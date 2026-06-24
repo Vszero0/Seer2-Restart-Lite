@@ -1,8 +1,10 @@
 using System.Linq;
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
+using TMPro;
 
 public class DialogView : Module
 {
@@ -21,11 +23,52 @@ public class DialogView : Module
     [SerializeField] private RectTransform functionRect;
     [SerializeField] private RectTransform replyRect;
 
+    private Action<NpcButtonHandler> replyClickHandler;
+    private Image storySpeakerIcon;
+    private TextMeshProUGUI storySpeakerText;
+    private RectTransform storySpeakerGroupRect;
+    private RectTransform storySpeakerIconRect;
+    private RectTransform storySpeakerRect;
+    private RectTransform contentTextRect;
+    private CanvasGroup storyContentCanvasGroup;
+    private CanvasGroup storyIconCanvasGroup;
+    private Coroutine storyFadeCoroutine;
+    private Vector2 defaultContentAnchorMin;
+    private Vector2 defaultContentAnchorMax;
+    private Vector2 defaultContentPivot;
+    private Vector2 defaultContentAnchoredPosition;
+    private Vector2 defaultContentSizeDelta;
+    private Vector2 defaultTextAnchorMin;
+    private Vector2 defaultTextAnchorMax;
+    private Vector2 defaultTextPivot;
+    private Vector2 defaultTextAnchoredPosition;
+    private Vector2 defaultTextSizeDelta;
+    private bool hasDefaultLayout;
+
+    protected override void Awake()
+    {
+        base.Awake();
+        StoreDefaultLayout();
+    }
+
+    public void SetReplyClickHandler(Action<NpcButtonHandler> handler)
+    {
+        replyClickHandler = handler;
+    }
+
     public void OpenDialog(DialogInfo info)
     {
+        bool useStoryLayout = info?.id == "story";
+        bool hasIcon = info?.icon != null && info.icon != SpriteSet.Empty && info.size.x > 0 && info.size.y > 0;
+
         SetIconAndName(info.icon, info.pos, info.size, info.name);
         SetGif(info.gifInfo, info.icon);
         SetContent(info.content);
+        if (useStoryLayout)
+            ApplyStoryLayout(info, hasIcon);
+        else
+            ResetStoryLayout();
+
         SetFunction(info.functionHandler);
         SetReply(info.replyHandler);
     }
@@ -34,6 +77,14 @@ public class DialogView : Module
     {
         if (icon != null)
         {
+            bool hasIcon = sprite != null && sprite != SpriteSet.Empty && iconSize.x > 0 && iconSize.y > 0;
+            icon.gameObject.SetActive(hasIcon);
+            if (!hasIcon)
+            {
+                npcName?.SetText(name);
+                return;
+            }
+
             icon.SetSprite(sprite);
             icon.rectTransform.SetSizeWithCurrentAnchors(RectTransform.Axis.Horizontal, iconSize.x);
             icon.rectTransform.SetSizeWithCurrentAnchors(RectTransform.Axis.Vertical, iconSize.y);
@@ -53,7 +104,251 @@ public class DialogView : Module
     private void SetContent(string text)
     {
         content?.SetText(text);
+        content?.text.ForceMeshUpdate();
         content?.text.rectTransform.SetSizeWithCurrentAnchors(RectTransform.Axis.Vertical, content.size.y);
+    }
+
+    private void StoreDefaultLayout()
+    {
+        if (contentRect == null || content == null)
+            return;
+
+        contentTextRect = content.text.rectTransform;
+        defaultContentAnchorMin = contentRect.anchorMin;
+        defaultContentAnchorMax = contentRect.anchorMax;
+        defaultContentPivot = contentRect.pivot;
+        defaultContentAnchoredPosition = contentRect.anchoredPosition;
+        defaultContentSizeDelta = contentRect.sizeDelta;
+
+        defaultTextAnchorMin = contentTextRect.anchorMin;
+        defaultTextAnchorMax = contentTextRect.anchorMax;
+        defaultTextPivot = contentTextRect.pivot;
+        defaultTextAnchoredPosition = contentTextRect.anchoredPosition;
+        defaultTextSizeDelta = contentTextRect.sizeDelta;
+        hasDefaultLayout = true;
+    }
+
+    private void ApplyStoryLayout(DialogInfo info, bool isActiveSpeaker)
+    {
+        if (contentRect == null || content == null)
+            return;
+
+        EnsureStorySpeakerBlock();
+        string speakerText = info.name ?? string.Empty;
+        bool hasSpeaker = !string.IsNullOrEmpty(speakerText);
+        Sprite speakerIcon = GetStorySpeakerIcon(info);
+        bool hasSpeakerIcon = speakerIcon != null && speakerIcon != SpriteSet.Empty;
+
+        storySpeakerGroupRect.gameObject.SetActive(hasSpeaker);
+        storySpeakerIcon.gameObject.SetActive(hasSpeakerIcon);
+        if (hasSpeakerIcon)
+            storySpeakerIcon.SetSprite(speakerIcon);
+        else
+            storySpeakerIcon.sprite = null;
+        storySpeakerIcon.color = isActiveSpeaker ? Color.white : new Color32(150, 150, 150, 255);
+
+        storySpeakerText.gameObject.SetActive(hasSpeaker);
+        storySpeakerText.text = speakerText;
+        storySpeakerText.color = isActiveSpeaker ? new Color32(255, 230, 92, 255) : new Color32(185, 190, 196, 255);
+
+        contentRect.anchorMin = new Vector2(0.14f, 0f);
+        contentRect.anchorMax = new Vector2(0.86f, 0f);
+        contentRect.pivot = new Vector2(0f, 0f);
+        contentRect.anchoredPosition = new Vector2(0f, 44f);
+
+        Canvas.ForceUpdateCanvases();
+        float barWidth = Mathf.Max(contentRect.rect.width, 680f);
+        float paddingX = 24f;
+        float paddingY = 16f;
+        float speakerWidth = hasSpeaker ? 116f : 0f;
+        float speakerGap = hasSpeaker ? 18f : 0f;
+        float textWidth = Mathf.Max(240f, barWidth - paddingX * 2f - speakerWidth - speakerGap);
+
+        contentTextRect = content.text.rectTransform;
+        contentTextRect.anchorMin = new Vector2(0f, 1f);
+        contentTextRect.anchorMax = new Vector2(0f, 1f);
+        contentTextRect.pivot = new Vector2(0f, 1f);
+        contentTextRect.sizeDelta = new Vector2(textWidth, 1000f);
+
+        content.text.enableWordWrapping = true;
+        content.text.ForceMeshUpdate();
+        float textHeight = Mathf.Max(24f, content.text.preferredHeight);
+
+        float speakerNameHeight = 26f;
+        float speakerIconSize = 46f;
+        float speakerIconGap = 6f;
+        float speakerHeight = hasSpeaker ? (hasSpeakerIcon ? speakerIconSize + speakerIconGap + speakerNameHeight : speakerNameHeight) : 0f;
+        float barHeight = Mathf.Max(78f, Mathf.Max(textHeight, speakerHeight) + paddingY * 2f);
+        contentRect.SetSizeWithCurrentAnchors(RectTransform.Axis.Vertical, barHeight);
+
+        float innerHeight = Mathf.Max(0f, barHeight - paddingY * 2f);
+        float textOffsetY = paddingY + Mathf.Max(0f, (innerHeight - textHeight) * 0.5f);
+        contentTextRect.anchoredPosition = new Vector2(paddingX + speakerWidth + speakerGap, -textOffsetY);
+        contentTextRect.sizeDelta = new Vector2(textWidth, textHeight + 4f);
+
+        storySpeakerGroupRect.anchorMin = new Vector2(0f, 1f);
+        storySpeakerGroupRect.anchorMax = new Vector2(0f, 1f);
+        storySpeakerGroupRect.pivot = new Vector2(0.5f, 0.5f);
+        storySpeakerGroupRect.anchoredPosition = new Vector2(paddingX + speakerWidth * 0.5f, -barHeight * 0.5f);
+        storySpeakerGroupRect.sizeDelta = new Vector2(speakerWidth, innerHeight);
+
+        storySpeakerIconRect.anchorMin = new Vector2(0.5f, 0.5f);
+        storySpeakerIconRect.anchorMax = new Vector2(0.5f, 0.5f);
+        storySpeakerIconRect.pivot = new Vector2(0.5f, 0.5f);
+        storySpeakerIconRect.anchoredPosition = new Vector2(0f, hasSpeakerIcon ? (speakerNameHeight + speakerIconGap) * 0.5f : 0f);
+        storySpeakerIconRect.sizeDelta = new Vector2(speakerIconSize, speakerIconSize);
+
+        storySpeakerRect.anchorMin = new Vector2(0.5f, 0.5f);
+        storySpeakerRect.anchorMax = new Vector2(0.5f, 0.5f);
+        storySpeakerRect.pivot = new Vector2(0.5f, 0.5f);
+        storySpeakerRect.anchoredPosition = new Vector2(0f, hasSpeakerIcon ? -(speakerIconSize + speakerIconGap) * 0.5f : 0f);
+        storySpeakerRect.sizeDelta = new Vector2(speakerWidth, speakerNameHeight);
+        PlayStoryFade(isActiveSpeaker);
+    }
+
+    private void ResetStoryLayout()
+    {
+        if (storySpeakerText != null)
+            storySpeakerText.gameObject.SetActive(false);
+
+        if (storySpeakerGroupRect != null)
+            storySpeakerGroupRect.gameObject.SetActive(false);
+
+        if (storySpeakerIcon != null)
+            storySpeakerIcon.gameObject.SetActive(false);
+
+        if (storyFadeCoroutine != null)
+        {
+            StopCoroutine(storyFadeCoroutine);
+            storyFadeCoroutine = null;
+        }
+
+        if (storyContentCanvasGroup != null)
+            storyContentCanvasGroup.alpha = 1f;
+
+        if (storyIconCanvasGroup != null)
+            storyIconCanvasGroup.alpha = 1f;
+
+        if (!hasDefaultLayout || contentRect == null || content == null)
+            return;
+
+        contentTextRect = content.text.rectTransform;
+        contentRect.anchorMin = defaultContentAnchorMin;
+        contentRect.anchorMax = defaultContentAnchorMax;
+        contentRect.pivot = defaultContentPivot;
+        contentRect.anchoredPosition = defaultContentAnchoredPosition;
+        contentRect.sizeDelta = defaultContentSizeDelta;
+
+        contentTextRect.anchorMin = defaultTextAnchorMin;
+        contentTextRect.anchorMax = defaultTextAnchorMax;
+        contentTextRect.pivot = defaultTextPivot;
+        contentTextRect.anchoredPosition = defaultTextAnchoredPosition;
+        contentTextRect.sizeDelta = defaultTextSizeDelta;
+    }
+
+    private void EnsureStorySpeakerBlock()
+    {
+        if (storySpeakerText != null)
+            return;
+
+        GameObject groupObj = new GameObject("Story Speaker Group", typeof(RectTransform));
+        groupObj.transform.SetParent(contentRect, false);
+        storySpeakerGroupRect = groupObj.GetComponent<RectTransform>();
+
+        GameObject iconObj = new GameObject("Story Speaker Icon", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));
+        iconObj.transform.SetParent(storySpeakerGroupRect, false);
+        storySpeakerIconRect = iconObj.GetComponent<RectTransform>();
+        storySpeakerIcon = iconObj.GetComponent<Image>();
+        storySpeakerIcon.preserveAspect = true;
+        storySpeakerIcon.raycastTarget = false;
+
+        GameObject textObj = new GameObject("Story Speaker Name", typeof(RectTransform), typeof(CanvasRenderer), typeof(TextMeshProUGUI));
+        textObj.transform.SetParent(storySpeakerGroupRect, false);
+        storySpeakerRect = textObj.GetComponent<RectTransform>();
+        storySpeakerText = textObj.GetComponent<TextMeshProUGUI>();
+        storySpeakerText.font = content.text.font;
+        storySpeakerText.fontSize = content.text.fontSize;
+        storySpeakerText.alignment = TextAlignmentOptions.Midline;
+        storySpeakerText.raycastTarget = false;
+        storySpeakerText.enableWordWrapping = true;
+        storySpeakerText.richText = true;
+    }
+
+    private Sprite GetStorySpeakerIcon(DialogInfo info)
+    {
+        if (info == null || string.IsNullOrEmpty(info.iconId))
+            return null;
+
+        if (TryGetPetIdFromIconId(info.iconId, out int petId))
+        {
+            Sprite petIcon = PetUISystem.GetPetIcon(petId);
+            if (petIcon != null && petIcon != SpriteSet.Empty)
+                return petIcon;
+        }
+
+        return info.icon;
+    }
+
+    private bool TryGetPetIdFromIconId(string iconId, out int petId)
+    {
+        petId = 0;
+        string normalized = iconId.Replace("\\", "/");
+        bool isPetPath = normalized.StartsWith("pet:", StringComparison.OrdinalIgnoreCase) ||
+            normalized.IndexOf("Pets/pet/", StringComparison.OrdinalIgnoreCase) >= 0 ||
+            normalized.IndexOf("Pets/icon/", StringComparison.OrdinalIgnoreCase) >= 0;
+
+        if (!isPetPath)
+            return false;
+
+        int slashIndex = normalized.LastIndexOf('/');
+        string idText = slashIndex >= 0 ? normalized.Substring(slashIndex + 1) : normalized.Substring(normalized.IndexOf(':') + 1);
+        idText = idText.Replace(".png", string.Empty);
+        return int.TryParse(idText, out petId);
+    }
+
+    private void PlayStoryFade(bool includeIcon)
+    {
+        storyContentCanvasGroup = GetOrAddCanvasGroup(contentRect.gameObject);
+        storyIconCanvasGroup = icon == null ? null : GetOrAddCanvasGroup(icon.gameObject);
+
+        if (storyFadeCoroutine != null)
+            StopCoroutine(storyFadeCoroutine);
+
+        storyFadeCoroutine = StartCoroutine(StoryFadeCoroutine(storyContentCanvasGroup, storyIconCanvasGroup, includeIcon && icon != null && icon.gameObject.activeSelf));
+    }
+
+    private IEnumerator StoryFadeCoroutine(CanvasGroup textGroup, CanvasGroup iconGroup, bool includeIcon)
+    {
+        const float duration = 0.16f;
+        float time = 0f;
+        textGroup.alpha = 0f;
+        if (includeIcon && iconGroup != null)
+            iconGroup.alpha = 0f;
+
+        while (time < duration)
+        {
+            float alpha = Mathf.Clamp01(time / duration);
+            textGroup.alpha = alpha;
+            if (includeIcon && iconGroup != null)
+                iconGroup.alpha = alpha;
+
+            time += Time.unscaledDeltaTime;
+            yield return null;
+        }
+
+        textGroup.alpha = 1f;
+        if (iconGroup != null)
+            iconGroup.alpha = 1f;
+        storyFadeCoroutine = null;
+    }
+
+    private CanvasGroup GetOrAddCanvasGroup(GameObject obj)
+    {
+        CanvasGroup canvasGroup = obj.GetComponent<CanvasGroup>();
+        if (canvasGroup == null)
+            canvasGroup = obj.AddComponent<CanvasGroup>();
+
+        return canvasGroup;
     }
 
     private void SetFunction(List<NpcButtonHandler> functionHandler)
@@ -62,6 +357,9 @@ public class DialogView : Module
 
         float functionY = Mathf.Min(-55, contentRect.anchoredPosition.y - content.size.y - 5);
         functionRect.anchoredPosition = new Vector2(functionRect.anchoredPosition.x, functionY);
+
+        if (functionHandler == null || functionHandler.Count == 0)
+            return;
 
         float handlerX = 0;
         IText lastText = null;
@@ -106,8 +404,15 @@ public class DialogView : Module
     {
         replyRect.DestoryChildren();
 
+        if (replyHandler == null || replyHandler.Count == 0)
+            return;
+
         float handlerX = 0;
-        float handlerSize = replyRect.rect.size.x / replyHandler.Count(x => x.typeId != "branch");
+        int replyCount = replyHandler.Count(x => x.typeId != "branch");
+        if (replyCount == 0)
+            return;
+
+        float handlerSize = replyRect.rect.size.x / replyCount;
         IText lastText = null;
 
         for (int i = 0; i < replyHandler.Count; i++)
@@ -133,6 +438,12 @@ public class DialogView : Module
             text.onPointerExitEvent.AddListener(x => text.SetColor(initTextColor));
             text.onPointerClickEvent.AddListener(x =>
             {
+                if (replyClickHandler != null)
+                {
+                    replyClickHandler.Invoke(handler);
+                    return;
+                }
+
                 NpcController npc = DialogManager.instance.currentNpc;
                 Dictionary<int, NpcController> npcList = (Dictionary<int, NpcController>)Player.GetSceneData("mapNpcList");
                 NpcHandler.GetNpcEntity(npc, handler, npcList)?.Invoke();

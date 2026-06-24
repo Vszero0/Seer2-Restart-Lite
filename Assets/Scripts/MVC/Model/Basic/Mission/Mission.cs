@@ -8,7 +8,17 @@ using System;
 public class Mission
 {
     public MissionInfo info => GetMissionInfo(id);
-    public MissionCheckpoint checkpointInfo => info.checkpoints.Find(x => x.id == checkPointId);
+    public MissionCheckpoint checkpointInfo
+    {
+        get
+        {
+            MissionCheckpoint checkpoint = info.checkpoints.Find(x => x.id == checkPointId);
+            if (checkpoint == null && info.replayable)
+                checkpoint = info.checkpoints.Find(x => x.id == "default");
+
+            return checkpoint;
+        }
+    }
 
     [XmlAttribute] public int id;
     [XmlAttribute("checkpoint")] public string checkPointId;

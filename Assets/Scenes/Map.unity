@@ -5871,6 +5871,8 @@ MonoBehaviour:
   infoPrompt: {fileID: 1360834064}
   descriptionBox: {fileID: 0}
   mailNewIcon: {fileID: 1869270458}
+  missionButtonIcon: {fileID: 7170880393122851562, guid: d34acb4d3ab7a0241b9f4f04228144f5, type: 3}
+  missionButtonOffset: {x: 0, y: 65}
 --- !u!1 &641554918
 GameObject:
   m_ObjectHideFlags: 0

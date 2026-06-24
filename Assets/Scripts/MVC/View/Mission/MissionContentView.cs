@@ -16,8 +16,9 @@ public class MissionContentView : Module
         }
         titleText?.SetText(mission.info.title);
         contentText?.SetText(mission.checkpointInfo.description);
+        var rewards = mission.info.rewards ?? new List<Item>();
         for (int i = 0; i < itemBlockViews.Count; i++) {
-            Item item = (i < mission.info.rewards.Count) ? mission.info.rewards[i] : null;
+            Item item = (i < rewards.Count) ? rewards[i] : null;
             itemBlockViews[i]?.SetItem(item);
         }
     }

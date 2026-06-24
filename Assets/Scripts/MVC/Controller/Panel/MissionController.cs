@@ -35,8 +35,17 @@ public class MissionController : Module
     public void MissionStart() {
         if (missionModel.currentMission == null)
             return;
-            
-        TeleportHandler.Teleport(missionModel.currentMission.checkpointInfo.mapId);
+
+        var checkpoint = missionModel.currentMission.checkpointInfo;
+        if (checkpoint == null)
+            return;
+
+        if (checkpoint.hasStory) {
+            StoryPanel.Open(checkpoint.storyId, checkpoint.mapId);
+            return;
+        }
+
+        TeleportHandler.Teleport(checkpoint.mapId);
     }
 
 }

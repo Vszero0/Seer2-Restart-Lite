@@ -13,7 +13,8 @@ public class MissionPanel : Panel
     }
 
     public void SetMissionStorage() {
-        var storage = Player.instance.gameData.missionStorage.FindAll(x => !x.isDone);
+        Mission.VersionUpdate();
+        var storage = Player.instance.gameData.missionStorage.FindAll(x => !x.isDone || x.info.replayable);
         missionController.SetMissionStorage(storage);
     }
 }
