@@ -268,6 +268,7 @@ public static class SaveSystem
             var mapMinePath = FileBrowserHelpers.CreateFolderInDirectory(mapPath, "mine");
 
             var npcPath = FileBrowserHelpers.CreateFolderInDirectory(modPath, "Npc");
+            var storyPath = FileBrowserHelpers.CreateFolderInDirectory(modPath, "Stories");
         }
         catch (Exception)
         {
@@ -388,6 +389,7 @@ public static class SaveSystem
                 data.activityStorage.Find(x => x.id == "shop")?.data.RemoveAll(x => ItemInfo.IsMod(int.Parse(x.key)));
                 data.itemStorage.RemoveAll(x => ItemInfo.IsMod(x.id));
                 data.achievement = ItemInfo.IsMod(data.achievement) ? 0 : data.achievement;
+                data.missionStorage.RemoveAll(x => (x?.id ?? 0) < 0 || x.info?.type == MissionType.Mod);
 
                 // Clean farm
                 var farmActivity = data.activityStorage.Find(x => x.id == "farm");
@@ -850,6 +852,50 @@ public static class SaveSystem
             return false;
         }
         return true;
+    }
+
+    public static bool TryLoadStoryMod(out string error, out Dictionary<string, StoryDocument> storyDict)
+    {
+        storyDict = new Dictionary<string, StoryDocument>();
+        error = string.Empty;
+
+        var storyPath = Application.persistentDataPath + "/Mod/Stories/";
+        try
+        {
+            if (!FileBrowserHelpers.DirectoryExists(storyPath))
+                return false;
+
+            foreach (var path in GetStoryJsonPaths(storyPath))
+            {
+                string json = FileBrowserHelpers.ReadTextFromFile(path);
+                StoryDocument document = JsonUtility.FromJson<StoryDocument>(json);
+                if (document == null || !document.IsValid)
+                    throw new Exception("Story json format error: " + path);
+
+                storyDict[document.id] = document;
+            }
+        }
+        catch (Exception e)
+        {
+            error = e.ToString();
+            storyDict.Clear();
+            return false;
+        }
+
+        return storyDict.Count > 0;
+    }
+
+    private static IEnumerable<string> GetStoryJsonPaths(string storyPath)
+    {
+        var entries = FileBrowserHelpers.GetEntriesInDirectory(storyPath, true);
+        foreach (var entry in entries)
+        {
+            if (entry.IsDirectory)
+                continue;
+
+            if (entry.Path.EndsWith(".json", StringComparison.OrdinalIgnoreCase))
+                yield return entry.Path;
+        }
     }
 
     public static bool TrySaveItemMod(ItemInfo info, byte[] iconBytes, Sprite iconSprite, out string error, int deleteItemId = 0)

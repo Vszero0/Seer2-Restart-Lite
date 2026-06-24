@@ -17,7 +17,7 @@ public class MissionModel : Module
 
     public void SetFilterType(MissionType type) {
         this.type = type;
-        selections = storage.FindAll(x => x.info.type == type);
+        selections = storage.FindAll(x => x.info != null && x.info.type == type);
     }
 
     public void Select(int index) {

@@ -8,6 +8,7 @@ using TMPro;
 public class StoryPanel : Panel
 {
     private const string StoryResourceRoot = "Data/Stories/";
+    private const string ModStoryPrefix = "mod:";
     private const string NarrationPrompt = "\u9009\u62E9\u56DE\u5E94";
     private const string NarratorName = "\u65C1\u767D";
     private const string ChoicePrompt = "\u8BF7\u9009\u62E9\u63A5\u4E0B\u6765\u7684\u56DE\u5E94\u3002";
@@ -55,6 +56,29 @@ public class StoryPanel : Panel
         return panel;
     }
 
+    public static bool CanOpenStory(string storyId, out string error)
+    {
+        error = string.Empty;
+        if (string.IsNullOrEmpty(storyId))
+        {
+            error = "剧情脚本为空";
+            return false;
+        }
+
+        if (!IsModStory(storyId))
+            return Resources.Load<TextAsset>(StoryResourceRoot + storyId) != null;
+
+        string modStoryId = storyId.Substring(ModStoryPrefix.Length);
+        StoryDocument document = Database.instance.GetStoryInfo(modStoryId);
+        if (document == null || !document.IsValid)
+        {
+            error = "找不到对应的Mod剧情，或剧情文件格式错误";
+            return false;
+        }
+
+        return true;
+    }
+
     public override void Init()
     {
         base.Init();
@@ -97,14 +121,12 @@ public class StoryPanel : Panel
 
     private void LoadStory(string storyId, int fallbackMapId)
     {
-        TextAsset textAsset = Resources.Load<TextAsset>(StoryResourceRoot + storyId);
-        if (textAsset == null)
+        if (!TryBuildStoryScript(storyId, out story))
         {
             SetDialogue("\u7CFB\u7EDF", "\u672A\u627E\u5230\u5267\u60C5\u811A\u672C\uFF1A" + storyId);
             return;
         }
 
-        story = StoryParser.Parse(textAsset.text);
         commandIndex = 0;
         isClosing = false;
         waitingForChoice = false;
@@ -115,6 +137,33 @@ public class StoryPanel : Panel
             SetScene("Maps/bg/" + fallbackMapId);
 
         ShowNextCommand();
+    }
+
+    private static bool TryBuildStoryScript(string storyId, out StoryScript story)
+    {
+        story = null;
+        if (IsModStory(storyId))
+        {
+            string modStoryId = storyId.Substring(ModStoryPrefix.Length);
+            StoryDocument document = Database.instance.GetStoryInfo(modStoryId);
+            if (document == null || !document.IsValid)
+                return false;
+
+            story = document.ToScript();
+            return story != null;
+        }
+
+        TextAsset textAsset = Resources.Load<TextAsset>(StoryResourceRoot + storyId);
+        if (textAsset == null)
+            return false;
+
+        story = StoryParser.Parse(textAsset.text);
+        return story != null;
+    }
+
+    private static bool IsModStory(string storyId)
+    {
+        return !string.IsNullOrEmpty(storyId) && storyId.StartsWith(ModStoryPrefix, StringComparison.OrdinalIgnoreCase);
     }
 
     private void Advance()

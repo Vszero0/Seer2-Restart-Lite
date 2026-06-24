@@ -36,16 +36,45 @@ public class MissionController : Module
         if (missionModel.currentMission == null)
             return;
 
+        var missionInfo = missionModel.currentMission.info;
         var checkpoint = missionModel.currentMission.checkpointInfo;
         if (checkpoint == null)
+        {
+            if (missionInfo != null && missionInfo.type == MissionType.Mod)
+                OpenModMissionError("找不到对应的任务节点");
+
             return;
+        }
 
         if (checkpoint.hasStory) {
+            if (!StoryPanel.CanOpenStory(checkpoint.storyId, out string error))
+            {
+                if (missionInfo != null && missionInfo.type == MissionType.Mod)
+                    OpenModMissionError(error);
+
+                return;
+            }
+
             StoryPanel.Open(checkpoint.storyId, checkpoint.mapId);
             return;
         }
 
+        if (missionInfo != null && missionInfo.type == MissionType.Mod)
+        {
+            OpenModMissionError("该Mod任务未配置剧情脚本");
+            return;
+        }
+
         TeleportHandler.Teleport(checkpoint.mapId);
+    }
+
+    private void OpenModMissionError(string detail)
+    {
+        string message = "加载Mod任务失败，可能为未加载Mod、该Mod未制作对应剧情，或剧情文件存在错误";
+        if (!string.IsNullOrEmpty(detail))
+            message += "\n" + detail;
+
+        Hintbox.OpenHintboxWithContent(message, 16).SetSize(640, 320);
     }
 
 }

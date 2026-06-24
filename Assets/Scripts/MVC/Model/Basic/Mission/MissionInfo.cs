@@ -43,4 +43,5 @@ public enum MissionType {
     Side = 1,
     Daily = 2,
     Event = 3,
+    Mod = 4,
 }

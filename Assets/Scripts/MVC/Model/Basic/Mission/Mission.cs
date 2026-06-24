@@ -12,6 +12,9 @@ public class Mission
     {
         get
         {
+            if (info == null || info.checkpoints == null)
+                return null;
+
             MissionCheckpoint checkpoint = info.checkpoints.Find(x => x.id == checkPointId);
             if (checkpoint == null && info.replayable)
                 checkpoint = info.checkpoints.Find(x => x.id == "default");
@@ -82,7 +85,7 @@ public class Mission
     }
 
     public static void VersionUpdate() {
-        var mainMission = Mission.Filter(x => x.id <= 10000);
+        var mainMission = Mission.Filter(x => x.info != null && x.info.type == MissionType.Main);
         if (mainMission.Count == 0)
             Mission.Start(1);
         else {
@@ -93,7 +96,7 @@ public class Mission
         }
 
         var sideMissions = Database.instance.missionInfos.FindAll(x => 
-            ((x.type == MissionType.Side) || (x.type == MissionType.Event)) && (Mission.Find(x.id) == null));
+            ((x.type == MissionType.Side) || (x.type == MissionType.Event) || (x.type == MissionType.Mod)) && (Mission.Find(x.id) == null));
 
         foreach (var mission in sideMissions)
             Mission.Start(mission.id);
