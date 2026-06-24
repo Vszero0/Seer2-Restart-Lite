@@ -21,10 +21,17 @@ public class MissionController : Module
     public void SetType(int index) {
         MissionType type = (MissionType)index;
         if (type == missionModel.type)
+        {
+            if (type == MissionType.Mod && IsCurrentMissionListEmpty())
+                OpenModMissionError("未找到可用的Mod剧情任务");
+
             return;
+        }
         
         missionModel.SetFilterType(type);
         OnSetMissionList();
+        if (type == MissionType.Mod && IsCurrentMissionListEmpty())
+            OpenModMissionError("未找到可用的Mod剧情任务");
     } 
 
     public void Select(int index) {
@@ -75,6 +82,11 @@ public class MissionController : Module
             message += "\n" + detail;
 
         Hintbox.OpenHintboxWithContent(message, 16).SetSize(640, 320);
+    }
+
+    private bool IsCurrentMissionListEmpty()
+    {
+        return missionModel.selections == null || missionModel.selections.Count == 0;
     }
 
 }
