@@ -1,6 +1,8 @@
 using System;
 using System.Linq;
+using System.Collections;
 using System.Collections.Generic;
+using System.IO;
 using UnityEngine;
 using UnityEngine.UI;
 using TMPro;
@@ -14,19 +16,30 @@ public class StoryPanel : Panel
     private const string ChoicePrompt = "\u8BF7\u9009\u62E9\u63A5\u4E0B\u6765\u7684\u56DE\u5E94\u3002";
     private const string DefaultIconSize = "90,120";
     private const string DefaultIconPos = "0,45";
+    private const float DefaultActorSpacing = 132f;
+    private const float DefaultActorHeight = 250f;
+    private const float DefaultActorBottom = 166f;
+    private const float DefaultActorCenterGap = 112f;
+    private const float DefaultActorStackOffset = 16f;
 
-    private readonly Dictionary<string, string> actorIcons = new Dictionary<string, string>();
+    private readonly Dictionary<string, StoryActorRuntime> actors = new Dictionary<string, StoryActorRuntime>();
+    private readonly Dictionary<string, int> nextSideSlots = new Dictionary<string, int>();
+    private static readonly Dictionary<Sprite, Vector2> spriteVisiblePivotCache = new Dictionary<Sprite, Vector2>();
 
     private StoryScript story;
+    private StoryLayoutRuntime activeLayout;
     private string pendingStoryId;
     private int fallbackMapId;
     private int commandIndex;
+    private int actorOrder;
     private bool isBuilt;
     private bool isClosing;
     private bool waitingForChoice;
 
     private Image sceneImage;
+    private RectTransform actorLayer;
     private GameObject exitButton;
+    private DialogInfo lastDialogInfo;
 
     public static StoryPanel Open(string storyId, int fallbackMapId = 0)
     {
@@ -66,13 +79,18 @@ public class StoryPanel : Panel
         }
 
         if (!IsModStory(storyId))
-            return Resources.Load<TextAsset>(StoryResourceRoot + storyId) != null;
+        {
+            if (!TryLoadStoryDocument(storyId, out _, out error))
+                return false;
+
+            return true;
+        }
 
         string modStoryId = storyId.Substring(ModStoryPrefix.Length);
         StoryDocument document = Database.instance.GetStoryInfo(modStoryId);
-        if (document == null || !document.IsValid)
+        if (!StoryValidator.Validate(document, out string validationError))
         {
-            error = "找不到对应的Mod剧情，或剧情文件格式错误";
+            error = "找不到对应的Mod剧情，或剧情文件格式错误：\n" + validationError;
             return false;
         }
 
@@ -92,6 +110,7 @@ public class StoryPanel : Panel
     public override void ClosePanel()
     {
         ClearDialogHandlers();
+        ClearActors();
         DialogManager.instance?.CloseDialog();
         if (exitButton != null)
             Destroy(exitButton);
@@ -116,49 +135,81 @@ public class StoryPanel : Panel
 
         sceneImage = CreateImage("Scene", transform, Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero, Vector2.zero, new Color32(8, 11, 18, 255));
         sceneImage.raycastTarget = false;
+        actorLayer = DialogManager.instance != null
+            ? DialogManager.instance.GetStoryActorLayer()
+            : CreateRect("Story Actors", transform, Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero, Vector2.zero);
         CreateExitButton();
     }
 
     private void LoadStory(string storyId, int fallbackMapId)
     {
-        if (!TryBuildStoryScript(storyId, out story))
+        if (fallbackMapId != 0)
+            SetScene("Maps/bg/" + fallbackMapId);
+
+        if (!TryBuildStoryScript(storyId, out story, out string error))
         {
-            SetDialogue("\u7CFB\u7EDF", "\u672A\u627E\u5230\u5267\u60C5\u811A\u672C\uFF1A" + storyId);
+            SetDialogue(null, "\u7CFB\u7EDF", error);
             return;
         }
 
         commandIndex = 0;
+        actorOrder = 0;
         isClosing = false;
         waitingForChoice = false;
-        actorIcons.Clear();
+        ClearActors();
+        nextSideSlots.Clear();
         ClearDialogHandlers();
-
-        if (fallbackMapId != 0)
-            SetScene("Maps/bg/" + fallbackMapId);
+        lastDialogInfo = null;
+        activeLayout = ResolveLayout(null);
 
         ShowNextCommand();
     }
 
-    private static bool TryBuildStoryScript(string storyId, out StoryScript story)
+    private static bool TryBuildStoryScript(string storyId, out StoryScript story, out string error)
     {
         story = null;
+        error = string.Empty;
         if (IsModStory(storyId))
         {
             string modStoryId = storyId.Substring(ModStoryPrefix.Length);
-            StoryDocument document = Database.instance.GetStoryInfo(modStoryId);
-            if (document == null || !document.IsValid)
+            StoryDocument modDocument = Database.instance.GetStoryInfo(modStoryId);
+            if (!StoryValidator.Validate(modDocument, out string validationError))
+            {
+                error = "Mod剧情文件格式错误：\n" + validationError;
                 return false;
+            }
 
-            story = document.ToScript();
+            story = modDocument.ToScript();
             return story != null;
         }
 
-        TextAsset textAsset = Resources.Load<TextAsset>(StoryResourceRoot + storyId);
-        if (textAsset == null)
+        if (!TryLoadStoryDocument(storyId, out StoryDocument document, out error))
             return false;
 
-        story = StoryParser.Parse(textAsset.text);
+        story = document.ToScript();
         return story != null;
+    }
+
+    private static bool TryLoadStoryDocument(string storyId, out StoryDocument document, out string error)
+    {
+        document = null;
+        error = string.Empty;
+
+        TextAsset textAsset = Resources.Load<TextAsset>(StoryResourceRoot + storyId);
+        if (textAsset != null)
+        {
+            document = JsonUtility.FromJson<StoryDocument>(textAsset.text);
+            if (!StoryValidator.Validate(document, out string validationError))
+            {
+                error = "剧情 JSON 格式错误：\n" + validationError;
+                return false;
+            }
+
+            return true;
+        }
+
+        error = "未找到剧情 JSON：" + storyId;
+        return false;
     }
 
     private static bool IsModStory(string storyId)
@@ -193,15 +244,16 @@ public class StoryPanel : Panel
             {
                 case StoryCommandType.Scene:
                     SetScene(GetArgValue(command.args, "bg", command.args));
+                    ApplySceneLayout(command.layout);
                     continue;
                 case StoryCommandType.Show:
-                    RegisterActor(command.args);
+                    RegisterActor(command);
                     continue;
                 case StoryCommandType.Hide:
                     UnregisterActor(command.args);
                     continue;
                 case StoryCommandType.Say:
-                    SetDialogue(command.speaker, command.text);
+                    SetDialogue(command.actorInfo, command.speaker, command.text);
                     return;
                 case StoryCommandType.Narrate:
                     SetNarration(command.text);
@@ -242,13 +294,32 @@ public class StoryPanel : Panel
         DialogManager.instance?.SetStoryDialogBackground(sceneImage.sprite, sceneImage.color);
     }
 
-    private void RegisterActor(string args)
+    private void RegisterActor(StoryCommand command)
     {
-        string[] tokens = SplitArgs(args);
-        if (tokens.Length < 2)
+        StoryActorDocument actor = command.actorInfo;
+        if (actor == null)
+            actor = BuildLegacyActor(command.args);
+
+        if (actor == null || string.IsNullOrEmpty(actor.id))
             return;
 
-        actorIcons[tokens[0]] = NormalizeSpritePath(tokens[1]);
+        if (!actors.TryGetValue(actor.id, out StoryActorRuntime runtime))
+        {
+            runtime = new StoryActorRuntime { document = actor };
+            runtime.image = CreateActorImage(actor);
+            runtime.canvasGroup = runtime.image.GetComponent<CanvasGroup>();
+            runtime.order = actorOrder++;
+            runtime.slot = actor.slot > 0 ? actor.slot : GetNextSideSlot(actor.normalizedSide);
+            actors[actor.id] = runtime;
+            PlayActorFade(runtime);
+        }
+        else
+        {
+            runtime.document = actor;
+            runtime.image.gameObject.SetActive(true);
+        }
+
+        LayoutActors();
     }
 
     private void UnregisterActor(string args)
@@ -256,20 +327,28 @@ public class StoryPanel : Panel
         string[] tokens = SplitArgs(args);
         if (tokens.Length == 0 || tokens[0] == "all")
         {
-            actorIcons.Clear();
+            ClearActors();
             return;
         }
 
-        actorIcons.Remove(tokens[0]);
+        if (actors.TryGetValue(tokens[0], out StoryActorRuntime runtime))
+        {
+            if (runtime.image != null)
+                Destroy(runtime.image.gameObject);
+            actors.Remove(tokens[0]);
+            LayoutActors();
+        }
     }
 
-    private void SetDialogue(string speaker, string content)
+    private void SetDialogue(StoryActorDocument actor, string speaker, string content)
     {
         waitingForChoice = false;
         DialogManager.instance.SetStoryDialogReplyClickHandler(null);
         DialogManager.instance.ClearStoryChoices();
         DialogManager.instance.SetStoryDialogBackgroundClickHandler(Advance);
-        DialogManager.instance.OpenStoryDialog(CreateDialogInfo(speaker, content, new List<NpcButtonHandler>()));
+        SetActiveActor(actor?.id);
+        lastDialogInfo = CreateDialogInfo(actor, speaker, content, new List<NpcButtonHandler>());
+        DialogManager.instance.OpenStoryDialog(lastDialogInfo);
         BringExitButtonToFront();
     }
 
@@ -279,7 +358,9 @@ public class StoryPanel : Panel
         DialogManager.instance.SetStoryDialogReplyClickHandler(null);
         DialogManager.instance.ClearStoryChoices();
         DialogManager.instance.SetStoryDialogBackgroundClickHandler(Advance);
-        DialogManager.instance.OpenStoryDialog(CreateDialogInfo(NarratorName, content, new List<NpcButtonHandler>()));
+        SetActiveActor(null);
+        lastDialogInfo = CreateDialogInfo(null, NarratorName, content, new List<NpcButtonHandler>());
+        DialogManager.instance.OpenStoryDialog(lastDialogInfo);
         BringExitButtonToFront();
     }
 
@@ -294,7 +375,11 @@ public class StoryPanel : Panel
         waitingForChoice = true;
         DialogManager.instance.SetStoryDialogBackgroundClickHandler(Advance);
         DialogManager.instance.SetStoryDialogReplyClickHandler(null);
-        DialogManager.instance.OpenStoryDialog(CreateDialogInfo(NarrationPrompt, ChoicePrompt, new List<NpcButtonHandler>()));
+        if (lastDialogInfo == null)
+        {
+            lastDialogInfo = CreateDialogInfo(null, NarrationPrompt, ChoicePrompt, new List<NpcButtonHandler>());
+            DialogManager.instance.OpenStoryDialog(lastDialogInfo);
+        }
         DialogManager.instance.ShowStoryChoices(choices.Select(x => x.text).ToList(), choiceIndex =>
         {
             if (choiceIndex < 0 || choiceIndex >= choices.Count)
@@ -304,13 +389,20 @@ public class StoryPanel : Panel
             ClearChoiceHandler();
             JumpTo(choices[choiceIndex].label);
             ShowNextCommand();
-        });
+        }, GetChoiceSpeakerSide());
         BringExitButtonToFront();
     }
 
-    private DialogInfo CreateDialogInfo(string speaker, string content, List<NpcButtonHandler> replyHandlers)
+    private string GetChoiceSpeakerSide()
     {
-        string iconPath = GetSpeakerIconPath(speaker);
+        return string.Equals(lastDialogInfo?.storySpeakerSide, "right", StringComparison.OrdinalIgnoreCase)
+            ? "right"
+            : "left";
+    }
+
+    private DialogInfo CreateDialogInfo(StoryActorDocument actor, string speaker, string content, List<NpcButtonHandler> replyHandlers)
+    {
+        string iconPath = actor?.icon;
         bool hasIcon = !string.IsNullOrEmpty(iconPath);
 
         return new DialogInfo
@@ -320,18 +412,12 @@ public class StoryPanel : Panel
             iconSize = hasIcon ? DefaultIconSize : "0,0",
             iconPos = hasIcon ? DefaultIconPos : "0,0",
             name = speaker ?? string.Empty,
+            storySpeakerSide = actor?.normalizedSide ?? "left",
+            storyFlipIcon = actor != null && actor.flipIcon,
             rawContent = content ?? string.Empty,
             functionHandler = new List<NpcButtonHandler>(),
             replyHandler = replyHandlers ?? new List<NpcButtonHandler>()
         };
-    }
-
-    private string GetSpeakerIconPath(string speaker)
-    {
-        if (string.IsNullOrEmpty(speaker))
-            return string.Empty;
-
-        return actorIcons.TryGetValue(speaker, out string path) ? path : string.Empty;
     }
 
     private void ClearDialogHandlers()
@@ -393,6 +479,264 @@ public class StoryPanel : Panel
         TeleportHandler.Teleport(mapId);
     }
 
+    private Image CreateActorImage(StoryActorDocument actor)
+    {
+        Image image = CreateImage("Story Actor " + actor.id, actorLayer, Vector2.zero, Vector2.zero, new Vector2(0.5f, 0f), Vector2.zero, Vector2.zero, Color.white);
+        image.raycastTarget = false;
+        image.preserveAspect = true;
+        image.sprite = LoadSprite(actor.displaySprite);
+        image.gameObject.SetActive(image.sprite != null);
+        CanvasGroup canvasGroup = image.gameObject.AddComponent<CanvasGroup>();
+        canvasGroup.alpha = 0f;
+        return image;
+    }
+
+    private void PlayActorFade(StoryActorRuntime runtime)
+    {
+        if (runtime == null || runtime.canvasGroup == null)
+            return;
+
+        if (runtime.fadeCoroutine != null)
+            StopCoroutine(runtime.fadeCoroutine);
+
+        runtime.fadeCoroutine = StartCoroutine(ActorFadeCoroutine(runtime));
+    }
+
+    private IEnumerator ActorFadeCoroutine(StoryActorRuntime runtime)
+    {
+        const float duration = 0.18f;
+        float time = 0f;
+        runtime.canvasGroup.alpha = 0f;
+
+        while (time < duration)
+        {
+            runtime.canvasGroup.alpha = Mathf.Clamp01(time / duration);
+            time += Time.unscaledDeltaTime;
+            yield return null;
+        }
+
+        runtime.canvasGroup.alpha = 1f;
+        runtime.fadeCoroutine = null;
+    }
+
+    private StoryActorDocument BuildLegacyActor(string args)
+    {
+        string[] tokens = SplitArgs(args);
+        if (tokens.Length < 2)
+            return null;
+
+        return new StoryActorDocument
+        {
+            id = tokens[0],
+            name = tokens[0],
+            sprite = NormalizeSpritePath(tokens[1]),
+            icon = NormalizeSpritePath(tokens[1]),
+            side = "left",
+            faceLeft = true,
+            scale = 1f,
+        };
+    }
+
+    private void LayoutActors()
+    {
+        if (activeLayout == null)
+            activeLayout = ResolveLayout(null);
+
+        LayoutActorsBySide("left");
+        LayoutActorsBySide("right");
+        ApplyInitialActorLayering();
+    }
+
+    private void LayoutActorsBySide(string side)
+    {
+        List<StoryActorRuntime> sideActors = actors.Values
+            .Where(x => x?.image != null && x.document != null && x.document.normalizedSide == side)
+            .OrderBy(x => x.slot)
+            .ThenBy(x => x.order)
+            .ToList();
+
+        int maxSlot = sideActors.Count == 0 ? 0 : sideActors.Max(x => x.slot);
+        for (int i = 0; i < sideActors.Count; i++)
+        {
+            StoryActorRuntime runtime = sideActors[i];
+            RectTransform rect = runtime.image.rectTransform;
+            bool isRight = side == "right";
+            int visualIndex = Mathf.Max(0, maxSlot - runtime.slot);
+            float yOffset = Mathf.Max(0, runtime.slot - 1) * activeLayout.stackOffset;
+            float scale = Mathf.Max(0.1f, runtime.document.scale <= 0f ? 1f : runtime.document.scale);
+            Vector2 originalSize = GetSpriteSize(runtime.image.sprite, activeLayout.actorHeight);
+            float width = originalSize.x * scale;
+            float height = originalSize.y * scale;
+            float sideOffset = activeLayout.centerGap + visualIndex * activeLayout.actorSpacing;
+            float x = isRight ? sideOffset : -sideOffset;
+
+            rect.anchorMin = new Vector2(0.5f, 0f);
+            rect.anchorMax = rect.anchorMin;
+            rect.pivot = GetVisibleBottomPivot(runtime.image.sprite);
+            rect.anchoredPosition = new Vector2(x, activeLayout.actorBottom + yOffset);
+            rect.sizeDelta = new Vector2(width, height);
+
+            bool shouldFaceLeft = runtime.document.faceLeft;
+            float direction = shouldFaceLeft ? -1f : 1f;
+            rect.localScale = new Vector3(direction, 1f, 1f);
+        }
+    }
+
+    private void SetActiveActor(string actorId)
+    {
+        foreach (StoryActorRuntime runtime in actors.Values)
+        {
+            if (runtime?.image == null)
+                continue;
+
+            bool active = !string.IsNullOrEmpty(actorId) && runtime.document.id == actorId;
+            runtime.image.color = active ? Color.white : new Color32(118, 118, 126, 255);
+            if (active)
+                runtime.image.transform.SetAsLastSibling();
+        }
+    }
+
+    private void ApplySceneLayout(StoryLayoutDocument sceneLayout)
+    {
+        activeLayout = ResolveLayout(sceneLayout);
+        LayoutActors();
+    }
+
+    private int GetNextSideSlot(string side)
+    {
+        if (!nextSideSlots.TryGetValue(side, out int slot))
+            slot = 1;
+
+        nextSideSlots[side] = slot + 1;
+        return slot;
+    }
+
+    private static Vector2 GetSpriteSize(Sprite sprite, float fallbackHeight)
+    {
+        if (sprite == null || sprite.rect.width <= 0f || sprite.rect.height <= 0f)
+        {
+            float height = fallbackHeight > 0f ? fallbackHeight : DefaultActorHeight;
+            return new Vector2(height * 0.72f, height);
+        }
+
+        return new Vector2(sprite.rect.width, sprite.rect.height);
+    }
+
+    private static Vector2 GetVisibleBottomPivot(Sprite sprite)
+    {
+        if (sprite == null)
+            return new Vector2(0.5f, 0f);
+
+        if (spriteVisiblePivotCache.TryGetValue(sprite, out Vector2 cachedPivot))
+            return cachedPivot;
+
+        Vector2 pivot = CalculateVisibleBottomPivot(sprite);
+        spriteVisiblePivotCache[sprite] = pivot;
+        return pivot;
+    }
+
+    private static Vector2 CalculateVisibleBottomPivot(Sprite sprite)
+    {
+        Rect rect = sprite.rect;
+        if (rect.width <= 0f || rect.height <= 0f || sprite.texture == null)
+            return new Vector2(0.5f, 0f);
+
+        try
+        {
+            Texture2D texture = sprite.texture;
+            Color32[] pixels = texture.GetPixels32();
+            int textureWidth = texture.width;
+            int xMin = Mathf.FloorToInt(rect.xMin);
+            int yMin = Mathf.FloorToInt(rect.yMin);
+            int width = Mathf.RoundToInt(rect.width);
+            int height = Mathf.RoundToInt(rect.height);
+            int minX = width;
+            int minY = height;
+            int maxX = -1;
+
+            for (int y = 0; y < height; y++)
+            {
+                int pixelY = yMin + y;
+                if (pixelY < 0 || pixelY >= texture.height)
+                    continue;
+
+                for (int x = 0; x < width; x++)
+                {
+                    int pixelX = xMin + x;
+                    if (pixelX < 0 || pixelX >= textureWidth)
+                        continue;
+
+                    if (pixels[pixelY * textureWidth + pixelX].a <= 8)
+                        continue;
+
+                    if (x < minX)
+                        minX = x;
+                    if (x > maxX)
+                        maxX = x;
+                    if (y < minY)
+                        minY = y;
+                }
+            }
+
+            if (maxX < minX || minY >= height)
+                return new Vector2(0.5f, 0f);
+
+            float pivotX = ((minX + maxX + 1f) * 0.5f) / width;
+            float pivotY = minY / (float)height;
+            return new Vector2(Mathf.Clamp01(pivotX), Mathf.Clamp01(pivotY));
+        }
+        catch (UnityException)
+        {
+            return new Vector2(0.5f, 0f);
+        }
+    }
+
+    private void ApplyInitialActorLayering()
+    {
+        foreach (StoryActorRuntime runtime in actors.Values
+            .Where(x => x?.image != null)
+            .OrderByDescending(x => x.slot)
+            .ThenBy(x => x.order))
+        {
+            runtime.image.transform.SetAsLastSibling();
+        }
+    }
+
+    private StoryLayoutRuntime ResolveLayout(StoryLayoutDocument sceneLayout)
+    {
+        StoryLayoutDocument globalLayout = story?.layout;
+        return new StoryLayoutRuntime
+        {
+            actorSpacing = FirstPositive(sceneLayout?.actorSpacing, globalLayout?.actorSpacing, DefaultActorSpacing),
+            actorHeight = FirstPositive(sceneLayout?.actorHeight, globalLayout?.actorHeight, DefaultActorHeight),
+            actorBottom = FirstPositive(sceneLayout?.actorBottom, globalLayout?.actorBottom, DefaultActorBottom),
+            centerGap = FirstPositive(sceneLayout?.centerGap, globalLayout?.centerGap, DefaultActorCenterGap),
+            stackOffset = FirstPositive(sceneLayout?.stackOffset, globalLayout?.stackOffset, DefaultActorStackOffset),
+        };
+    }
+
+    private static float FirstPositive(float? primary, float? secondary, float fallback)
+    {
+        if (primary.HasValue && primary.Value > 0f)
+            return primary.Value;
+
+        if (secondary.HasValue && secondary.Value > 0f)
+            return secondary.Value;
+
+        return fallback;
+    }
+
+    private void ClearActors()
+    {
+        foreach (StoryActorRuntime runtime in actors.Values)
+        {
+            if (runtime?.image != null)
+                Destroy(runtime.image.gameObject);
+        }
+
+        actors.Clear();
+    }
+
     private static string[] SplitArgs(string args)
     {
         return args.Split(new[] { ' ', '\t' }, StringSplitOptions.RemoveEmptyEntries);
@@ -425,11 +769,44 @@ public class StoryPanel : Panel
         if (string.IsNullOrEmpty(path) || path == "none")
             return null;
 
-        Sprite sprite = NpcInfo.GetIcon(path);
+        Sprite sprite = LoadPetSprite(path);
         if (sprite != null && sprite != SpriteSet.Empty)
             return sprite;
 
-        return ResourceManager.instance.Get<Sprite>(path);
+        sprite = ResourceManager.instance.Get<Sprite>(path);
+        if (sprite != null && sprite != SpriteSet.Empty)
+            return sprite;
+
+        sprite = NpcInfo.GetIcon(path);
+        if (sprite != null && sprite != SpriteSet.Empty)
+            return sprite;
+
+        return null;
+    }
+
+    private static Sprite LoadPetSprite(string path)
+    {
+        string normalized = path.Replace("\\", "/");
+        if (normalized.StartsWith("Pets/pet/", StringComparison.OrdinalIgnoreCase))
+            return LoadPersistentSprite(normalized);
+
+        if (normalized.StartsWith("Pets/icon/", StringComparison.OrdinalIgnoreCase))
+            return LoadPersistentSprite(normalized);
+
+        return null;
+    }
+
+    private static Sprite LoadPersistentSprite(string normalizedPath)
+    {
+        string relativePath = normalizedPath.EndsWith(".png", StringComparison.OrdinalIgnoreCase)
+            ? normalizedPath
+            : normalizedPath + ".png";
+        string fullPath = Path.Combine(Application.persistentDataPath, "Resources", relativePath.Replace("/", Path.DirectorySeparatorChar.ToString()));
+
+        if (!SaveSystem.TryLoadAllBytes(fullPath, out byte[] bytes))
+            return null;
+
+        return SpriteSet.TryCreateSpriteFromBytes(bytes, out Sprite sprite) ? sprite : null;
     }
 
     private Image CreateImage(string name, Transform parent, Vector2 anchorMin, Vector2 anchorMax, Vector2 pivot, Vector2 anchoredPosition, Vector2 sizeDelta, Color color)
@@ -447,6 +824,20 @@ public class StoryPanel : Panel
         Image image = obj.GetComponent<Image>();
         image.color = color;
         return image;
+    }
+
+    private RectTransform CreateRect(string name, Transform parent, Vector2 anchorMin, Vector2 anchorMax, Vector2 pivot, Vector2 anchoredPosition, Vector2 sizeDelta)
+    {
+        GameObject obj = new GameObject(name, typeof(RectTransform));
+        obj.transform.SetParent(parent, false);
+
+        RectTransform rect = obj.GetComponent<RectTransform>();
+        rect.anchorMin = anchorMin;
+        rect.anchorMax = anchorMax;
+        rect.pivot = pivot;
+        rect.anchoredPosition = anchoredPosition;
+        rect.sizeDelta = sizeDelta;
+        return rect;
     }
 
     private void CreateExitButton()
@@ -534,5 +925,24 @@ public class StoryPanel : Panel
         }
 
         return fallback;
+    }
+
+    private class StoryActorRuntime
+    {
+        public StoryActorDocument document;
+        public Image image;
+        public CanvasGroup canvasGroup;
+        public Coroutine fadeCoroutine;
+        public int order;
+        public int slot;
+    }
+
+    private class StoryLayoutRuntime
+    {
+        public float actorSpacing;
+        public float actorHeight;
+        public float actorBottom;
+        public float centerGap;
+        public float stackOffset;
     }
 }

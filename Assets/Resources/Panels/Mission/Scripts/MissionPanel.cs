@@ -13,6 +13,7 @@ public class MissionPanel : Panel
     }
 
     public void SetMissionStorage() {
+        Database.instance.ReloadStoryMod();
         Mission.VersionUpdate();
         var storage = Player.instance.gameData.missionStorage.FindAll(x => x.info != null && (!x.isDone || x.info.replayable));
         missionController.SetMissionStorage(storage);

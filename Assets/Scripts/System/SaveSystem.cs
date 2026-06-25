@@ -869,8 +869,11 @@ public static class SaveSystem
             {
                 string json = FileBrowserHelpers.ReadTextFromFile(path);
                 StoryDocument document = JsonUtility.FromJson<StoryDocument>(json);
-                if (document == null || !document.IsValid)
-                    throw new Exception("Story json format error: " + path);
+                if (!StoryValidator.Validate(document, out string validationError))
+                    throw new Exception("Story json format error: " + path + "\n" + validationError);
+
+                if (storyDict.ContainsKey(document.id))
+                    throw new Exception("Duplicate story id: " + document.id + "\n" + path);
 
                 storyDict[document.id] = document;
             }

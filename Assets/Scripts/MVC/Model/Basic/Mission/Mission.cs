@@ -51,8 +51,12 @@ public class Mission
 
     public static Mission Start(int id) {
         Mission mission = new Mission(id);
-        if (!string.IsNullOrEmpty(mission.info.preMissionId)) {
-            foreach (var preId in mission.info.preMissions) {
+        MissionInfo missionInfo = mission.info;
+        if (missionInfo == null)
+            return null;
+
+        if (!string.IsNullOrEmpty(missionInfo.preMissionId)) {
+            foreach (var preId in missionInfo.preMissions) {
                 Mission preMission = Mission.Find(preId);
                 if ((preMission == null) || (!preMission.isDone)) {
                     return null;
@@ -73,13 +77,17 @@ public class Mission
 
     public static void Complete(int id = 0) {
         Mission mission = Mission.Find(id);
+        if (mission == null)
+            return;
 
         mission.isDone = true;
         mission.checkPointId = "complete";
-        if (string.IsNullOrEmpty(mission.info.nextMissionId))
+
+        MissionInfo missionInfo = mission.info;
+        if (missionInfo == null || string.IsNullOrEmpty(missionInfo.nextMissionId))
             return;
 
-        foreach (var nextId in mission.info.nextMissions) {
+        foreach (var nextId in missionInfo.nextMissions) {
             Mission.Start(nextId);
         }
     }

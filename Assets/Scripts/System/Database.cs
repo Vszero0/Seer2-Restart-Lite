@@ -41,7 +41,7 @@ public class Database : Singleton<Database>
         RM.LoadMissionInfo((x) =>
         {
             missionInfoDict = x;
-            LoadStoryMod();
+            ReloadStoryMod();
             missionInfos = missionInfoDict.Select(entry => entry.Value).ToList();
         });
         RM.LoadActivityInfo((x) =>
@@ -178,9 +178,17 @@ public class Database : Singleton<Database>
         return string.IsNullOrEmpty(id) ? null : storyInfoDict.Get(id);
     }
 
-    private void LoadStoryMod()
+    public void ReloadStoryMod()
     {
         storyInfoDict.Clear();
+        var modMissionIds = missionInfoDict
+            .Where(x => x.Value != null && x.Value.type == MissionType.Mod)
+            .Select(x => x.Key)
+            .ToList();
+
+        foreach (int id in modMissionIds)
+            missionInfoDict.Remove(id);
+
         if (!SaveSystem.TryLoadStoryMod(out string error, out var storyDict))
         {
             if (!string.IsNullOrEmpty(error))
@@ -198,6 +206,8 @@ public class Database : Singleton<Database>
 
             missionInfoDict[missionInfo.id] = missionInfo;
         }
+
+        missionInfos = missionInfoDict.Select(entry => entry.Value).ToList();
     }
 
     public PetHitInfo GetPetHitInfo(int skinId)

@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
 using TMPro;
+using UnityEngine.EventSystems;
 
 public class DialogManager : Manager<DialogManager>
 {
@@ -26,6 +27,8 @@ public class DialogManager : Manager<DialogManager>
     private Image storyDialogBackground;
     private Sprite storyDialogDefaultBackgroundSprite;
     private Color storyDialogDefaultBackgroundColor;
+    private RectTransform storyActorLayer;
+    private RectTransform storyTextBar;
     private RectTransform storyChoiceRoot;
     private TMP_Text storyDialogTextSample;
 
@@ -35,6 +38,7 @@ public class DialogManager : Manager<DialogManager>
         dialogLayerPosition = dialogLayer.anchoredPosition;
         dialogStoryLayerPosition = dialogStoryLayer.anchoredPosition;
         storyDialogBackground = FindStoryDialogBackground();
+        storyTextBar = FindChildRect(dialogStoryLayer, "Text Bar");
         storyDialogTextSample = FindStoryDialogTextSample();
         EnsureStoryDialogTextBackground();
         if (storyDialogBackground != null)
@@ -129,12 +133,21 @@ public class DialogManager : Manager<DialogManager>
         storyDialogBackground.color = storyDialogDefaultBackgroundColor;
     }
 
-    public void ShowStoryChoices(IReadOnlyList<string> choices, Action<int> onChoiceSelected) {
+    public RectTransform GetStoryActorLayer() {
+        if (storyActorLayer == null)
+            storyActorLayer = EnsureStoryActorLayer();
+
+        PlaceStoryActorLayer();
+        return storyActorLayer;
+    }
+
+    public void ShowStoryChoices(IReadOnlyList<string> choices, Action<int> onChoiceSelected, string speakerSide = "left") {
         ClearStoryChoices();
         if (choices == null || choices.Count == 0)
             return;
 
         storyChoiceRoot = EnsureStoryChoiceRoot();
+        PlaceStoryChoiceRoot(string.Equals(speakerSide, "right", StringComparison.OrdinalIgnoreCase));
         storyChoiceRoot.gameObject.SetActive(true);
 
         float rootWidth = 380f;
@@ -287,7 +300,7 @@ public class DialogManager : Manager<DialogManager>
         if (dialogStoryLayer == null)
             return null;
 
-        RectTransform textBar = FindChildRect(dialogStoryLayer, "Text Bar");
+        RectTransform textBar = storyTextBar != null ? storyTextBar : FindChildRect(dialogStoryLayer, "Text Bar");
         if (textBar == null)
             return null;
 
@@ -353,30 +366,80 @@ public class DialogManager : Manager<DialogManager>
         return rect;
     }
 
+    private void PlaceStoryChoiceRoot(bool placeLeft)
+    {
+        if (storyChoiceRoot == null)
+            return;
+
+        float xAnchor = placeLeft ? 0f : 1f;
+        storyChoiceRoot.anchorMin = new Vector2(xAnchor, 0f);
+        storyChoiceRoot.anchorMax = new Vector2(xAnchor, 0f);
+        storyChoiceRoot.pivot = new Vector2(xAnchor, 0f);
+        storyChoiceRoot.anchoredPosition = new Vector2(placeLeft ? 90f : -90f, 160f);
+    }
+
+    private RectTransform EnsureStoryActorLayer()
+    {
+        if (dialogStoryLayer == null)
+            return null;
+
+        GameObject obj = new GameObject("Story Actor Layer", typeof(RectTransform));
+        obj.transform.SetParent(dialogStoryLayer, false);
+
+        RectTransform rect = obj.GetComponent<RectTransform>();
+        rect.anchorMin = Vector2.zero;
+        rect.anchorMax = Vector2.one;
+        rect.offsetMin = Vector2.zero;
+        rect.offsetMax = Vector2.zero;
+        rect.pivot = Vector2.zero;
+        rect.anchoredPosition = Vector2.zero;
+        rect.sizeDelta = Vector2.zero;
+        rect.gameObject.SetActive(true);
+        return rect;
+    }
+
+    private void PlaceStoryActorLayer()
+    {
+        if (storyActorLayer == null || storyDialogBackground == null)
+            return;
+
+        int targetIndex = storyDialogBackground.transform.GetSiblingIndex() + 1;
+        if (storyTextBar != null && storyTextBar.GetSiblingIndex() > targetIndex)
+            targetIndex = storyTextBar.GetSiblingIndex();
+
+        storyActorLayer.SetSiblingIndex(targetIndex);
+    }
+
     private Button CreateStoryChoiceButton(RectTransform parent, string label, Action onClick)
     {
         GameObject obj = new GameObject("Choice", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image), typeof(Button));
         obj.transform.SetParent(parent, false);
 
         RectTransform rect = obj.GetComponent<RectTransform>();
-        rect.anchorMin = new Vector2(1f, 1f);
-        rect.anchorMax = new Vector2(1f, 1f);
-        rect.pivot = new Vector2(1f, 1f);
+        rect.anchorMin = new Vector2(0f, 1f);
+        rect.anchorMax = new Vector2(0f, 1f);
+        rect.pivot = new Vector2(0f, 1f);
 
         Image image = obj.GetComponent<Image>();
-        image.color = new Color32(0, 18, 24, 218);
+        Color32 normalBackground = new Color32(0, 18, 24, 176);
+        Color32 hoverBackground = new Color32(5, 84, 98, 236);
+        Color32 pressedBackground = new Color32(9, 50, 62, 245);
+        image.color = normalBackground;
         image.raycastTarget = true;
 
         Outline outline = obj.AddComponent<Outline>();
-        outline.effectColor = new Color32(44, 227, 255, 190);
+        outline.effectColor = new Color32(44, 227, 255, 96);
         outline.effectDistance = new Vector2(1.5f, -1.5f);
 
         Button button = obj.GetComponent<Button>();
         button.transition = Selectable.Transition.ColorTint;
         ColorBlock colors = button.colors;
-        colors.normalColor = Color.white;
-        colors.highlightedColor = new Color32(20, 84, 96, 255);
-        colors.pressedColor = new Color32(8, 42, 52, 255);
+        colors.normalColor = normalBackground;
+        colors.highlightedColor = hoverBackground;
+        colors.selectedColor = normalBackground;
+        colors.pressedColor = pressedBackground;
+        colors.disabledColor = new Color32(0, 18, 24, 90);
+        colors.fadeDuration = 0.08f;
         button.colors = colors;
         button.onClick.AddListener(() => onClick?.Invoke());
 
@@ -397,10 +460,40 @@ public class DialogManager : Manager<DialogManager>
         text.text = label;
         text.fontSize = 18f;
         text.alignment = TextAlignmentOptions.MidlineLeft;
-        text.color = new Color32(255, 238, 92, 255);
+        text.color = new Color32(178, 184, 172, 235);
         text.enableWordWrapping = true;
         text.raycastTarget = false;
+        StoryChoiceHover hover = obj.AddComponent<StoryChoiceHover>();
+        hover.text = text;
+        hover.outline = outline;
         return button;
+    }
+
+    private class StoryChoiceHover : MonoBehaviour, IPointerEnterHandler, IPointerExitHandler
+    {
+        public TextMeshProUGUI text;
+        public Outline outline;
+
+        private static readonly Color32 NormalTextColor = new Color32(178, 184, 172, 235);
+        private static readonly Color32 HoverTextColor = new Color32(255, 238, 92, 255);
+        private static readonly Color32 NormalOutlineColor = new Color32(44, 227, 255, 96);
+        private static readonly Color32 HoverOutlineColor = new Color32(44, 227, 255, 220);
+
+        public void OnPointerEnter(PointerEventData eventData)
+        {
+            if (text != null)
+                text.color = HoverTextColor;
+            if (outline != null)
+                outline.effectColor = HoverOutlineColor;
+        }
+
+        public void OnPointerExit(PointerEventData eventData)
+        {
+            if (text != null)
+                text.color = NormalTextColor;
+            if (outline != null)
+                outline.effectColor = NormalOutlineColor;
+        }
     }
 
 }

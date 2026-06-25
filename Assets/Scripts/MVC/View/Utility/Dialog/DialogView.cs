@@ -134,10 +134,14 @@ public class DialogView : Module
             return;
 
         EnsureStorySpeakerBlock();
+        if (icon != null)
+            icon.gameObject.SetActive(false);
+
         string speakerText = info.name ?? string.Empty;
         bool hasSpeaker = !string.IsNullOrEmpty(speakerText);
         Sprite speakerIcon = GetStorySpeakerIcon(info);
         bool hasSpeakerIcon = speakerIcon != null && speakerIcon != SpriteSet.Empty;
+        bool speakerOnRight = string.Equals(info.storySpeakerSide, "right", StringComparison.OrdinalIgnoreCase);
 
         storySpeakerGroupRect.gameObject.SetActive(hasSpeaker);
         storySpeakerIcon.gameObject.SetActive(hasSpeakerIcon);
@@ -149,6 +153,7 @@ public class DialogView : Module
 
         storySpeakerText.gameObject.SetActive(hasSpeaker);
         storySpeakerText.text = speakerText;
+        storySpeakerText.fontStyle = FontStyles.Bold;
         storySpeakerText.color = isActiveSpeaker ? new Color32(255, 230, 92, 255) : new Color32(185, 190, 196, 255);
 
         contentRect.anchorMin = new Vector2(0.14f, 0f);
@@ -171,6 +176,10 @@ public class DialogView : Module
         contentTextRect.sizeDelta = new Vector2(textWidth, 1000f);
 
         content.text.enableWordWrapping = true;
+        content.text.alignment = TextAlignmentOptions.MidlineLeft;
+        content.text.color = Color.white;
+        content.text.outlineColor = new Color32(0, 0, 0, 230);
+        content.text.outlineWidth = 0.16f;
         content.text.ForceMeshUpdate();
         float textHeight = Mathf.Max(24f, content.text.preferredHeight);
 
@@ -183,13 +192,15 @@ public class DialogView : Module
 
         float innerHeight = Mathf.Max(0f, barHeight - paddingY * 2f);
         float textOffsetY = paddingY + Mathf.Max(0f, (innerHeight - textHeight) * 0.5f);
-        contentTextRect.anchoredPosition = new Vector2(paddingX + speakerWidth + speakerGap, -textOffsetY);
+        float textX = speakerOnRight ? paddingX : paddingX + speakerWidth + speakerGap;
+        contentTextRect.anchoredPosition = new Vector2(textX, -textOffsetY);
         contentTextRect.sizeDelta = new Vector2(textWidth, textHeight + 4f);
 
         storySpeakerGroupRect.anchorMin = new Vector2(0f, 1f);
         storySpeakerGroupRect.anchorMax = new Vector2(0f, 1f);
         storySpeakerGroupRect.pivot = new Vector2(0.5f, 0.5f);
-        storySpeakerGroupRect.anchoredPosition = new Vector2(paddingX + speakerWidth * 0.5f, -barHeight * 0.5f);
+        float speakerX = speakerOnRight ? barWidth - paddingX - speakerWidth * 0.5f : paddingX + speakerWidth * 0.5f;
+        storySpeakerGroupRect.anchoredPosition = new Vector2(speakerX, -barHeight * 0.5f);
         storySpeakerGroupRect.sizeDelta = new Vector2(speakerWidth, innerHeight);
 
         storySpeakerIconRect.anchorMin = new Vector2(0.5f, 0.5f);
@@ -197,6 +208,7 @@ public class DialogView : Module
         storySpeakerIconRect.pivot = new Vector2(0.5f, 0.5f);
         storySpeakerIconRect.anchoredPosition = new Vector2(0f, hasSpeakerIcon ? (speakerNameHeight + speakerIconGap) * 0.5f : 0f);
         storySpeakerIconRect.sizeDelta = new Vector2(speakerIconSize, speakerIconSize);
+        storySpeakerIconRect.localScale = new Vector3(info.storyFlipIcon ? -1f : 1f, 1f, 1f);
 
         storySpeakerRect.anchorMin = new Vector2(0.5f, 0.5f);
         storySpeakerRect.anchorMax = new Vector2(0.5f, 0.5f);
@@ -268,7 +280,7 @@ public class DialogView : Module
         storySpeakerText = textObj.GetComponent<TextMeshProUGUI>();
         storySpeakerText.font = content.text.font;
         storySpeakerText.fontSize = content.text.fontSize;
-        storySpeakerText.alignment = TextAlignmentOptions.Midline;
+        storySpeakerText.alignment = TextAlignmentOptions.Center;
         storySpeakerText.raycastTarget = false;
         storySpeakerText.enableWordWrapping = true;
         storySpeakerText.richText = true;
