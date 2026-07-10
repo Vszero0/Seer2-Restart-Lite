@@ -268,6 +268,10 @@ public static class SaveSystem
             var mapMinePath = FileBrowserHelpers.CreateFolderInDirectory(mapPath, "mine");
 
             var npcPath = FileBrowserHelpers.CreateFolderInDirectory(modPath, "Npc");
+
+            var spritePath = FileBrowserHelpers.CreateFolderInDirectory(modPath, "Sprites");
+            var spriteMapPath = FileBrowserHelpers.CreateFolderInDirectory(spritePath, "Map");
+            var talkBubblePath = FileBrowserHelpers.CreateFolderInDirectory(spriteMapPath, "talk bubble");
         }
         catch (Exception)
         {
