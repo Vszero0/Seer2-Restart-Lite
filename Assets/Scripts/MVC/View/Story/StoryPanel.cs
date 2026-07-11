@@ -349,7 +349,7 @@ public class StoryPanel : Panel
         SetActiveActor(actor?.id);
         lastDialogInfo = CreateDialogInfo(actor, speaker, content, new List<NpcButtonHandler>());
         DialogManager.instance.OpenStoryDialog(lastDialogInfo);
-        BringExitButtonToFront();
+        RefreshOverlayLayering();
     }
 
     private void SetNarration(string content)
@@ -361,7 +361,7 @@ public class StoryPanel : Panel
         SetActiveActor(null);
         lastDialogInfo = CreateDialogInfo(null, NarratorName, content, new List<NpcButtonHandler>());
         DialogManager.instance.OpenStoryDialog(lastDialogInfo);
-        BringExitButtonToFront();
+        RefreshOverlayLayering();
     }
 
     private void ShowChoices(List<StoryChoice> choices)
@@ -390,7 +390,7 @@ public class StoryPanel : Panel
             JumpTo(choices[choiceIndex].label);
             ShowNextCommand();
         }, GetChoiceSpeakerSide());
-        BringExitButtonToFront();
+        RefreshOverlayLayering();
     }
 
     private string GetChoiceSpeakerSide()
@@ -545,6 +545,7 @@ public class StoryPanel : Panel
         LayoutActorsBySide("left");
         LayoutActorsBySide("right");
         ApplyInitialActorLayering();
+        RefreshOverlayLayering();
     }
 
     private void LayoutActorsBySide(string side)
@@ -901,6 +902,12 @@ public class StoryPanel : Panel
     {
         if (exitButton != null)
             exitButton.transform.SetAsLastSibling();
+    }
+
+    private void RefreshOverlayLayering()
+    {
+        DialogManager.instance?.RefreshStoryOverlayLayering();
+        BringExitButtonToFront();
     }
 
     private TMP_Text FindTextSample()

@@ -107,6 +107,7 @@ public class DialogManager : Manager<DialogManager>
 
         SetStoryDialogLayerActive(true);
         dialogStoryController.OpenDialog(info);
+        RefreshStoryOverlayLayering();
     }
 
     public void SetStoryDialogBackgroundClickHandler(Action handler) {
@@ -185,6 +186,8 @@ public class DialogManager : Manager<DialogManager>
             text.rectTransform.sizeDelta = new Vector2(rootWidth - 38f, buttonHeight - 12f);
             y += buttonHeight + 8f;
         }
+
+        RefreshStoryOverlayLayering();
     }
 
     public void ClearStoryChoices() {
@@ -193,6 +196,25 @@ public class DialogManager : Manager<DialogManager>
 
         storyChoiceRoot.DestoryChildren();
         storyChoiceRoot.gameObject.SetActive(false);
+        RefreshStoryOverlayLayering();
+    }
+
+    public void RefreshStoryOverlayLayering()
+    {
+        if (dialogStoryLayer == null)
+            return;
+
+        if (storyDialogBackground != null)
+            storyDialogBackground.transform.SetAsFirstSibling();
+
+        if (storyActorLayer != null)
+            storyActorLayer.SetSiblingIndex(GetStoryOverlayInsertIndex());
+
+        if (storyTextBar != null)
+            storyTextBar.SetAsLastSibling();
+
+        if (storyChoiceRoot != null && storyChoiceRoot.gameObject.activeSelf)
+            storyChoiceRoot.SetAsLastSibling();
     }
   
     public void CloseDialog() {
@@ -400,14 +422,18 @@ public class DialogManager : Manager<DialogManager>
 
     private void PlaceStoryActorLayer()
     {
-        if (storyActorLayer == null || storyDialogBackground == null)
+        if (storyActorLayer == null)
             return;
 
-        int targetIndex = storyDialogBackground.transform.GetSiblingIndex() + 1;
-        if (storyTextBar != null && storyTextBar.GetSiblingIndex() > targetIndex)
-            targetIndex = storyTextBar.GetSiblingIndex();
+        storyActorLayer.SetSiblingIndex(GetStoryOverlayInsertIndex());
+    }
 
-        storyActorLayer.SetSiblingIndex(targetIndex);
+    private int GetStoryOverlayInsertIndex()
+    {
+        if (storyDialogBackground == null)
+            return 0;
+
+        return Mathf.Min(storyDialogBackground.transform.GetSiblingIndex() + 1, dialogStoryLayer.childCount - 1);
     }
 
     private Button CreateStoryChoiceButton(RectTransform parent, string label, Action onClick)

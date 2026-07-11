@@ -393,6 +393,7 @@ public class StoryMissionDocument
     public string title;
     public bool replayable = true;
     public int mapId;
+    public int[] mapIds;
     public string summary;
 }
 
