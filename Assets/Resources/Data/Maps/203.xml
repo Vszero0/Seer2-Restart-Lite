@@ -10,6 +10,30 @@
 			<wild>
 				<movement mode="wander" radius="220" speed="34" idle="2,3" step="12,26" moveTick="0.05" snap="1" bob="1.25" bobSpeed="2" originalFacesRight="true" />
 				<talk chance="0.3" duration="2.5">
+					<self image="emoji/toon/alert" />
+					<self image="emoji/toon/angry" />
+					<self image="emoji/toon/annoyed" />
+					<self image="emoji/toon/cool" />
+					<self image="emoji/toon/cry" />
+					<self image="emoji/toon/dizzy" />
+					<self image="emoji/toon/grin" />
+					<self image="emoji/toon/happy" />
+					<self image="emoji/toon/hypno" />
+					<self image="emoji/toon/laugh" />
+					<self image="emoji/toon/love" />
+					<self image="emoji/toon/mute" />
+					<self image="emoji/toon/shocked" />
+					<self image="emoji/toon/shy" />
+					<self image="emoji/toon/sick" />
+					<self image="emoji/toon/silly" />
+					<self image="emoji/toon/skull" />
+					<self image="emoji/toon/sleepy" />
+					<self image="emoji/toon/smug" />
+					<self image="emoji/toon/star_eyes" />
+					<self image="emoji/toon/sunglasses" />
+					<self image="emoji/toon/surprised" />
+					<self image="emoji/toon/sweat" />
+					<self image="emoji/toon/worried" />
 					<self>潮水技能！让对手溺水几率提升~</self>
 					<self>有时候会吵架，但过一会儿又黏在一起了。</self>
 					<self>脱力！……不是我们脱力了，是让对手脱力！</self>
@@ -41,6 +65,30 @@
 			<wild>
 				<movement mode="wander" radius="220" speed="34" idle="2,3" step="12,26" moveTick="0.05" snap="1" bob="1.25" bobSpeed="2" originalFacesRight="true" />
 				<talk chance="0.3" duration="2.5">
+					<self image="emoji/toon/alert" />
+					<self image="emoji/toon/angry" />
+					<self image="emoji/toon/annoyed" />
+					<self image="emoji/toon/cool" />
+					<self image="emoji/toon/cry" />
+					<self image="emoji/toon/dizzy" />
+					<self image="emoji/toon/grin" />
+					<self image="emoji/toon/happy" />
+					<self image="emoji/toon/hypno" />
+					<self image="emoji/toon/laugh" />
+					<self image="emoji/toon/love" />
+					<self image="emoji/toon/mute" />
+					<self image="emoji/toon/shocked" />
+					<self image="emoji/toon/shy" />
+					<self image="emoji/toon/sick" />
+					<self image="emoji/toon/silly" />
+					<self image="emoji/toon/skull" />
+					<self image="emoji/toon/sleepy" />
+					<self image="emoji/toon/smug" />
+					<self image="emoji/toon/star_eyes" />
+					<self image="emoji/toon/sunglasses" />
+					<self image="emoji/toon/surprised" />
+					<self image="emoji/toon/sweat" />
+					<self image="emoji/toon/worried" />
 					<self>我们是两个！不是两个头，是两只精灵！</self>
 					<self>黏在一起久了，有时候会忘记谁是哪个。</self>
 					<self>蓄水！水量充足，伤害加成~</self>

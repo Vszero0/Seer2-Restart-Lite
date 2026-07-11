@@ -54,6 +54,30 @@
 			<wild visual="animation">
 				<movement mode="wander" radius="220" speed="34" idle="2,6" step="12,26" moveTick="0.05" snap="1" bob="1.25" bobSpeed="2" originalFacesRight="true" />
 				<talk chance="0.3" duration="4">
+					<self image="emoji/toon/alert" />
+					<self image="emoji/toon/angry" />
+					<self image="emoji/toon/annoyed" />
+					<self image="emoji/toon/cool" />
+					<self image="emoji/toon/cry" />
+					<self image="emoji/toon/dizzy" />
+					<self image="emoji/toon/grin" />
+					<self image="emoji/toon/happy" />
+					<self image="emoji/toon/hypno" />
+					<self image="emoji/toon/laugh" />
+					<self image="emoji/toon/love" />
+					<self image="emoji/toon/mute" />
+					<self image="emoji/toon/shocked" />
+					<self image="emoji/toon/shy" />
+					<self image="emoji/toon/sick" />
+					<self image="emoji/toon/silly" />
+					<self image="emoji/toon/skull" />
+					<self image="emoji/toon/sleepy" />
+					<self image="emoji/toon/smug" />
+					<self image="emoji/toon/star_eyes" />
+					<self image="emoji/toon/sunglasses" />
+					<self image="emoji/toon/surprised" />
+					<self image="emoji/toon/sweat" />
+					<self image="emoji/toon/worried" />
 					<self>云霄星的风好大！吹得我东倒西歪的~</self>
 					<self>小巧玲珑才是优势！你追不到我~</self>
 					<self>夜曲特性！晚上我更强哦~</self>
@@ -105,6 +129,30 @@
 			<wild visual="animation">
 				<movement mode="wander" radius="220" speed="34" idle="2,6" step="12,26" moveTick="0.05" snap="1" bob="1.25" bobSpeed="2" originalFacesRight="true" />
 				<talk chance="0.3" duration="4">
+					<self image="emoji/toon/alert" />
+					<self image="emoji/toon/angry" />
+					<self image="emoji/toon/annoyed" />
+					<self image="emoji/toon/cool" />
+					<self image="emoji/toon/cry" />
+					<self image="emoji/toon/dizzy" />
+					<self image="emoji/toon/grin" />
+					<self image="emoji/toon/happy" />
+					<self image="emoji/toon/hypno" />
+					<self image="emoji/toon/laugh" />
+					<self image="emoji/toon/love" />
+					<self image="emoji/toon/mute" />
+					<self image="emoji/toon/shocked" />
+					<self image="emoji/toon/shy" />
+					<self image="emoji/toon/sick" />
+					<self image="emoji/toon/silly" />
+					<self image="emoji/toon/skull" />
+					<self image="emoji/toon/sleepy" />
+					<self image="emoji/toon/smug" />
+					<self image="emoji/toon/star_eyes" />
+					<self image="emoji/toon/sunglasses" />
+					<self image="emoji/toon/surprised" />
+					<self image="emoji/toon/sweat" />
+					<self image="emoji/toon/worried" />
 					<self>头晕……转圈圈……等等，我在哪？</self>
 					<self>毛毛出击！……哎呦撞到树了。</self>
 					<self>今天又是莽撞的一天~</self>

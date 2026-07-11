@@ -20,6 +20,30 @@
 			<wild visual="animation">
 				<movement mode="wander" radius="220" speed="34" idle="2,6" step="12,26" moveTick="0.05" snap="1" bob="1.25" bobSpeed="2" originalFacesRight="true" />
 				<talk chance="0.3" duration="4">
+					<self image="emoji/toon/alert" />
+					<self image="emoji/toon/angry" />
+					<self image="emoji/toon/annoyed" />
+					<self image="emoji/toon/cool" />
+					<self image="emoji/toon/cry" />
+					<self image="emoji/toon/dizzy" />
+					<self image="emoji/toon/grin" />
+					<self image="emoji/toon/happy" />
+					<self image="emoji/toon/hypno" />
+					<self image="emoji/toon/laugh" />
+					<self image="emoji/toon/love" />
+					<self image="emoji/toon/mute" />
+					<self image="emoji/toon/shocked" />
+					<self image="emoji/toon/shy" />
+					<self image="emoji/toon/sick" />
+					<self image="emoji/toon/silly" />
+					<self image="emoji/toon/skull" />
+					<self image="emoji/toon/sleepy" />
+					<self image="emoji/toon/smug" />
+					<self image="emoji/toon/star_eyes" />
+					<self image="emoji/toon/sunglasses" />
+					<self image="emoji/toon/surprised" />
+					<self image="emoji/toon/sweat" />
+					<self image="emoji/toon/worried" />
 					<self>吱吱！这里可是我的地盘。</self>
 					<self>刚才是不是有什么东西闪过去了？</self>
 					<self>今天也要努力收集能量！</self>
@@ -60,6 +84,30 @@
 			<wild visual="animation">
 				<movement mode="wander" radius="220" speed="34" idle="2,6" step="12,26" moveTick="0.05" snap="1" bob="1.25" bobSpeed="2" originalFacesRight="true" />
 				<talk chance="0.3" duration="4">
+					<self image="emoji/toon/alert" />
+					<self image="emoji/toon/angry" />
+					<self image="emoji/toon/annoyed" />
+					<self image="emoji/toon/cool" />
+					<self image="emoji/toon/cry" />
+					<self image="emoji/toon/dizzy" />
+					<self image="emoji/toon/grin" />
+					<self image="emoji/toon/happy" />
+					<self image="emoji/toon/hypno" />
+					<self image="emoji/toon/laugh" />
+					<self image="emoji/toon/love" />
+					<self image="emoji/toon/mute" />
+					<self image="emoji/toon/shocked" />
+					<self image="emoji/toon/shy" />
+					<self image="emoji/toon/sick" />
+					<self image="emoji/toon/silly" />
+					<self image="emoji/toon/skull" />
+					<self image="emoji/toon/sleepy" />
+					<self image="emoji/toon/smug" />
+					<self image="emoji/toon/star_eyes" />
+					<self image="emoji/toon/sunglasses" />
+					<self image="emoji/toon/surprised" />
+					<self image="emoji/toon/sweat" />
+					<self image="emoji/toon/worried" />
 					<self>鼠鼠我呀，今天也是狠狠充电了呢！</self>
 					<self>你见过赫尔卡星早晨五点钟的太阳吗？</self>
 					<self>成功一定会属于鼠鼠我这样不肯停下脚步的人！</self>

@@ -10,6 +10,30 @@
 			<wild>
 				<movement mode="wander" radius="220" speed="34" idle="2,3" step="12,26" moveTick="0.05" snap="1" bob="1.25" bobSpeed="2" originalFacesRight="true" />
 				<talk chance="0.3" duration="2.5">
+					<self image="emoji/toon/alert" />
+					<self image="emoji/toon/angry" />
+					<self image="emoji/toon/annoyed" />
+					<self image="emoji/toon/cool" />
+					<self image="emoji/toon/cry" />
+					<self image="emoji/toon/dizzy" />
+					<self image="emoji/toon/grin" />
+					<self image="emoji/toon/happy" />
+					<self image="emoji/toon/hypno" />
+					<self image="emoji/toon/laugh" />
+					<self image="emoji/toon/love" />
+					<self image="emoji/toon/mute" />
+					<self image="emoji/toon/shocked" />
+					<self image="emoji/toon/shy" />
+					<self image="emoji/toon/sick" />
+					<self image="emoji/toon/silly" />
+					<self image="emoji/toon/skull" />
+					<self image="emoji/toon/sleepy" />
+					<self image="emoji/toon/smug" />
+					<self image="emoji/toon/star_eyes" />
+					<self image="emoji/toon/sunglasses" />
+					<self image="emoji/toon/surprised" />
+					<self image="emoji/toon/sweat" />
+					<self image="emoji/toon/worried" />
 					<self>逆流！逆流而上！……被冲回来了。</self>
 					<self>银脉山脊的水好凉快，最适合散步~</self>
 					<self>虽然不能畅游，但我在水中走路也很优雅的！</self>
@@ -58,6 +82,30 @@
 			<wild>
 				<movement mode="wander" radius="220" speed="34" idle="2,3" step="12,26" moveTick="0.05" snap="1" bob="1.25" bobSpeed="2" originalFacesRight="true" />
 				<talk chance="0.3" duration="2.5">
+					<self image="emoji/toon/alert" />
+					<self image="emoji/toon/angry" />
+					<self image="emoji/toon/annoyed" />
+					<self image="emoji/toon/cool" />
+					<self image="emoji/toon/cry" />
+					<self image="emoji/toon/dizzy" />
+					<self image="emoji/toon/grin" />
+					<self image="emoji/toon/happy" />
+					<self image="emoji/toon/hypno" />
+					<self image="emoji/toon/laugh" />
+					<self image="emoji/toon/love" />
+					<self image="emoji/toon/mute" />
+					<self image="emoji/toon/shocked" />
+					<self image="emoji/toon/shy" />
+					<self image="emoji/toon/sick" />
+					<self image="emoji/toon/silly" />
+					<self image="emoji/toon/skull" />
+					<self image="emoji/toon/sleepy" />
+					<self image="emoji/toon/smug" />
+					<self image="emoji/toon/star_eyes" />
+					<self image="emoji/toon/sunglasses" />
+					<self image="emoji/toon/surprised" />
+					<self image="emoji/toon/sweat" />
+					<self image="emoji/toon/worried" />
 					<self>虚弱水枪！……水枪也虚弱了？不，是让对手虚弱！</self>
 					<self>小时候被嘲笑的事……现在想想也没什么啦~</self>
 					<self>哼，总有一天我要学会游泳的！……大概。</self>
