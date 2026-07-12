@@ -377,9 +377,8 @@ BranchTarget
 
 ```text
 ConditionGroup
-├── operator: AND / OR
-├── conditions[]
-└── groups[]?
+├── operatorType: AND / OR
+└── conditions[]
 ```
 
 条件节点可以是：
@@ -389,7 +388,9 @@ ConditionGroup
 - `StoryFlag`：剧本运行标记。
 - `MissionState`：任务状态。
 
-`ConditionGroup.operator` 由作者显式选择，不规定默认必须是 AND 或 OR。编辑器应要求作者明确选择组合逻辑，避免依赖数组顺序猜测语义。
+由于 Unity `JsonUtility` 的字段限制，JSON 使用 `operatorType` 表示组合运算符。`ConditionGroup.operatorType` 由作者显式选择，不规定默认必须是 AND 或 OR。编辑器应要求作者明确选择组合逻辑，避免依赖数组顺序猜测语义。
+
+第一阶段的 `ConditionGroup` 不嵌套其他条件组；需要更复杂的逻辑时，先通过多个 `jump` 命令和多个条件组表达。后续如果需要嵌套条件，应改用非递归的条件树序列化结构，不能直接把 `ConditionGroup` 作为自身的数组字段。
 
 ## 8. 持久化数据与运行时数据边界
 

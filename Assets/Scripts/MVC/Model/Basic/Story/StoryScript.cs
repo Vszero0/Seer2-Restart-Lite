@@ -1,4 +1,5 @@
 using System;
+using System.IO;
 using System.Linq;
 using System.Collections.Generic;
 using UnityEngine;
@@ -7,6 +8,8 @@ public class StoryScript
 {
     public List<StoryCommand> commands = new List<StoryCommand>();
     public Dictionary<string, int> labels = new Dictionary<string, int>();
+    public Dictionary<string, string> resourceSources = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+    public List<StoryChoiceHistoryEntry> choiceHistory = new List<StoryChoiceHistoryEntry>();
     public StoryLayoutDocument layout;
     public StoryTextStyleDocument textStyle;
 
@@ -14,24 +17,95 @@ public class StoryScript
     {
         return labels.TryGetValue(label, out int index) ? index : -1;
     }
+
+    public string GetResourceSource(string path)
+    {
+        if (string.IsNullOrWhiteSpace(path) || !resourceSources.TryGetValue(path, out string source))
+            return "auto";
+
+        return source;
+    }
 }
 
 public class StoryCommand
 {
+    public string commandId;
     public StoryCommandType type;
     public string args;
     public string actorId;
+    public string choiceId;
     public string speaker;
     public string text;
     public StoryActorDocument actorInfo;
     public StoryLayoutDocument layout;
+    public int mapId;
+    public string bgmResourcePath;
     public List<StoryChoice> choices = new List<StoryChoice>();
+    public ConditionGroupDocument condition;
+    public ConditionGroupDocument displayCondition;
+}
+
+public class StoryChoiceHistoryEntry
+{
+    public string pointId;
+    public string commandId;
+    public string choiceId;
+    public string optionId;
 }
 
 public class StoryChoice
 {
+    public string choiceId;
+    public string optionId;
     public string text;
     public string label;
+}
+
+[Serializable]
+public class StoryResourceDefinition
+{
+    public string path;
+    public string kind;
+    public string source = "auto";
+    public string metadata;
+}
+
+[Serializable]
+public class StoryActorReferenceDocument
+{
+    public string actorId;
+}
+
+[Serializable]
+public class StorySceneDocument
+{
+    public string id;
+    public int mapId;
+    public string bgmResourcePath;
+    public string[] actorIds;
+    public StoryLayoutDocument layout;
+}
+
+[Serializable]
+public class StoryConditionDocument
+{
+    public string type;
+    public string pointId;
+    public string commandId;
+    public string choiceId;
+    public string optionId;
+    public string[] optionSequence;
+    public string flag;
+    public string value;
+    public int missionId;
+    public string missionState;
+}
+
+[Serializable]
+public class ConditionGroupDocument
+{
+    public string operatorType = "AND";
+    public StoryConditionDocument[] conditions;
 }
 
 [Serializable]
@@ -55,6 +129,8 @@ public class StoryDocument
     public StoryLayoutDocument layout;
     public StoryTextStyleDocument style;
     public StoryMissionDocument mission;
+    public bool replayable = true;
+    public StoryResourceDefinition[] resourceDefinitions;
     public StoryActorDocument[] actors;
     public StoryNodeDocument[] nodes;
 
@@ -69,7 +145,7 @@ public class StoryDocument
         {
             id = mission.id,
             typeId = (int)MissionType.Mod,
-            replayable = mission.replayable,
+            replayable = replayable && mission.replayable,
             title = string.IsNullOrEmpty(mission.title) ? title : mission.title,
             checkpoints = new List<MissionCheckpoint>
             {
@@ -92,6 +168,15 @@ public class StoryDocument
             layout = layout,
             textStyle = style
         };
+        foreach (StoryResourceDefinition resource in resourceDefinitions ?? Array.Empty<StoryResourceDefinition>())
+        {
+            if (resource == null || string.IsNullOrWhiteSpace(resource.path))
+                continue;
+
+            script.resourceSources[resource.path] = string.IsNullOrWhiteSpace(resource.source)
+                ? "auto"
+                : resource.source.Trim().ToLower();
+        }
         if (nodes == null)
             return script;
 
@@ -104,11 +189,15 @@ public class StoryDocument
             if (node.commands == null)
                 continue;
 
-            foreach (StoryCommandDocument command in node.commands)
+            for (int commandIndex = 0; commandIndex < node.commands.Length; commandIndex++)
             {
-                StoryCommand parsed = command?.ToCommand(this);
+                StoryCommand parsed = node.commands[commandIndex]?.ToCommand(this, node);
                 if (parsed != null)
+                {
+                    if (string.IsNullOrEmpty(parsed.commandId))
+                        parsed.commandId = node.id + ":" + commandIndex;
                     script.commands.Add(parsed);
+                }
             }
         }
 
@@ -158,6 +247,24 @@ public static class StoryValidator
         "end",
     };
 
+    private static readonly HashSet<string> resourceKinds = new HashSet<string>
+    {
+        "sprite",
+        "actorSprite",
+        "actorIcon",
+        "mapBackground",
+        "audio",
+        "map",
+        "ui",
+    };
+
+    private static readonly HashSet<string> resourceSources = new HashSet<string>
+    {
+        "auto",
+        "mod",
+        "builtin",
+    };
+
     public static bool Validate(StoryDocument document, out string error)
     {
         List<string> errors = new List<string>();
@@ -188,6 +295,7 @@ public static class StoryValidator
         }
 
         Dictionary<string, StoryActorDocument> actorDict = ValidateActors(document, errors);
+        ValidateResources(document, errors);
         Dictionary<string, StoryNodeDocument> nodeDict = ValidateNodes(document, errors);
 
         string entry = string.IsNullOrWhiteSpace(document.entry) ? "start" : document.entry;
@@ -195,10 +303,108 @@ public static class StoryValidator
             errors.Add("entry 指向的节点不存在：" + entry);
 
         foreach (StoryNodeDocument node in document.nodes ?? Array.Empty<StoryNodeDocument>())
+        {
+            ValidateNodeScenes(node, actorDict, errors);
             ValidateNodeCommands(node, actorDict, nodeDict, errors);
+        }
 
         error = string.Join("\n", errors);
         return errors.Count == 0;
+    }
+
+    private static void ValidateNodeScenes(StoryNodeDocument node, Dictionary<string, StoryActorDocument> actorDict, List<string> errors)
+    {
+        if (node?.scenes == null)
+            return;
+
+        HashSet<string> sceneIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (StorySceneDocument scene in node.scenes)
+        {
+            if (scene == null)
+                continue;
+
+            string location = "node[" + node.id + "].scenes[" + (scene.id ?? string.Empty) + "]";
+            if (string.IsNullOrWhiteSpace(scene.id) || !sceneIds.Add(scene.id))
+                errors.Add(location + " 存在重复或为空的场景 id");
+
+            if (scene.mapId <= 0)
+                errors.Add(location + ".mapId 必须是有效地图 ID");
+
+            ValidateResourcePath("Maps/bg/" + scene.mapId, "mapBackground", "auto", errors, location + ".mapId");
+
+            ValidateResourcePath(scene.bgmResourcePath, "audio", "auto", errors, location + ".bgmResourcePath");
+            foreach (string actorId in scene.actorIds ?? Array.Empty<string>())
+            {
+                if (string.IsNullOrWhiteSpace(actorId) || !actorDict.ContainsKey(actorId))
+                    errors.Add(location + ".actorIds 引用了不存在的角色：" + actorId);
+            }
+        }
+    }
+
+    private static void ValidateResources(StoryDocument document, List<string> errors)
+    {
+        HashSet<string> resourcePaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (StoryResourceDefinition resource in document.resourceDefinitions ?? Array.Empty<StoryResourceDefinition>())
+        {
+            if (resource == null)
+                continue;
+
+            string path = resource.path?.Trim();
+            if (string.IsNullOrEmpty(path))
+            {
+                errors.Add("resourceDefinitions 中存在 path 为空的资源");
+                continue;
+            }
+
+            if (!resourcePaths.Add(path))
+                errors.Add("resourceDefinitions 存在重复资源路径：" + path);
+
+            if (!string.IsNullOrEmpty(resource.kind) && !resourceKinds.Contains(resource.kind))
+                errors.Add("资源 kind 不支持：" + resource.kind + "，路径：" + path);
+
+            string source = string.IsNullOrWhiteSpace(resource.source) ? "auto" : resource.source.Trim().ToLower();
+            if (!resourceSources.Contains(source))
+                errors.Add("资源 source 不支持：" + resource.source + "，路径：" + path);
+
+            ValidateResourcePath(path, resource.kind, source, errors, "resourceDefinitions[" + path + "]");
+        }
+
+    }
+
+    private static void ValidateResourcePath(string path, string kind, string source, List<string> errors, string location)
+    {
+        if (string.IsNullOrWhiteSpace(path) || string.Equals(kind, "map", StringComparison.OrdinalIgnoreCase))
+            return;
+
+        string normalizedPath = path.Replace('\\', '/').TrimStart('/');
+        string[] roots = source == "mod"
+            ? new[] { Application.persistentDataPath + "/Mod/" }
+            : source == "builtin"
+                ? new[] { Application.persistentDataPath + "/Resources/" }
+                : new[]
+                {
+                    Application.persistentDataPath + "/Mod/",
+                    Application.persistentDataPath + "/Resources/",
+                };
+
+        string[] extensions = GetResourceExtensions(kind, normalizedPath);
+        bool exists = roots.Any(root => extensions.Any(extension => File.Exists(root + normalizedPath + extension)));
+        if (!exists)
+            errors.Add(location + " 引用的资源不存在：" + path + "，source=" + source);
+    }
+
+    private static string[] GetResourceExtensions(string kind, string path)
+    {
+        if (Path.HasExtension(path))
+            return new[] { string.Empty };
+
+        if (string.Equals(kind, "audio", StringComparison.OrdinalIgnoreCase))
+            return new[] { ".mp3" };
+
+        if (string.Equals(kind, "actorSprite", StringComparison.OrdinalIgnoreCase))
+            return new[] { ".png", ".gif" };
+
+        return new[] { ".png", ".gif" };
     }
 
     private static Dictionary<string, StoryActorDocument> ValidateActors(StoryDocument document, List<string> errors)
@@ -222,6 +428,9 @@ public static class StoryValidator
             }
 
             actorDict[actor.id] = actor;
+            ValidateResourcePath(actor.sprite, "actorSprite", "auto", errors, "actors[" + actor.id + "].sprite");
+            ValidateResourcePath(actor.icon, "actorIcon", "auto", errors, "actors[" + actor.id + "].icon");
+            ValidateResourcePath(actor.battleSprite, "actorSprite", "auto", errors, "actors[" + actor.id + "].battleSprite");
         }
 
         return actorDict;
@@ -294,8 +503,18 @@ public static class StoryValidator
             switch (type)
             {
                 case "scene":
-                    if (string.IsNullOrWhiteSpace(command.bg) && string.IsNullOrWhiteSpace(command.args))
-                        errors.Add(location + " 需要 bg 或 args");
+                    if (string.IsNullOrWhiteSpace(command.sceneId)
+                        && command.mapId <= 0
+                        && string.IsNullOrWhiteSpace(command.bg)
+                        && string.IsNullOrWhiteSpace(command.args))
+                        errors.Add(location + " 需要 sceneId、mapId、bg 或 args");
+                    if (command.mapId < 0)
+                        errors.Add(location + ".mapId 不能小于 0");
+                    if (command.mapId > 0)
+                        ValidateResourcePath("Maps/bg/" + command.mapId, "mapBackground", "auto", errors, location + ".mapId");
+                    ValidateResourcePath(command.bgmResourcePath, "audio", "auto", errors, location + ".bgmResourcePath");
+                    ValidateConditionGroup(command.condition, errors, location + ".condition");
+                    ValidateConditionGroup(command.displayCondition, errors, location + ".displayCondition");
                     break;
                 case "show":
                     ValidateActorReference(command, actorDict, errors, location, true);
@@ -315,9 +534,11 @@ public static class StoryValidator
                     break;
                 case "choice":
                     ValidateChoices(command, nodeDict, errors, location);
+                    ValidateConditionGroup(command.condition, errors, location + ".condition");
                     break;
                 case "jump":
                     ValidateTarget(command.target, nodeDict, errors, location);
+                    ValidateConditionGroup(command.condition, errors, location + ".condition");
                     break;
                 case "mission":
                     if (string.IsNullOrWhiteSpace(command.args))
@@ -329,6 +550,23 @@ public static class StoryValidator
                     break;
             }
         }
+    }
+
+    private static void ValidateConditionGroup(ConditionGroupDocument group, List<string> errors, string location)
+    {
+        if (group == null)
+            return;
+
+        string op = string.IsNullOrWhiteSpace(group.operatorType) ? string.Empty : group.operatorType.Trim().ToUpper();
+        if (op != "AND" && op != "OR")
+            errors.Add(location + ".operatorType 必须是 AND 或 OR");
+
+        foreach (StoryConditionDocument condition in group.conditions ?? Array.Empty<StoryConditionDocument>())
+        {
+            if (condition == null || string.IsNullOrWhiteSpace(condition.type))
+                errors.Add(location + ".conditions 中存在无效条件");
+        }
+
     }
 
     private static void ValidateActorReference(
@@ -379,7 +617,8 @@ public static class StoryValidator
             if (string.IsNullOrWhiteSpace(choice.text))
                 errors.Add(choiceLocation + ".text 不能为空");
 
-            ValidateTarget(choice.target, nodeDict, errors, choiceLocation);
+            if (!string.IsNullOrWhiteSpace(choice.target))
+                ValidateTarget(choice.target, nodeDict, errors, choiceLocation);
         }
     }
 
@@ -415,9 +654,13 @@ public class StoryMissionDocument
 public class StoryActorDocument
 {
     public string id;
+    public string actorType = "pet";
+    public string petId;
+    public string npcId;
     public string name;
     public string sprite;
     public string icon;
+    public string battleSprite;
     public string side = "left";
     public int slot;
     public bool faceLeft = true;
@@ -443,13 +686,30 @@ public class StoryLayoutDocument
 public class StoryNodeDocument
 {
     public string id;
+    public string displayName;
+    public StoryActorReferenceDocument[] actorReferences;
+    public StorySceneDocument[] scenes;
+    public StoryTextStyleDocument style;
     public StoryCommandDocument[] commands;
+
+    public StorySceneDocument GetScene(string sceneId)
+    {
+        if (string.IsNullOrWhiteSpace(sceneId) || scenes == null)
+            return null;
+
+        return scenes.FirstOrDefault(x => x != null && string.Equals(x.id, sceneId, StringComparison.OrdinalIgnoreCase));
+    }
 }
 
 [Serializable]
 public class StoryCommandDocument
 {
+    public string commandId;
     public string type;
+    public string choiceId;
+    public string sceneId;
+    public int mapId;
+    public string bgmResourcePath;
     public string bg;
     public string actor;
     public string text;
@@ -462,17 +722,30 @@ public class StoryCommandDocument
     public float centerGap;
     public float stackOffset;
     public StoryChoiceDocument[] choices;
+    public ConditionGroupDocument condition;
+    public ConditionGroupDocument displayCondition;
 
-    public StoryCommand ToCommand(StoryDocument document)
+    public StoryCommand ToCommand(StoryDocument document, StoryNodeDocument node = null)
     {
         string commandType = (type ?? string.Empty).Trim().ToLower();
         StoryCommand command = new StoryCommand();
+        command.commandId = commandId;
+        command.choiceId = choiceId;
+        command.condition = condition;
+        command.displayCondition = displayCondition;
         switch (commandType)
         {
             case "scene":
                 command.type = StoryCommandType.Scene;
-                command.args = string.IsNullOrEmpty(bg) ? args : bg;
-                command.layout = GetSceneLayout();
+                StorySceneDocument scene = node?.GetScene(sceneId);
+                command.mapId = scene?.mapId > 0 ? scene.mapId : mapId;
+                command.bgmResourcePath = string.IsNullOrEmpty(scene?.bgmResourcePath)
+                    ? bgmResourcePath
+                    : scene.bgmResourcePath;
+                command.args = string.IsNullOrEmpty(bg)
+                    ? (command.mapId > 0 ? "Maps/bg/" + command.mapId : args)
+                    : bg;
+                command.layout = scene?.layout ?? GetSceneLayout();
                 return command;
             case "show":
                 command.type = StoryCommandType.Show;
@@ -561,6 +834,8 @@ public class StoryCommandDocument
 [Serializable]
 public class StoryChoiceDocument
 {
+    public string choiceId;
+    public string optionId;
     public string text;
     public string target;
 
@@ -568,6 +843,8 @@ public class StoryChoiceDocument
     {
         return new StoryChoice
         {
+            choiceId = choiceId,
+            optionId = optionId,
             text = text,
             label = target,
         };

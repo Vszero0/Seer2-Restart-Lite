@@ -242,8 +242,7 @@ public class StoryPanel : Panel
             switch (command.type)
             {
                 case StoryCommandType.Scene:
-                    SetScene(GetArgValue(command.args, "bg", command.args));
-                    ApplySceneLayout(command.layout);
+                    ApplyScene(command);
                     continue;
                 case StoryCommandType.Show:
                     RegisterActor(command);
@@ -261,7 +260,8 @@ public class StoryPanel : Panel
                     ShowChoices(command.choices);
                     return;
                 case StoryCommandType.Jump:
-                    JumpTo(command.args);
+                    if (EvaluateCondition(command.condition))
+                        JumpTo(command.args);
                     continue;
                 case StoryCommandType.Mission:
                     ExecuteMission(command.args);
@@ -276,6 +276,30 @@ public class StoryPanel : Panel
         }
 
         ClosePanel();
+    }
+
+    private void ApplyScene(StoryCommand command)
+    {
+        SetScene(GetArgValue(command.args, "bg", command.args));
+        ClearActors();
+        nextSideSlots.Clear();
+        ApplySceneLayout(command.layout);
+        PlaySceneMusic(command.bgmResourcePath);
+    }
+
+    private void PlaySceneMusic(string resourcePath)
+    {
+        if (string.IsNullOrWhiteSpace(resourcePath) || ResourceManager.instance == null)
+            return;
+
+        string source = story?.GetResourceSource(resourcePath) ?? "auto";
+        bool modOnly = source == "mod" || source == "auto";
+        ResourceManager.instance.GetLocalAddressables<AudioClip>(resourcePath, modOnly,
+            clip => AudioSystem.instance?.PlayMusic(clip, AudioVolumeType.BGM),
+            modOnly && source == "auto"
+                ? _ => ResourceManager.instance.GetLocalAddressables<AudioClip>(resourcePath, false,
+                    clip => AudioSystem.instance?.PlayMusic(clip, AudioVolumeType.BGM))
+                : null);
     }
 
     private void SetScene(string path)
@@ -386,7 +410,14 @@ public class StoryPanel : Panel
 
             waitingForChoice = false;
             ClearChoiceHandler();
-            JumpTo(choices[choiceIndex].label);
+            StoryChoice choice = choices[choiceIndex];
+            StoryCommand choiceCommand = GetCurrentChoiceCommand();
+            story.choiceHistory.Add(new StoryChoiceHistoryEntry
+            {
+                commandId = choiceCommand?.commandId,
+                choiceId = choiceCommand?.choiceId,
+                optionId = choice.optionId,
+            });
             ShowNextCommand();
         }, GetChoiceSpeakerSide());
         RefreshOverlayLayering();
@@ -793,6 +824,62 @@ public class StoryPanel : Panel
             return sprite;
 
         return null;
+    }
+
+    private StoryCommand GetCurrentChoiceCommand()
+    {
+        int index = Mathf.Clamp(commandIndex - 1, 0, story?.commands.Count - 1 ?? 0);
+        return story == null || story.commands.Count == 0 ? null : story.commands[index];
+    }
+
+    private bool EvaluateCondition(ConditionGroupDocument group)
+    {
+        if (group == null)
+            return true;
+
+        bool useAnd = !string.Equals(group.operatorType, "OR", StringComparison.OrdinalIgnoreCase);
+        List<bool> results = new List<bool>();
+        foreach (StoryConditionDocument condition in group.conditions ?? Array.Empty<StoryConditionDocument>())
+            results.Add(EvaluateCondition(condition));
+
+        if (results.Count == 0)
+            return true;
+
+        return useAnd ? results.All(x => x) : results.Any(x => x);
+    }
+
+    private bool EvaluateCondition(StoryConditionDocument condition)
+    {
+        if (condition == null || string.IsNullOrWhiteSpace(condition.type))
+            return false;
+
+        switch (condition.type.Trim().ToLower())
+        {
+            case "choiceselected":
+                return story.choiceHistory.Any(x =>
+                    (string.IsNullOrEmpty(condition.commandId) || x.commandId == condition.commandId) &&
+                    (string.IsNullOrEmpty(condition.choiceId) || x.choiceId == condition.choiceId) &&
+                    (string.IsNullOrEmpty(condition.optionId) || x.optionId == condition.optionId));
+            case "choicesequencematched":
+                string[] sequence = condition.optionSequence ?? Array.Empty<string>();
+                if (sequence.Length == 0 || story.choiceHistory.Count < sequence.Length)
+                    return false;
+
+                int start = story.choiceHistory.Count - sequence.Length;
+                return sequence.Select((optionId, index) => optionId == story.choiceHistory[start + index].optionId).All(x => x);
+            case "missionstate":
+                Mission mission = Mission.Find(condition.missionId);
+                if (mission == null)
+                    return false;
+
+                return string.Equals(condition.missionState, "complete", StringComparison.OrdinalIgnoreCase)
+                    ? mission.isDone
+                    : !mission.isDone;
+            case "storyflag":
+                return false;
+            default:
+                return false;
+        }
     }
 
     private Image CreateImage(string name, Transform parent, Vector2 anchorMin, Vector2 anchorMax, Vector2 pivot, Vector2 anchoredPosition, Vector2 sizeDelta, Color color)

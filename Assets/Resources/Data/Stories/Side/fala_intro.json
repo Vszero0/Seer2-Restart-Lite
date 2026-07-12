@@ -3,13 +3,29 @@
   "id": "fala_intro",
   "title": "法拉的星际巡查演示",
   "entry": "start",
-  "layout": {
-    "actorSpacing": 150,
-    "actorHeight": 238,
-    "actorBottom": 166,
-    "centerGap": 118,
-    "stackOffset": 32
-  },
+  "replayable": true,
+  "resourceDefinitions": [
+    { "path": "Maps/bg/121", "kind": "mapBackground", "source": "builtin" },
+    { "path": "BGM/101/BGM_1", "kind": "audio", "source": "builtin" },
+    { "path": "Pets/pet/10", "kind": "actorSprite", "source": "builtin" },
+    { "path": "Pets/icon/10", "kind": "actorIcon", "source": "builtin" },
+    { "path": "Pets/battle/10", "kind": "actorSprite", "source": "builtin" },
+    { "path": "Pets/pet/11", "kind": "actorSprite", "source": "builtin" },
+    { "path": "Pets/icon/11", "kind": "actorIcon", "source": "builtin" },
+    { "path": "Pets/battle/11", "kind": "actorSprite", "source": "builtin" },
+    { "path": "Pets/pet/12", "kind": "actorSprite", "source": "builtin" },
+    { "path": "Pets/icon/12", "kind": "actorIcon", "source": "builtin" },
+    { "path": "Pets/battle/12", "kind": "actorSprite", "source": "builtin" },
+    { "path": "Pets/pet/13", "kind": "actorSprite", "source": "builtin" },
+    { "path": "Pets/icon/13", "kind": "actorIcon", "source": "builtin" },
+    { "path": "Pets/battle/13", "kind": "actorSprite", "source": "builtin" },
+    { "path": "Pets/pet/16", "kind": "actorSprite", "source": "builtin" },
+    { "path": "Pets/icon/16", "kind": "actorIcon", "source": "builtin" },
+    { "path": "Pets/battle/16", "kind": "actorSprite", "source": "builtin" },
+    { "path": "Pets/pet/17", "kind": "actorSprite", "source": "builtin" },
+    { "path": "Pets/icon/17", "kind": "actorIcon", "source": "builtin" },
+    { "path": "Pets/battle/17", "kind": "actorSprite", "source": "builtin" }
+  ],
   "mission": {
     "id": -10001,
     "title": "法拉的星际巡查演示",
@@ -20,9 +36,12 @@
   "actors": [
     {
       "id": "fala",
+      "actorType": "pet",
+      "petId": "10",
       "name": "法拉",
       "sprite": "Pets/pet/10",
       "icon": "Pets/icon/10",
+      "battleSprite": "Pets/battle/10",
       "side": "left",
       "slot": 1,
       "faceLeft": false,
@@ -31,9 +50,12 @@
     },
     {
       "id": "fanna",
+      "actorType": "pet",
+      "petId": "11",
       "name": "法娜",
       "sprite": "Pets/pet/11",
       "icon": "Pets/icon/11",
+      "battleSprite": "Pets/battle/11",
       "side": "left",
       "slot": 2,
       "faceLeft": false,
@@ -42,9 +64,12 @@
     },
     {
       "id": "fayina",
+      "actorType": "pet",
+      "petId": "12",
       "name": "法伊娜",
       "sprite": "Pets/pet/12",
       "icon": "Pets/icon/12",
+      "battleSprite": "Pets/battle/12",
       "side": "left",
       "slot": 3,
       "faceLeft": false,
@@ -53,9 +78,12 @@
     },
     {
       "id": "xiaoxiaokui",
+      "actorType": "pet",
+      "petId": "13",
       "name": "小小葵",
       "sprite": "Pets/pet/13",
       "icon": "Pets/icon/13",
+      "battleSprite": "Pets/battle/13",
       "side": "right",
       "slot": 3,
       "faceLeft": true,
@@ -64,9 +92,12 @@
     },
     {
       "id": "buer",
+      "actorType": "pet",
+      "petId": "16",
       "name": "布尔",
       "sprite": "Pets/pet/16",
       "icon": "Pets/icon/16",
+      "battleSprite": "Pets/battle/16",
       "side": "right",
       "slot": 2,
       "faceLeft": true,
@@ -75,9 +106,12 @@
     },
     {
       "id": "bulutuo",
+      "actorType": "pet",
+      "petId": "17",
       "name": "布鲁托",
       "sprite": "Pets/pet/17",
       "icon": "Pets/icon/17",
+      "battleSprite": "Pets/battle/17",
       "side": "right",
       "slot": 1,
       "faceLeft": true,
@@ -88,13 +122,27 @@
   "nodes": [
     {
       "id": "start",
+      "scenes": [
+        {
+          "id": "opening",
+          "mapId": 121,
+          "bgmResourcePath": "BGM/101/BGM_1",
+          "actorIds": [ "fala", "fanna", "fayina", "xiaoxiaokui", "buer", "bulutuo" ],
+          "layout": {
+            "actorSpacing": 150,
+            "actorHeight": 238,
+            "actorBottom": 166,
+            "centerGap": 118,
+            "stackOffset": 32
+          }
+        }
+      ],
       "commands": [
         {
           "type": "scene",
-          "bg": "Maps/bg/121",
-          "layout": {
-            "actorSpacing": 150
-          }
+          "sceneId": "opening",
+          "mapId": 121,
+          "bgmResourcePath": "BGM/101/BGM_1"
         },
         {
           "type": "show",
@@ -141,16 +189,37 @@
         },
         {
           "type": "choice",
+          "choiceId": "start_route",
           "choices": [
             {
-              "text": "认真询问巡查目标。",
-              "target": "ask_goal"
+              "optionId": "ask_goal",
+              "text": "认真询问巡查目标。"
             },
             {
-              "text": "先质疑这艘“飞船”的合法性。",
-              "target": "ask_ship"
+              "optionId": "ask_ship",
+              "text": "先质疑这艘“飞船”的合法性。"
             }
           ]
+        },
+        {
+          "type": "jump",
+          "target": "ask_goal",
+          "condition": {
+            "operatorType": "AND",
+            "conditions": [
+              { "type": "ChoiceSelected", "choiceId": "start_route", "optionId": "ask_goal" }
+            ]
+          }
+        },
+        {
+          "type": "jump",
+          "target": "ask_ship",
+          "condition": {
+            "operatorType": "AND",
+            "conditions": [
+              { "type": "ChoiceSelected", "choiceId": "start_route", "optionId": "ask_ship" }
+            ]
+          }
         }
       ]
     },
@@ -169,20 +238,37 @@
         },
         {
           "type": "choice",
+          "choiceId": "goal_followup",
           "choices": [
             {
-              "text": "询问小小葵的自然融入方案。",
-              "target": "nature_blend"
+              "optionId": "nature_blend",
+              "text": "询问小小葵的自然融入方案。"
             },
             {
-              "text": "询问右侧吐槽组的预算贡献。",
-              "target": "budget_contribution"
+              "optionId": "budget_contribution",
+              "text": "询问右侧吐槽组的预算贡献。"
             }
           ]
         },
         {
           "type": "jump",
-          "target": "briefing"
+          "target": "nature_blend",
+          "condition": {
+            "operatorType": "AND",
+            "conditions": [
+              { "type": "ChoiceSelected", "choiceId": "goal_followup", "optionId": "nature_blend" }
+            ]
+          }
+        },
+        {
+          "type": "jump",
+          "target": "budget_contribution",
+          "condition": {
+            "operatorType": "AND",
+            "conditions": [
+              { "type": "ChoiceSelected", "choiceId": "goal_followup", "optionId": "budget_contribution" }
+            ]
+          }
         }
       ]
     },
@@ -257,16 +343,37 @@
         },
         {
           "type": "choice",
+          "choiceId": "briefing_check",
           "choices": [
             {
-              "text": "检查星际路线。",
-              "target": "route_check"
+              "optionId": "route_check",
+              "text": "检查星际路线。"
             },
             {
-              "text": "检查临时补给。",
-              "target": "supply_check"
+              "optionId": "supply_check",
+              "text": "检查临时补给。"
             }
           ]
+        },
+        {
+          "type": "jump",
+          "target": "route_check",
+          "condition": {
+            "operatorType": "AND",
+            "conditions": [
+              { "type": "ChoiceSelected", "choiceId": "briefing_check", "optionId": "route_check" }
+            ]
+          }
+        },
+        {
+          "type": "jump",
+          "target": "supply_check",
+          "condition": {
+            "operatorType": "AND",
+            "conditions": [
+              { "type": "ChoiceSelected", "choiceId": "briefing_check", "optionId": "supply_check" }
+            ]
+          }
         }
       ]
     },
@@ -323,16 +430,37 @@
         },
         {
           "type": "choice",
+          "choiceId": "signal_method",
           "choices": [
             {
-              "text": "用星星眨眼发信号。",
-              "target": "blink_signal"
+              "optionId": "blink_signal",
+              "text": "用星星眨眼发信号。"
             },
             {
-              "text": "用蘑菇频道发信号。",
-              "target": "mushroom_channel"
+              "optionId": "mushroom_channel",
+              "text": "用蘑菇频道发信号。"
             }
           ]
+        },
+        {
+          "type": "jump",
+          "target": "blink_signal",
+          "condition": {
+            "operatorType": "AND",
+            "conditions": [
+              { "type": "ChoiceSelected", "choiceId": "signal_method", "optionId": "blink_signal" }
+            ]
+          }
+        },
+        {
+          "type": "jump",
+          "target": "mushroom_channel",
+          "condition": {
+            "operatorType": "AND",
+            "conditions": [
+              { "type": "ChoiceSelected", "choiceId": "signal_method", "optionId": "mushroom_channel" }
+            ]
+          }
         }
       ]
     },

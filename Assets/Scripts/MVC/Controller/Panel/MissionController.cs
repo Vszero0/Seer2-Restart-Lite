@@ -47,18 +47,14 @@ public class MissionController : Module
         var checkpoint = missionModel.currentMission.checkpointInfo;
         if (checkpoint == null)
         {
-            if (missionInfo != null && missionInfo.type == MissionType.Mod)
-                OpenModMissionError("找不到对应的任务节点");
-
+            OpenStoryError("找不到对应的任务节点");
             return;
         }
 
         if (checkpoint.hasStory) {
             if (!StoryPanel.CanOpenStory(checkpoint.storyId, out string error))
             {
-                if (missionInfo != null && missionInfo.type == MissionType.Mod)
-                    OpenModMissionError(error);
-
+                OpenStoryError(error);
                 return;
             }
 
@@ -73,6 +69,15 @@ public class MissionController : Module
         }
 
         TeleportHandler.Teleport(checkpoint.mapId);
+    }
+
+    private void OpenStoryError(string detail)
+    {
+        string message = "加载剧情失败，可能是剧情文件不存在或格式错误";
+        if (!string.IsNullOrEmpty(detail))
+            message += "\n" + detail;
+
+        Hintbox.OpenHintboxWithContent(message, 16).SetSize(640, 320);
     }
 
     private void OpenModMissionError(string detail)
