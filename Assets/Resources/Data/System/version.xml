@@ -1,20 +1,20 @@
 <versionData>
-    <gameVersion>lite_4.5</gameVersion>
-    <buildVersion>lite_4.5</buildVersion>
-    <resourceVersion>lite_4.5</resourceVersion>
+    <gameVersion>lite_4.6</gameVersion>
+    <buildVersion>lite_4.6</buildVersion>
+    <resourceVersion>lite_4.6</resourceVersion>
     <releaseDate>2026-07-03+08:00</releaseDate>
     <releaseNote>
-        【当前版本】lite_4.5
-        【版本日期】2026/07/03
+        【当前版本】lite_4.6
+        【版本日期】2026/07/17
 
-        【更新精灵】时空幻零、脉灵神、蚀魂兽、黑岩莫古、天翼沙皇、特伊特、鬼伊特、包芯粽、伊利特
-        【更新活动】蚀魂兽的挑战、脉灵兽超进化、阿尔比零神迹觉醒、五月五庆端午、七月签到
-        【更新功能】上架新植物、可以售卖料理、显示各段连击伤害、琉梦好感信息、（试运行）牧场开放养殖、动物跟随功能、地图路径显示功能、野生精灵说话功能、自定义强弱化类印记消除功能
-        【更新地图】虫林仙境、时空罗盘
-        【修复错误】修复战斗开始时初始化印记异常的错误、异常失效中仍无法行动的错误、寒冰蜕变无视先制无效的错误、重甲穿刺流血对象异常的错误、脉灵兽特性恢复怒气效果条件异常的错误、脂肪燃烧消耗增重没有使体重下降的错误
-        【平衡调整】降低目灵神关卡难度
-        【伊特大乱斗调整】《实装新伊特》特伊特、鬼伊特
-        【下期预告】塞西利亚星
+        【更新精灵】阿克希亚、克洛亚、宾塞克、阿娅、雷奥帕德、诺基博、派鲁基达
+        【更新活动】凛冰枪骑、试炼之塔、王者之塔第7层
+        【更新功能】《新植物》番茄、马铃薯；《新动物》红猪、磷虾；《新料理》精灵蛋包饭、爱心汉堡、惊奇松塔饼；自定义属性组别与颜色代码
+        【更新地图】塞西利亚星冰原
+        【修复错误】钢伊特特性效果与描述不符的错误、脉灵神必杀激活专属动作时条件错误、包芯粽香气扑鼻效果错误
+        【平衡调整】泰斗之破
+        【伊特大乱斗调整】《实装新加成》雪球、寒冰大米
+        【下期预告】玄冰兽
 
         后续更新请关注【B站奥比休斯】或加群 258645296
     </releaseNote>
@@ -45,15 +45,15 @@
         </dailyLoginMail>
     </mailData>
     <petData>
-        <petNum>708</petNum>
+        <petNum>759</petNum>
         <minPetId>1</minPetId>
         <maxPetId>20000</maxPetId>
-        <topicPetId>20014,992,1982,695,696,105,741,407,1006</topicPetId>
+        <topicPetId>10050,10118,10556,13399,374,191,10073</topicPetId>
     </petData>
     <skillData>
-        <skillNum>4401</skillNum>
+        <skillNum>4748</skillNum>
         <minSkillId>10001</minSkillId>
-        <maxSkillId>14415</maxSkillId>
+        <maxSkillId>14748</maxSkillId>
     </skillData>
     <missionData>
         <mainCount>6</mainCount>

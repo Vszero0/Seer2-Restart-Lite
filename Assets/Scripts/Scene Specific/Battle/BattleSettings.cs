@@ -134,6 +134,9 @@ public class BattleSettings
     public bool Condition(Pet pet, out string message)
     {
         message = null;
+        if (GameManager.instance.debugMode)
+            return true;
+
         if (isSimulate || (pet == null))
             return true;
 

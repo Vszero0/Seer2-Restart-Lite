@@ -1181,6 +1181,17 @@ public class ResourceManager : Singleton<ResourceManager>
         return PetElementSystem.IsMod();
     }
 
+    public void GetElementEffect(string[] data)
+    {
+        int dataCol = PetElementSystem.DATA_COL;
+        int dataRow = data.Length / dataCol;
+        for (int i = 1; i < dataRow; i++)
+        {
+            int cur = dataCol * i;
+            PetElementSystem.ParseElementEffect(data, cur);
+        }
+    }
+
     public void LoadMissionInfo(Action<Dictionary<int, MissionInfo>> onSuccess = null)
     {
         var missionData = GameManager.versionData.missionData;

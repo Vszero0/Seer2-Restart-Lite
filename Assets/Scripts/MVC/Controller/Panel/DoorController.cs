@@ -34,7 +34,7 @@ public class DoorController : Module
     {
         doorView.SetTitle(doorModel.door.StartsWith("new") ? "精灵太空站" : "英格瓦要塞");
         doorView.SetMode(doorModel.mode);
-        doorView.SetFloor(Mathf.Min(doorModel.floorNum, 21).ToString());
+        doorView.SetFloor(Mathf.Min(doorModel.floorNum, doorModel.maxFloorNum).ToString());
 
         optionSelectController.Select(doorModel.doorIndex);
 

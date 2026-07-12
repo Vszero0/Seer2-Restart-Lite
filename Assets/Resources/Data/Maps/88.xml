@@ -527,6 +527,58 @@
 						</button>
 					</winHandler>
 				</branch>
+				<branch id="7">
+					<settings count="6" star="4" item="false">
+						<mode>1</mode>
+					</settings>
+					<enemy>
+						<pet id="374" level="100">
+						    <status>
+								<atk>6000</atk>
+								<mat>6000</mat>
+						        <hp>6000</hp>
+						    </status>
+						    <initBuff>-3,-8,61,-3059,100,-3112,-3105,27,93,-3082,-3118</initBuff>
+							<loopSkill>14725,14728</loopSkill>
+						</pet>
+						<pet id="374" level="100">
+						    <status>
+								<def>6000</def>
+								<mdf>6000</mdf>
+						        <hp>6000</hp>
+						    </status>
+						    <initBuff>-3,-8,61,-3059,100,-3112,-3105,27,93,-3082,-3118,-3109</initBuff>
+							<loopSkill>14725,14728</loopSkill>
+						</pet>
+					</enemy>
+					<winHandler>
+						<button type="auto">
+							<action>getPet</action>
+							<param>373,1</param>
+							<condition>activity[door].king[max]=[int]6[default]0</condition>
+						</button>
+						<button type="auto">
+							<action>openHintbox</action>
+							<param>type=Item</param>
+							<param>title=提示</param>
+							<param>content=【帕德】已经放入仓库</param>
+							<param>option_num=1</param>
+							<param>item_icon=pet[373]</param>
+							<condition>activity[door].king[max]=[int]6[default]0</condition>
+						</button>
+						<button type="auto">
+							<action>setActivity</action>
+							<param>door</param>
+							<param>king[floor]=8</param>
+						</button>
+						<button type="auto">
+							<action>setActivity</action>
+							<param>door</param>
+							<param>king[max]=7</param>
+							<condition>activity[door].king[max]=[int]6[default]0</condition>
+						</button>
+					</winHandler>
+				</branch>
 			</battle>
 			<eventHandler>
 				<button type="click">

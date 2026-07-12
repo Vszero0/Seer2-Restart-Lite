@@ -408,7 +408,7 @@ public class Skill
         if (!withBasicInfo)
             return desc;
 
-        var elementColor = PetElementSystem.elementColorList.Get((int)element, "#ffffff").TrimStart('#');
+        var elementColor = PetElementSystem.elementColorDict.Get(element, "#ffffff").TrimStart('#');
         desc = $"<size=4>[ENDL]</size><size=16>[{elementColor}]{element.GetElementName()}系[-][ffbb33]【{type}】[-]威力 {power}</size>[ENDL][ENDL]{desc}";
 
         return desc;
@@ -568,6 +568,16 @@ public class Skill
                     "count" => okEffects.Count,
                     _ => okEffects.Count,
                 };
+            }
+        }
+
+        if (id.TryTrimStart("element.", out trimId))
+        {
+            if (trimId.TryTrimStart("group", out var trimGruoup))
+            {
+                var elementGroup = PetElementSystem.GetElementGroup(element);
+                var groupIds = trimGruoup.TrimParenthesesLoop().Select(x => (Element)Identifier.GetNumIdentifier(x));
+                return groupIds.All(elementGroup.Contains) ? 1 : 0;
             }
         }
 

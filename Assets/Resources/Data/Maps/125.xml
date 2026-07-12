@@ -56,6 +56,7 @@
 			</eventHandler>
 		</npc>
 		<npc id="12503" resId="Pets/pet/407" name="包芯粽" size="62,82" pos="290,180" namePos="0,-5">
+			<anim id="Pets/anim/407" pos="-0.75,0.75" scale="0.75,0.75" />
 			<description><![CDATA[五月五，庆端午]]></description>
 			<dialog>
 				<branch id="default" name="包芯粽" icon="Pets/pet/407" size="62,82" pos="0,55">
@@ -66,8 +67,8 @@
 							<action>openPanel</action>
 							<param>ItemShop</param>
 							<param>title=兑换商店</param>
-							<param>currency=14001/0</param>
-							<param>item=500406</param>
+							<param>currency=14001/400025</param>
+							<param>item=500406/500190</param>
 						</func>
 						<func type="click">
 							<description><![CDATA[如何获得原料]]></description>

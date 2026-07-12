@@ -4,7 +4,6 @@
 		<bgm>BGM_2</bgm>
 	</music>
 	<entities>
-		<!--
 		<npc id="1000901" resId="8501" name="试炼之塔" size="125,125" pos="560,105" namePos="0,-10" color="0,0,0,0">
 			<description>试炼之塔</description>
 			<dialog>
@@ -41,25 +40,30 @@
 						<mode>1</mode>
 					</settings>
 					<enemy>
-						<pet id="10300" level="100">
-							<loopSkill>10753,10754,10749,10761,10756</loopSkill>
-							<superSkill>10759</superSkill>
+						<pet id="10073" level="100">
+							<status>
+								<atk>600</atk>
+								<mat>600</mat>
+								<hp>3000</hp>
+							</status>
+							<initBuff>3645</initBuff>
+							<headerSkill>14650</headerSkill>
+							<loopSkill>14651,14655,14656,14651,14655,14645</loopSkill>
 						</pet>
 					</enemy>
 					<winHandler>
 						<button type="auto">
-							<action>setItem</action>
-							<param>add</param>
-							<param>2,50</param>
+							<action>getPet</action>
+							<param>10071</param>
 							<condition>activity[door].new_basic[easy][max]=[int]29[default]0</condition>
 						</button>
 						<button type="auto">
 							<action>openHintbox</action>
 							<param>type=Item</param>
 							<param>title=提示</param>
-							<param>content=50 星钻已经放入背包</param>
+							<param>content=获得了派派！</param>
 							<param>option_num=1</param>
-							<param>item_icon=item[2]</param>
+							<param>item_icon=pet[10071]</param>
 							<condition>activity[door].new_basic[easy][max]=[int]29[default]0</condition>
 						</button>
 						<button type="auto">
@@ -83,7 +87,6 @@
 				</button>
 			</eventHandler>
 		</npc>
-		-->
 		<teleport id="1" name="传送室" pos="750,250" targetMapId="10001"/>
 	</entities>		
 </map>

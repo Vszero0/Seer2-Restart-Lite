@@ -184,6 +184,26 @@ public class BattlePet : Pet
 
     public override float GetPetIdentifier(string id)
     {
+        if (id.TryTrimStart("element.", out var trimElement))
+        {
+            if (trimElement.TryTrimStart("group", out var trimGruoup))
+            {
+                var elementGroup = PetElementSystem.GetElementGroup(buffController.element);
+                var groupIds = trimGruoup.TrimParenthesesLoop().Select(x => (Element)Identifier.GetNumIdentifier(x));
+                return groupIds.All(elementGroup.Contains) ? 1 : 0;
+            }
+        }
+
+        if (id.TryTrimStart("subElement.", out var trimSubElement))
+        {
+            if (trimSubElement.TryTrimStart("group", out var trimGruoup))
+            {
+                var elementGroup = PetElementSystem.GetElementGroup(buffController.subElement);
+                var groupIds = trimGruoup.TrimParenthesesLoop().Select(x => (Element)Identifier.GetNumIdentifier(x));
+                return groupIds.All(elementGroup.Contains) ? 1 : 0;
+            }
+        }
+
         if (id.TryTrimStart("skill", out var trimSkill))
         {
 

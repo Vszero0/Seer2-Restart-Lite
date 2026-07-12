@@ -4,6 +4,7 @@
 		<bgm>BGM_2</bgm>
 	</music>
 	<entities>
+		<!--
 		<npc id="-1001001" resId="2005" name="" size="240,340" pos="0,200" color="0,0,0,0">
 			<description>精灵融合仓</description>
 			<eventHandler>
@@ -13,6 +14,7 @@
 				</button>
 			</eventHandler>
 		</npc>
+		-->
 		<npc id="-1001002" resId="Pets/pet/10001" name="布布种子" size="75,110" pos="387,390" namePos="0,-88" color="0,0,0,0">
 			<description><![CDATA[布布花进化]]></description>
 			<dialog>
@@ -118,6 +120,251 @@
 				<button type="click">
 					<action>openDialog</action>
 					<param>default</param>
+				</button>
+			</eventHandler>
+		</npc>
+		<npc id="-1001005" resId="Pets/pet/13385" name="小娅" size="125,125" pos="40,245" namePos="0,-5">
+			<anim id="Pets/anim/13385" pos="-0.225,0.225" scale="0.45,0.45" />
+			<description><![CDATA[可爱的精灵]]></description>
+			<dialog>
+				<branch id="default" name="小娅" icon="Pets/pet/13385" size="125,125" pos="0,40">
+					<content><![CDATA[小娅会成为你最棒的骑士！]]></content>
+					<replyHandler>
+						<reply type="click">
+							<description><![CDATA[孩子开心比什么都重要]]></description>
+							<action>openDialog</action>
+							<param>null</param>
+						</reply>
+					</replyHandler>
+				</branch>
+				<branch id="hungry" name="小娅" icon="Pets/pet/13385" size="125,125" pos="0,40">
+					<content><![CDATA[饿饿，饭饭！]]></content>
+					<functionHandler>
+						<func type="click">
+							<description><![CDATA[喂食料理]]></description>
+							<action>openHintbox</action>
+							<param>type=Item</param>
+							<param>title=提示</param>
+							<param>content=先去七味小厨制作初级料理套组吧！</param>
+							<param>item_icon=item[400024]</param>
+							<param>option_num=1</param>
+							<condition>item[400024].num=0</condition>
+						</func>
+						<func type="branch">
+							<action>setActivity</action>
+							<param>20017</param>
+							<param>done[default][hungry]=true</param>
+							<condition>item[400024].num&gt;0</condition>
+						</func>
+						<func type="branch">
+							<action>setItem</action>
+							<param>remove</param>
+							<param>400024,1</param>
+							<condition>item[400024].num&gt;0</condition>
+						</func>
+						<func type="branch">
+							<action>openDialog</action>
+							<param>battle</param>
+							<condition>item[400024].num&gt;0</condition>
+						</func>
+					</functionHandler>
+					<replyHandler>
+						<reply type="click">
+							<description><![CDATA[我去找点吃的]]></description>
+							<action>openDialog</action>
+							<param>null</param>
+						</reply>
+					</replyHandler>
+				</branch>
+				<branch id="battle" name="小娅" icon="Pets/pet/13385" size="125,125" pos="0,40">
+					<content><![CDATA[吃饱了！战斗！出击！]]></content>
+					<functionHandler>
+						<func type="click">
+							<description><![CDATA[迎击海盗]]></description>
+							<action>battle</action>
+							<param>default</param>
+						</func>
+					</functionHandler>
+					<replyHandler>
+						<reply type="click">
+							<description><![CDATA[我还没准备好]]></description>
+							<action>openDialog</action>
+							<param>null</param>
+						</reply>
+					</replyHandler>
+				</branch>
+				<branch id="clean" name="小娅" icon="Pets/pet/13385" size="125,125" pos="0,40">
+					<content><![CDATA[唔...脏脏的，要洗澡]]></content>
+					<functionHandler>
+						<func type="click">
+							<description><![CDATA[获取高压水枪]]></description>
+							<action>teleport</action>
+							<param>10008</param>
+						</func>
+					</functionHandler>
+					<replyHandler>
+						<reply type="click">
+							<description><![CDATA[用高压水枪帮忙洗一下澡吧！]]></description>
+							<action>openDialog</action>
+							<param>null</param>
+						</reply>
+					</replyHandler>
+				</branch>
+				<branch id="gift" name="小娅" icon="Pets/pet/13385" size="125,125" pos="0,40">
+					<content><![CDATA[（甩甩头发）小娅击退了敌人，小娅很棒，想要奖励...]]></content>
+					<functionHandler>
+						<func type="click">
+							<description><![CDATA[赠送礼物]]></description>
+							<action>openHintbox</action>
+							<param>type=Item</param>
+							<param>title=提示</param>
+							<param>content=先去七味小厨制作护身符吧！</param>
+							<param>item_icon=item[400030]</param>
+							<param>option_num=1</param>
+							<condition>item[400030].num=0</condition>
+						</func>
+						<func type="branch">
+							<action>getPet</action>
+							<param>13385,1</param>
+							<condition>item[400030].num&gt;0</condition>
+						</func>
+						<func type="branch">
+							<action>openHintbox</action>
+							<param>type=Item</param>
+							<param>title=提示</param>
+							<param>content=获得了【小娅】！</param>
+							<param>item_icon=pet[13385]</param>
+							<param>option_num=1</param>
+							<condition>item[400030].num&gt;0</condition>
+						</func>
+						<func type="branch">
+							<action>setActivity</action>
+							<param>20017</param>
+							<param>done[default][gift]=true</param>
+							<condition>item[400030].num&gt;0</condition>
+						</func>
+						<func type="branch">
+							<action>setItem</action>
+							<param>remove</param>
+							<param>400030,1</param>
+							<condition>item[400030].num&gt;0</condition>
+						</func>
+						<func type="branch">
+							<action>openDialog</action>
+							<param>null</param>
+							<condition>item[400030].num&gt;0</condition>
+						</func>
+					</functionHandler>
+					<replyHandler>
+						<reply type="click">
+							<description><![CDATA[该送什么好呢]]></description>
+							<action>openDialog</action>
+							<param>null</param>
+						</reply>
+					</replyHandler>
+				</branch>
+			</dialog>
+			<battle>
+				<branch id="default">
+					<settings count="6" item="false" simulate="true"/>
+					<player>
+						<pet id="13385" level="100">
+							<status>
+								<spd>600</spd>
+								<hp>300</hp>
+								<cdf>1000</cdf>
+							</status>
+							<initBuff>17</initBuff>
+							<normalSkill>14403,14409,14410,14406</normalSkill>
+							<superSkill>14411</superSkill>
+						</pet>
+					</player>
+					<enemy>
+						<pet id="148" level="80">
+							<status>
+								<def>2000</def>
+								<hp>2000</hp>
+							</status>
+							<emblem>false</emblem>
+							<initBuff>13,14,17</initBuff>
+							<loopSkill>10069,10074,10082,10079</loopSkill>
+							<superSkill>10078</superSkill>
+						</pet>
+						<pet id="153" level="80">
+							<status>
+								<def>2000</def>
+								<hp>2000</hp>
+							</status>
+							<emblem>false</emblem>
+							<initBuff>13,14,17</initBuff>
+							<loopSkill>10084,10094,10092,10085</loopSkill>
+							<superSkill>10091</superSkill>
+						</pet>
+					</enemy>
+					<winHandler>
+						<button type="auto">
+							<action>setActivity</action>
+							<param>20017</param>
+							<param>done[default][battle]=true</param>
+						</button>
+						<button type="auto">
+							<action>openDialog</action>
+							<param>clean</param>
+						</button>
+					</winHandler>
+				</branch>
+			</battle>
+			<eventHandler>
+				<button type="click">
+					<action>openDialog</action>
+					<param>hungry</param>
+					<condition>activity[20017].done[default][hungry]=[bool]false[default]false</condition>
+				</button>
+				<button type="click">
+					<action>openDialog</action>
+					<param>battle</param>
+					<condition>activity[20017].done[default][hungry]=[bool]true[default]false</condition>
+					<condition>activity[20017].done[default][battle]=[bool]false[default]false</condition>
+				</button>
+				<button type="click">
+					<action>openDialog</action>
+					<param>clean</param>
+					<condition>activity[20017].done[default][hungry]=[bool]true[default]false</condition>
+					<condition>activity[20017].done[default][battle]=[bool]true[default]false</condition>
+					<condition>activity[20017].done[default][clean]=[bool]false[default]false</condition>
+				</button>
+				<button type="click">
+					<action>openDialog</action>
+					<param>gift</param>
+					<condition>activity[20017].done[default][hungry]=[bool]true[default]false</condition>
+					<condition>activity[20017].done[default][battle]=[bool]true[default]false</condition>
+					<condition>activity[20017].done[default][clean]=[bool]true[default]false</condition>
+					<condition>activity[20017].done[default][gift]=[bool]false[default]false</condition>
+				</button>
+				<button type="click">
+					<action>openDialog</action>
+					<param>default</param>
+					<condition>activity[20017].done[default][hungry]=[bool]true[default]false</condition>
+					<condition>activity[20017].done[default][battle]=[bool]true[default]false</condition>
+					<condition>activity[20017].done[default][clean]=[bool]true[default]false</condition>
+					<condition>activity[20017].done[default][gift]=[bool]true[default]false</condition>
+				</button>
+				<button type="shoot">
+					<action>setActivity</action>
+					<param>20017</param>
+					<param>done[default][clean]=true</param>
+					<condition>activity[20017].done[default][hungry]=[bool]true[default]false</condition>
+					<condition>activity[20017].done[default][battle]=[bool]true[default]false</condition>
+					<condition>activity[20017].done[default][clean]=[bool]false[default]false</condition>
+					<condition>player.shoot=7002</condition>
+				</button>
+				<button type="shoot">
+					<action>openDialog</action>
+					<param>gift</param>
+					<condition>activity[20017].done[default][hungry]=[bool]true[default]false</condition>
+					<condition>activity[20017].done[default][battle]=[bool]true[default]false</condition>
+					<condition>activity[20017].done[default][clean]=[bool]true[default]false</condition>
+					<condition>player.shoot=7002</condition>
 				</button>
 			</eventHandler>
 		</npc>
