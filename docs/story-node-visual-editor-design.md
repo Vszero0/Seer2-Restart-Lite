@@ -97,9 +97,11 @@ StoryPointEditorView
 
 ## 6. 角色编辑
 
-角色资源定义来自剧本角色表，剧情点只保存引用：
+角色资源定义来自剧本资源注册表中的角色定义，剧情点只保存角色引用；背景、BGM、NPC 和其他表现资源也通过同一注册表选择：
 
 ```text
+StoryData.resourceDefinitions
+    ↓ 角色定义引用其中的立绘、头像等资源
 StoryData.actorDefinitions
     ↓ 引用
 StoryPointData.actorReferences

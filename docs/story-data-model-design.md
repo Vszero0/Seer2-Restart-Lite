@@ -19,6 +19,7 @@
 
 ```text
 StoryData                       剧本数据
+├── resourceDefinitions[]        剧本资源定义
 └── StoryPointData[]             剧情点数据
     ├── SceneData[]              场景上下文
     ├── ActorReference[]          角色引用
@@ -45,7 +46,7 @@ StoryData
 ├── description/summary
 ├── entryPointId
 ├── missionData
-├── actorDefinitions[]
+├── resourceDefinitions[]
 └── storyStyleOverride?
 ```
 
@@ -54,7 +55,7 @@ StoryData
 - 剧本身份和显示名称。
 - Mod 任务注册信息。
 - 入口剧情点。
-- 可被多个剧情点引用的角色资源定义。
+- 本剧本需要引用的资源定义，包括角色、地图、背景、BGM、NPC 和其他表现资源。
 - 剧本级文本样式覆盖。
 
 它不负责当前角色的位置、当前背景、当前命令索引或玩家选择历史。
@@ -88,8 +89,9 @@ StoryPointData
 ```text
 SceneData
 ├── id
-├── mapId
-├── background
+├── mapResourceId?
+├── backgroundResourceId?
+├── bgmResourceId?
 ├── actorIds[]
 └── layout
 ```
@@ -163,13 +165,71 @@ end
 
 编辑器可以调整命令顺序，但保存前必须通过命令参数和引用校验。
 
-## 4. 角色与场景关系
+## 4. 剧本资源定义与场景引用
 
-角色定义分为“剧本资源定义”和“剧情点/场景引用”：
+本体资源目录表明，剧情可引用的资源不应被限制为角色。当前本体资源至少包含以下资源域：
 
 ```text
+Resources/
+├── BGM/          音频，按分类目录组织，主要为 .mp3
+├── Maps/         地图背景、战斗背景、路径、动物等图片或动图资源
+├── Npc/          NPC 图片资源
+├── Pets/         精灵头像、立绘、战斗图等图片资源
+├── Panel/        UI 面板图片资源
+└── Activities/   活动图片及平台相关资源
+```
+
+Mod 资源也沿用类似的逻辑资源路径，并由资源加载层决定从本体资源还是 Mod 资源中解析。剧情数据不应把物理文件路径、资源类型和角色语义混为一体。
+
+### 4.1 StoryResourceDefinition
+
+`StoryData.resourceDefinitions[]` 是本剧本的资源注册表。它只注册本剧本会用到的资源，不复制资源文件本身：
+
+```text
+StoryResourceDefinition
+├── id                  剧本内稳定资源 ID
+├── kind                资源语义类型
+├── path                逻辑资源路径
+├── source?             builtin / mod / auto
+└── metadata?           可选的编辑器展示信息
+```
+
+`kind` 第一阶段建议支持：
+
+| kind | 用途 | 典型逻辑路径 |
+| --- | --- | --- |
+| `sprite` | 通用图片或立绘 | `Sprites/...`、`Activities/...` |
+| `actorSprite` | 精灵/NPC 的剧情立绘 | `Pets/pet/10`、`Npc/10001` |
+| `actorIcon` | 角色头像或图标 | `Pets/icon/10`、`Npc/10001` |
+| `mapBackground` | 地图或剧情背景 | `Maps/bg/121` |
+| `audio` | BGM 或其他音频 | `BGM/101/BGM_1` |
+| `map` | 地图上下文标识 | 地图 ID 或地图逻辑资源标识 |
+| `ui` | 剧情专用 UI 或装饰资源 | `Panel/...` |
+
+`kind` 是编辑器和校验使用的语义提示，不应直接决定所有加载细节；最终资源加载仍由统一资源解析器根据逻辑路径、资源类型和来源处理。
+
+### 4.2 资源解析规则
+
+剧情 JSON 保存的是逻辑资源路径，不直接保存 `Application.persistentDataPath` 下的物理路径。资源注册表中的 `source` 用于表达来源偏好：
+
+- `auto`：优先查找当前 Mod 资源，找不到时回退本体资源；这是面向作者的默认行为。
+- `mod`：只查找当前 Mod 资源，资源缺失时校验或运行时报告错误。
+- `builtin`：只查找本体资源，不允许被 Mod 同名资源覆盖。
+
+逻辑路径通常不包含最终文件扩展名，由资源解析器根据 `kind` 和资源加载方式补全。例如图片可以使用 `Maps/bg/121`，音频可以使用 `BGM/101/BGM_1`。如果某类资源必须保留扩展名，应由该资源类型的解析器统一处理。
+
+当前项目的 `ResourceManager.GetLocalAddressables` 已经按照 `Resources/` 与 `Mod/` 两个资源根目录加载图片和音频；新剧情资源层应在此基础上统一来源策略，而不是让每个命令自行拼接物理路径。
+
+### 4.3 角色定义是资源引用的组合
+
+角色不是独立于资源系统的特殊文件类型，而是由角色身份信息和多个资源引用组成：
+
+```text
+StoryData.resourceDefinitions[]
+    └── resourceId, kind, path, source
+
 StoryData.actorDefinitions[]
-    └── actorId, name, sprite, icon, default properties
+    └── actorId, name, spriteResourceId, iconResourceId, default properties
 
 StoryPointData.actorReferences[]
     └── actorId, optional point override
@@ -182,10 +242,12 @@ SceneData.actorIds[]
 
 1. `say`、`show`、`hide` 引用的角色必须存在于剧情点角色集合。
 2. 场景的 `actorIds` 必须来自剧情点角色集合。
-3. 角色资源路径只维护在剧本角色定义或明确的覆盖字段中。
-4. 场景 layout 只描述当前场景角色的表现，不修改角色资源定义。
+3. 角色定义引用的 `spriteResourceId`、`iconResourceId` 必须存在于剧本资源注册表，且资源类型匹配。
+4. 场景背景、BGM 和地图上下文也应引用资源注册表中的资源，不能在多个命令中重复维护未经登记的路径。
+5. 资源路径只维护在 `StoryResourceDefinition` 或明确的资源覆盖字段中。
+6. 场景 layout 只描述当前场景角色的表现，不修改资源定义。
 
-这样同一个角色可以在不同剧情点或不同场景拥有不同位置，而不会污染全局角色定义。
+这样同一个角色可以在不同剧情点或不同场景拥有不同位置，同一首 BGM 或同一张背景也可以被多个剧情点复用，而不会污染资源定义。
 
 ## 5. layout 作用域
 
