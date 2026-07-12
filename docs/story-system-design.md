@@ -1,392 +1,245 @@
 # 自制剧情系统设计
 
-> 文本字体、富文本格式、Mod 共享专有名词词典和悬浮解释框的专项设计，见 [剧情文本表现系统设计](story-text-presentation-design.md)。
+## 1. 文档定位
 
-## 1. 文档目的
+本文档描述自制剧情的整体目标、数据层、运行时层和编辑器边界。
 
-本文档描述自制剧情功能的目标、核心概念、运行时架构、可视化编辑器架构以及后续扩展边界。
+权威数据契约见：[自制剧情剧本数据模型与运行时上下文设计](story-data-model-design.md)。
 
-本文档服务于三类工作：
+专项文档：
 
-- 让剧情作者能够理解如何组织一段剧情；
-- 让开发者能够在不破坏现有剧情系统的前提下扩展功能；
-- 为后续 Workshop 编辑器和剧情播放层重构提供统一依据。
+- [自制剧情编辑器 MVC 与闭环设计](story-editor-mvc-design.md)
+- [剧情点可视化编辑器设计](story-node-visual-editor-design.md)
+- [自制剧情数据作用域与剧情点上下文设计](story-node-data-scope-design.md)
+- [剧情文本表现系统设计](story-text-presentation-design.md)
 
-## 2. 功能愿景
+## 2. 当前基线
 
-玩家可以通过自制剧情 Mod 入口，使用结构化的可视化编辑器制作剧情，而不需要手写 JSON 或编写代码。
+当前项目已经具备运行时自制剧情原型：
 
-剧情的基本创作单位不是单句对白，而是一个“剧情点”：一个场景中连续发生的一段对话或事件。多个剧情点可以组织成顺序结构、分支结构和汇合结构。
+```text
+Mod/Stories/*.json
+    ↓
+SaveSystem.TryLoadStoryMod
+    ↓
+Database.ReloadStoryMod
+    ↓
+StoryDocument.ToMissionInfo / ToScript
+    ↓
+StoryPanel / StoryScript / DialogManager
+```
 
-典型创作流程如下：
+当前运行时数据和校验代码位于：
 
-1. 创建一个剧情；
-2. 设置剧情标题、简介、入口地图和可重复进入属性；
-3. 创建若干剧情点；
-4. 为剧情点设置场景背景和出场角色；
-5. 在剧情点内部编辑旁白、角色对白和对话选项；
-6. 将选项或默认流程连接到其他剧情点；
-7. 预览剧情；
-8. 保存并作为 Mod 任务使用。
+- `StoryDocument`、`StoryValidator`、`StoryCommandDocument`：`Assets/Scripts/MVC/Model/Basic/Story/StoryScript.cs`
+- Mod 剧情加载：`Assets/Scripts/System/SaveSystem.cs`
+- Mod 任务注册：`Assets/Scripts/System/Database.cs`
+- 正式剧情播放：`Assets/Scripts/MVC/View/Story/StoryPanel.cs`
 
-目标是降低二次创作门槛，让作者更专注于角色、对白和故事结构。
+旧的 `WorkshopStoryPanel` 和上一版编辑器原型已经删除。Workshop 的自制剧情入口暂时停用，下一版编辑器从数据模型和 MVC 边界重新设计，不保留旧 Panel 的迁移路线。
 
-## 3. 当前项目基础
+## 3. 功能愿景
 
-当前分支已经具备自制剧情原型：
+作者可以通过 Workshop 中的自制剧情入口，以结构化可视化方式制作剧情，而不需要直接编辑 JSON。
 
-- `StoryDocument`：JSON 剧情文档；
-- `StoryValidator`：剧情结构校验；
-- `StoryScript`：运行时命令流；
-- `StoryPanel`：当前剧情播放入口；
-- `DialogManager`：对白和选项表现；
-- `Database` / `SaveSystem`：加载 `Mod/Stories/*.json`；
-- `MissionType.Mod`：将自制剧情注册为 Mod 任务；
-- `WorkshopStoryPanel`：当前的剧情列表、元数据编辑和预览入口。
+基本创作层级为：
 
-现有实现应作为基础继续演进，不另起一套独立剧情系统。
+```text
+StoryData                         剧本数据
+└── StoryPointData[]               剧情点数据
+    ├── SceneData[]                场景上下文
+    ├── ActorReference[]            角色引用
+    ├── CommandData[]               有序命令
+    └── ChoiceData / 条件
+```
+
+一个剧情点是一段连续剧情，可以包含多个场景、角色、对白、旁白和选择。多个剧情点通过入口、跳转和选择目标组成有向图。
 
 ## 4. 核心概念
 
-### 4.1 StoryGraph
+### 4.1 StoryData
 
-一份完整剧情是一个有向图，而不是单纯的命令列表。
+整个可保存、可预览、可注册为 Mod 任务的剧本。当前代码兼容类型为 `StoryDocument`。
 
-```text
-StoryGraph
- ├── 元数据
- ├── 角色定义
- ├── 剧情点列表
- └── 入口剧情点
-```
+包含：
 
-剧情图包含一个入口节点。每个剧情点通过默认连接或选项连接指向下一个剧情点。
+- 剧本 ID、标题和简介。
+- 入口剧情点 ID。
+- Mod 任务信息。
+- 剧本角色资源定义。
+- 剧本级文本样式覆盖。
+- 剧情点集合。
 
-### 4.2 StoryPoint
+剧本数据不保存玩家当前命令位置、角色当前显示状态或本次选择历史。
 
-`StoryPoint` 是作者编辑和连接的主要单位，表示一个场景中连续发生的一段内容。
+### 4.2 StoryPointData
 
-剧情点可以包含：
+剧情点是作者编辑和连接的基本单位。当前代码兼容类型为 `StoryNodeDocument`。
 
-- 场景背景；
-- 场景布局；
-- 出场角色；
-- 角色出现和隐藏；
-- 旁白；
-- 多轮对白；
-- 玩家选项；
-- 剧情事件；
-- 下一剧情点连接。
+包含：
 
-剧情点内部仍然可以包含多个命令，但作者不需要直接面对底层命令流。
+- 稳定剧情点 ID。
+- 本剧情点涉及的角色引用。
+- 本剧情点的场景集合。
+- 剧情点级文本样式覆盖。
+- 有序命令集合。
 
-### 4.3 StoryLine
+### 4.3 SceneData
 
-`StoryLine` 表示剧情点中的一条内容，主要包括：
+场景是剧情点内部的上下文，不等同于 Unity 完整游戏场景。
 
-- 角色对白；
-- 旁白；
-- 角色显示或隐藏；
-- 场景切换；
-- 其他未来支持的表现命令。
+场景负责：
 
-一条对白只属于一个剧情点，不直接承担跨节点跳转职责。
+- 地图或地图区域。
+- 背景资源。
+- 当前场景允许出现的角色。
+- 当前场景角色 layout。
 
-### 4.4 StoryChoice
+一个剧情点可以通过 `scene` 命令在多个场景上下文之间切换。
 
-`StoryChoice` 表示玩家在剧情点内看到的一个选择。
+### 4.4 CommandData
 
-每个选项至少包含：
+命令不是单纯标签。序列化字段 `type` 只是命令类型标识，完整命令由类型、参数和执行语义组成。
 
-- 显示文本；
-- 目标剧情点；
-- 可选的选择条件；
-- 可选的选择后效果。
-
-第一阶段只实现显示文本和目标剧情点。条件、变量和效果留作后续扩展。
-
-### 4.5 StoryLink
-
-`StoryLink` 表示剧情点之间的连接，分为：
-
-- 默认连接：当前剧情点结束后自动进入；
-- 选项连接：玩家选择后进入；
-- 汇合连接：多个分支重新进入同一个剧情点。
-
-编辑器应将连接关系作为图数据处理，而不是依靠作者手动维护节点索引。
-
-## 5. 数据层与运行时层
-
-剧情数据分为编辑格式和运行时格式两层：
+第一阶段命令：
 
 ```text
-可视化编辑数据
-    StoryGraph / StoryPoint / StoryLine / StoryChoice
-                    ↓ 编译
-运行时数据
-    StoryScript / StoryCommand
-                    ↓ 执行
-剧情表现层
+scene / show / hide / say / narrate
+choice / jump / mission / teleport / end
 ```
 
-### 5.1 编辑格式
+稳定 ID 与命令类型必须区分：
 
-编辑格式面向作者，强调：
+- `pointId`：剧情点身份。
+- `commandId`：命令身份。
+- `choiceId`：选择命令身份。
+- `optionId`：选择项身份。
+- `type`：命令类型。
 
-- 节点结构清晰；
-- 便于增删和重排；
-- 选项直接连接目标节点；
-- 可以被编辑器完整加载和保存；
-- 校验错误可以定位到具体节点和命令。
+数组下标只表示执行和显示顺序，不能作为长期引用。
 
-### 5.2 运行时格式
+### 4.5 StoryRuntimeContext
 
-运行时继续复用当前 `StoryScript` 和 `StoryCommand`，负责：
+运行时上下文表示玩家本次游玩的状态：
 
-- 顺序执行命令；
-- 根据标签或连接跳转；
-- 等待玩家对白点击；
-- 等待玩家选择；
-- 执行任务、传送和结束命令。
+```text
+StoryRuntimeContext
+├── currentPointId
+├── currentSceneId
+├── currentCommandId / index
+├── visibleActors
+└── choiceHistory[]
+```
 
-编辑器数据不应直接依赖 Unity UI 对象，播放层也不应直接修改编辑器状态。
+选择历史可以记录同一剧情点内多个选择的有序结果，并供后续条件判断使用。它不属于作者保存的 `StoryData`。
 
-## 6. 剧情播放层 MVC 分工
+## 5. 运行时层
 
-当前 `StoryPanel` 同时承担全屏容器、剧情流程、角色、背景、对白和选项职责，后续需要收敛为薄层协调者。
-
-建议结构如下：
+运行时继续复用现有 `StoryScript` 和 `StoryCommand`，但目标职责如下：
 
 ```text
 StoryPanel
- ├── StoryController / StoryPlayer
- └── StoryPresentationView
-      ├── StorySceneView
-      ├── StoryActorView
-      ├── StoryDialogueView
-      └── StoryChoiceView
+└── StoryController / StoryPlayer
+    └── StoryPresentationView
+        ├── StorySceneView
+        ├── StoryActorView
+        ├── StoryDialogueView
+        └── StoryChoiceView
 ```
 
-### 6.1 StoryPanel
+职责边界：
 
-只负责：
+- `StoryController / StoryPlayer`：推进命令、处理等待、跳转和条件。
+- `StoryPresentationView`：组合场景、角色、对白和选项表现。
+- `StoryPanel`：管理全屏容器和生命周期。
+- `DialogManager`：作为现有对白表现实现逐步收敛，不应成为剧情数据或流程控制的直接依赖。
 
-- 创建和关闭全屏剧情容器；
-- 管理剧情播放生命周期；
-- 组装 Controller 和表现 View；
-- 处理退出剧情。
+编辑器和运行时可以共享资源加载、角色布局和文本表现组件，但不能共享同一份 UI 生命周期状态。
 
-不再直接处理具体对白、角色布局和选项按钮细节。
+## 6. 编辑器层
 
-### 6.2 StoryController / StoryPlayer
-
-负责：
-
-- 当前剧情点和命令位置；
-- 默认连接和选项跳转；
-- 执行任务、检查点和传送；
-- 推进和暂停剧情；
-- 将表现命令交给 View。
-
-它不应该依赖具体的对话框 Prefab 或具体 UI 层级。
-
-### 6.3 StoryPresentationView
-
-负责组合剧情表现组件，对 Controller 提供稳定接口。
-
-后续更换对话框时，只替换表现层，不修改剧情数据和流程控制。
-
-### 6.4 StoryDialogueView
-
-负责：
-
-- 显示角色对白；
-- 显示旁白；
-- 接收点击继续；
-- 设置当前说话角色；
-- 显示或隐藏对话背景。
-
-第一阶段可以继续将现有 `DialogManager` 作为内部实现，以保持兼容；但 `StoryController` 不应直接依赖 `DialogManager`。
-
-当前剧情对话第一次出现时的淡入和向上位移来自 `DialogManager` 的 `dialogStoryLayer` 打开动画。后续应让剧情对话 View 自己决定是否使用该动画，不能影响普通 NPC 对话。
-
-### 6.5 StorySceneView
-
-负责：
-
-- 背景图片；
-- 场景布局；
-- 角色层级的表现容器；
-- 场景切换时的表现。
-
-### 6.6 StoryActorView
-
-负责：
-
-- 角色显示和隐藏；
-- 角色位置、左右侧和层级；
-- 当前说话角色高亮；
-- 角色淡入；
-- 角色缩放和朝向。
-
-## 7. 剧情编辑器 MVC 分工
-
-当前 `WorkshopStoryPanel` 同时负责 Model、View 和 Controller 职责，后续应按项目现有 Workshop MVC 风格拆分。
+编辑器目标结构：
 
 ```text
-WorkshopStoryController
-        ↓
-WorkshopStoryModel  ↔  WorkshopStoryView
+StoryRepository
+    ├── 加载 / 保存 / 删除 / 枚举
+    └── 校验 / 迁移
+
+StoryEditorModel
+    ├── 当前 StoryData
+    ├── 剧本列表
+    └── 当前选择状态
+
+StoryManagementController
+    └── 剧本级操作
+
+StoryPointDraftModel
+    └── 当前剧情点的临时编辑数据
+
+StoryPointEditorController
+    └── 场景、角色、命令、选项和样式操作
 ```
 
-### 7.1 WorkshopStoryModel
+View 不直接读写文件，也不直接修改正式 `StoryData`。剧情点编辑先进入草稿，提交后再写回 Model，最终由 Repository 保存。
 
-负责：
+详细职责见 [自制剧情编辑器 MVC 与闭环设计](story-editor-mvc-design.md)。
 
-- 剧情文件列表；
-- 当前选中的剧情；
-- 编辑中的 `StoryDocument`；
-- 新建、读取、保存和删除；
-- 脏状态；
-- 剧情校验；
-- 节点、对白、选项和连接的增删改。
+## 7. 资源规则
 
-### 7.2 WorkshopStoryController
+背景、立绘和头像继续使用现有资源路径规则：
 
-负责：
+- 本体资源保存本体资源路径。
+- Mod 资源保存为 `Mod/...` 路径。
+- 运行时继续遵循 Mod 优先、本体回退。
+- 资源选择器只负责枚举、选择和预览，不复制或覆盖文件。
 
-- 响应按钮和编辑操作；
-- 调用 Model 修改数据；
-- 驱动 View 刷新；
-- 打开预览；
-- 处理错误提示。
-
-### 7.3 WorkshopStoryView
-
-负责显示：
-
-- 剧情列表；
-- 元数据编辑；
-- 角色编辑；
-- 剧情点列表或图形编辑区；
-- 剧情点内容编辑区；
-- 状态和错误提示。
-
-不建议继续把所有编辑逻辑堆进 `WorkshopAllView.cs`。可以先将现有 `WorkshopStoryPanel` 保留为入口，再逐步拆分为专用 View 和 Controller。
-
-## 8. 编辑器交互形态
-
-第一阶段推荐使用“节点列表 + 节点内容编辑器”，而不是直接制作复杂的流程图编辑器：
+## 8. 保存和预览
 
 ```text
-左侧：剧情点列表
-中间：当前剧情点内容
-右侧：角色、场景和连接设置
+用户编辑
+    ↓
+StoryPointDraftModel
+    ↓ StoryValidator
+提交到 StoryData
+    ↓
+StoryRepository.Save
+    ↓
+Database.ReloadStoryMod
+    ↓
+StoryPanel 只读预览
 ```
 
-节点列表应支持：
+预览必须使用保存后的数据，不能直接播放尚未提交的 UI 草稿。
 
-- 新建节点；
-- 删除节点；
-- 修改节点名称；
-- 调整顺序；
-- 设置入口节点；
-- 设置默认下一节点。
+在正式预览隔离模式完成前，测试剧本应使用 `replayable=true`，并明确提示预览可能影响现有任务状态。
 
-节点内容应支持：
+## 9. 兼容和迁移
 
-- 添加对白；
-- 添加旁白；
-- 添加角色显示/隐藏；
-- 添加场景切换；
-- 添加选项；
-- 设置选项目标节点。
+当前代码类型作为兼容基础：
 
-等基础流程稳定后，再考虑把节点列表升级成可视化连线图。
+| 设计语义 | 当前代码 |
+| --- | --- |
+| `StoryData` | `StoryDocument` |
+| `StoryPointData` | `StoryNodeDocument` |
+| `CommandData` | `StoryCommandDocument` |
+| 运行时命令 | `StoryCommand` |
+| 选择数据 | `StoryChoiceDocument` |
 
-## 9. 资源规则
+迁移原则：
 
-剧情角色、图标和背景必须遵循项目已有的资源加载约定：
+1. 旧的全局 `layout` 只作为兼容输入，映射到入口剧情点默认场景。
+2. 旧的 `scene.bg` / `scene.args` 转换为场景背景。
+3. 旧选项没有稳定 ID 时，在读取阶段生成，保存时写回。
+4. 不认识的字段不能被静默破坏；在序列化能力不足时必须提示作者。
+5. 新字段通过 `schemaVersion` 管理。
 
-- 明确的 `Mod/...` 路径加载 Mod 资源；
-- 内置路径加载 `Resources` 资源；
-- 同名资源遵循 Mod 优先、内置资源兜底；
-- 剧情播放器不直接拼接并读取固定的 `Resources` 路径；
-- 资源查找应复用 `ResourceManager` 现有接口。
+## 10. 当前不冻结内容
 
-这部分是自制剧情可以使用自制角色和背景的基础能力，应在可视化编辑器扩展前完成。
+以下内容在 Model 和 Controller 实现前继续讨论：
 
-## 10. 任务和重复进入
-
-测试阶段保持 `replayable=true`，允许剧情完成后重复进入。
-
-当前剧情完成命令仍可能修改任务存档，因此后续增加独立的“预览模式”：
-
-- 预览可以播放完整剧情；
-- 预览不执行任务完成；
-- 预览不发放奖励；
-- 预览不改变玩家任务进度；
-- 正式从任务面板进入时才执行任务状态变化。
-
-在预览模式实现前，不改变现有 `Mission` 和 `replayable` 规则，以保证剧情制作和测试流程可用。
-
-## 11. 兼容性原则
-
-- 保留现有官方剧情播放入口；
-- 保留现有 `StoryScript` 运行时命令；
-- 保留现有 Mod 剧情任务入口；
-- 保留已有 JSON 剧本字段的兼容读取；
-- 新增字段应提供默认值；
-- 编辑器保存时不应破坏未知或暂未支持的字段；
-- 普通 NPC 对话不应受到剧情专用表现层改动影响。
-
-## 12. 分阶段实现计划
-
-### 阶段一：基础稳定
-
-- 整理剧情资源加载规则；
-- 修正 Mod 角色和背景资源读取；
-- 为剧情对话动画增加独立控制；
-- 保持现有 JSON 和任务流程不变。
-
-### 阶段二：播放层分离
-
-- 将 `StoryPanel` 收敛为生命周期和组合入口；
-- 抽离剧情流程控制；
-- 抽离场景、角色、对白和选项表现；
-- 保持旧剧情播放结果不变。
-
-### 阶段三：编辑器 MVC
-
-- 从 `WorkshopStoryPanel` 中分离 Model、Controller 和 View；
-- 保留现有新建、列表、元数据、删除和预览功能；
-- 确保重构不改变 JSON 文件结构。
-
-### 阶段四：剧情点编辑器
-
-- 实现剧情点列表；
-- 实现节点内容编辑；
-- 实现对白和旁白编辑；
-- 实现选项和节点连接；
-- 接入统一校验和预览。
-
-### 阶段五：预览和扩展
-
-- 增加不影响存档的预览模式；
-- 增加条件、变量和效果；
-- 增加更复杂的流程图交互；
-- 评估是否需要拆分 JSON 编辑格式和运行时格式。
-
-## 13. 当前不纳入范围
-
-第一阶段暂不实现：
-
-- 完整可视化流程图；
-- 剧情变量系统；
-- 条件分支；
-- 复杂任务奖励编辑；
-- 战斗演出编排器；
-- 多人同步剧情；
-- 预览与正式任务完全隔离。
-
-这些功能应建立在基础剧情点、资源加载和 MVC 分层稳定之后。
+- 场景是显式 `scenes[]` 加命令引用，还是完全由 `scene` 命令隐式创建。
+- 场景切换时角色的保留、隐藏和重置规则。
+- 选择历史是否写入玩家存档。
+- 条件表达式和条件编辑方式。
+- 是否支持命令级文本样式覆盖。
+- 预览模式与正式任务状态的隔离方案。

@@ -81,7 +81,7 @@ public class WorkshopAllController : Module
             return;
         }
 
-        WorkshopStoryPanel.Open();
+        Hintbox.OpenHintboxWithContent("自制剧情界面正在重新设计。", 16);
     }
 
     public void OnEditPet(PetInfo petInfo) {
