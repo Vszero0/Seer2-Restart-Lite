@@ -5,8 +5,10 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
-public static class PetElementSystem {
+public static class PetElementSystem
+{
 
+    public const int DATA_COL = 4;
     public static bool isMod = false;
     public static int elementNum => elementDefenseRelation.Count;
 
@@ -15,29 +17,53 @@ public static class PetElementSystem {
     public const float W = 2.0f;
     public const float O = 0.0f;
 
-    public static List<Element> elementList = new List<Element>() {
-        Element.普通,   Element.草,     Element.水,     Element.火, 
-        Element.风,     Element.虫,     Element.飞行,   Element.电,     
+    public static List<Element> elementList = new List<Element>()
+    {
+        Element.普通,   Element.草,     Element.水,     Element.火,
+        Element.风,     Element.虫,     Element.飞行,   Element.电,
         Element.地面,   Element.冰,     Element.超能,   Element.战斗,
         Element.特质,   Element.光,     Element.神秘,   Element.暗影,
         Element.龙,     Element.沙漠,   Element.圣灵,   Element.精灵王,
         Element.上古,   Element.机械,   Element.邪灵
     };
 
-    public static List<string> elementNameList = new List<string>() {
+    public static Dictionary<Element, List<Element>> elementGroupDict = new Dictionary<Element, List<Element>>();
+
+    public static List<string> elementNameList = new List<string>()
+    {
         "普通", "草", "水", "火", "风", "虫", "飞行", "电", "地面", "冰",
         "超能", "战斗", "特质", "光", "神秘", "暗影", "龙", "沙漠", "圣灵",
         "精灵王", "上古", "机械", "邪灵"
     };
 
-    public static List<string> elementColorList = new List<string>() {
-        "#ffffff", "#73c652", "#65ffff", "#fd0100", "#d7e9eb",
-        "#965983", "#e5eeeb", "#ffe53d", "#cca681", "#55d9e8",
-        "#c24ec9", "#ba8551", "#f9e805", "#fffc01", "#a428a4",
-        "#595271", "#981c65", "#a56741", "#01beff", "#ed780e",
-        "#fff699", "#706283", "#073e00"
-    };        
-    public static Dictionary<Element, List<float>> elementDefenseRelation = new Dictionary<Element, List<float>>() {
+    public static Dictionary<Element, string> elementColorDict = new Dictionary<Element, string>() 
+    {
+        { Element.普通, "#ffffff" },
+        { Element.草, "#73c652" },
+        { Element.水, "#65ffff" },
+        { Element.火, "#fd0100" },
+        { Element.风, "#d7e9eb" },
+        { Element.虫, "#965983" },
+        { Element.飞行, "#e5eeeb" },
+        { Element.电, "#ffe53d" },
+        { Element.地面, "#cca681" },
+        { Element.冰, "#55d9e8" },
+        { Element.超能, "#c24ec9" },
+        { Element.战斗, "#ba8551" },
+        { Element.特质, "#f9e805" },
+        { Element.光, "#fffc01" },
+        { Element.神秘, "#a428a4" },
+        { Element.暗影, "#595271" },
+        { Element.龙, "#981c65" },
+        { Element.沙漠, "#a56741" },
+        { Element.圣灵, "#01beff" },
+        { Element.精灵王, "#ed780e" },
+        { Element.上古, "#fff699" },
+        { Element.机械, "#706283" },
+        { Element.邪灵, "#073e00" }
+    };
+    public static Dictionary<Element, List<float>> elementDefenseRelation = new Dictionary<Element, List<float>>() 
+    {
         { Element.普通, new List<float>() { N, N, N, N, N, N, N, N, N, N, N, N, N, N, N, N, N, N, N, N, N, N, N } },
         { Element.草, new List<float>()   { N, R, R, W, N, W, W, R, R, N, N, N, R, O, N, N, N, R, W, W, W, W, N } },
         { Element.水, new List<float>()   { N, W, R, R, N, N, N, W, N, R, N, R, R, N, N, R, W, N, W, W, N, R, N } },
@@ -65,7 +91,30 @@ public static class PetElementSystem {
 
     public static bool IsMod() => isMod;
 
-    public static string GetElementName(this Element element, int totalLength = -1) {
+    public static void ParseElementEffect(string[] _data, int startIndex)
+    {
+        string[] _slicedData = new string[DATA_COL];
+        Array.Copy(_data, startIndex, _slicedData, 0, _slicedData.Length);
+
+        if (!int.TryParse(_slicedData[0], out var elementId))
+            return;
+
+        var element = (Element)elementId;
+        var group = _slicedData[1].ToIntList('/');
+        if (!ListHelper.IsNullOrEmpty(group))
+            elementGroupDict.Set(element, group.Select(x => (Element)x).ToList());
+
+        if (ColorUtility.TryParseHtmlString(_slicedData[2], out _))
+            elementColorDict.Set(element, _slicedData[2]);
+    }
+
+    public static List<Element> GetElementGroup(Element element)
+    {
+        return elementGroupDict.Get(element, element.SingleToList());
+    }
+
+    public static string GetElementName(this Element element, int totalLength = -1)
+    {
         int id = (int)element;
         var elementName = (id < 0) ? "全部" : elementNameList.Get(id, "未知");
         if (totalLength <= elementName.Length)
@@ -74,7 +123,8 @@ public static class PetElementSystem {
         return new string('　', totalLength - elementName.Length) + elementName;
     }
 
-    public static Color GetElementRelationColor(float relation) {
+    public static Color GetElementRelationColor(float relation)
+    {
         if (relation == 0)
             return Color.gray;
 
@@ -87,7 +137,8 @@ public static class PetElementSystem {
         return Color.white;
     }
 
-    public static string GetElementRelationNote(float relation) {
+    public static string GetElementRelationNote(float relation)
+    {
         if (relation == 0)
             return "无效";
 
@@ -100,28 +151,34 @@ public static class PetElementSystem {
         return "普通";
     }
 
-    public static float GetElementRelation(int atkElmentId, Element defElement) {
+    public static float GetElementRelation(int atkElmentId, Element defElement)
+    {
         return elementDefenseRelation.Get(defElement)?.Get(atkElmentId, 1) ?? 1;
     }
 
-    public static float GetElementRelation(int atkElementId, Element defElement, Element defSubElement) {
+    public static float GetElementRelation(int atkElementId, Element defElement, Element defSubElement)
+    {
         var defenseRelation = GetElementRelation(atkElementId, defElement);
         var subDefenseRelation = GetElementRelation(atkElementId, defSubElement);
         return defenseRelation * ((defSubElement == Element.普通) ? 1 : subDefenseRelation);
     }
 
-    public static float GetElementRelation(int elementId, BattlePet rhs) {
+    public static float GetElementRelation(int elementId, BattlePet rhs)
+    {
         return GetElementRelation(elementId, rhs.battleElement, rhs.subBattleElement);
     }
 
-    public static float GetElementRelation(Skill lhs, BattlePet rhs) {
+    public static float GetElementRelation(Skill lhs, BattlePet rhs)
+    {
         return GetElementRelation((int)(lhs.elementId), rhs);
     }
 
-    public static List<Element> GetAttackRelation(Element element, Func<float, bool> filter) {
+    public static List<Element> GetAttackRelation(Element element, Func<float, bool> filter)
+    {
         List<Element> attackRelation = new List<Element>();
 
-        for (int i = 0; i < elementNum; i++) {
+        for (int i = 0; i < elementNum; i++)
+        {
             Element e = (Element)i;
             var defenseRelation = elementDefenseRelation.Get(e);
             if (filter.Invoke(defenseRelation[(int)element]))
@@ -130,14 +187,15 @@ public static class PetElementSystem {
         return attackRelation;
     }
 
-    public static List<Element> GetDefenseRelation(Element element, Func<float, bool> filter) {
+    public static List<Element> GetDefenseRelation(Element element, Func<float, bool> filter)
+    {
         return elementDefenseRelation.Get(element)?.FindAllIndex(new Predicate<float>(filter))
             .Select(index => (Element)index).ToList() ?? new List<Element>();
     }
 
     public static Color GetElementColor(Element element)
     {
-        var code = elementColorList.Get((int)element, "#ffffff");
+        var code = elementColorDict.Get(element, "#ffffff");
         if (ColorUtility.TryParseHtmlString(code, out var color))
             return color;
 
@@ -145,12 +203,13 @@ public static class PetElementSystem {
     }
 }
 
-public enum Element {
+public enum Element
+{
     全部 = -1,
-    普通 = 0, 草 = 1, 水 = 2, 火 = 3, 风 = 4, 虫 = 5, 
-    飞行 = 6, 电 = 7, 地面 = 8, 冰 = 9, 超能 = 10, 
-    战斗 = 11, 特质 = 12, 光 = 13, 神秘 = 14, 暗影 = 15, 
-    龙 = 16, 沙漠 = 17, 圣灵 = 18, 精灵王 = 19, 上古 = 20, 
+    普通 = 0, 草 = 1, 水 = 2, 火 = 3, 风 = 4, 虫 = 5,
+    飞行 = 6, 电 = 7, 地面 = 8, 冰 = 9, 超能 = 10,
+    战斗 = 11, 特质 = 12, 光 = 13, 神秘 = 14, 暗影 = 15,
+    龙 = 16, 沙漠 = 17, 圣灵 = 18, 精灵王 = 19, 上古 = 20,
     机械 = 21, 邪灵 = 22,
 }
 

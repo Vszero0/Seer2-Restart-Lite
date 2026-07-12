@@ -962,6 +962,7 @@ public static class SaveSystem
         try
         {
             string infoPath = elementPath + "info.csv";
+            string effectPath = elementPath + "effect.csv";
 
             if (!FileBrowserHelpers.FileExists(infoPath))
                 return false;
@@ -979,6 +980,12 @@ public static class SaveSystem
                     continue;
 
                 ResourceManager.instance.Set<Sprite>(spritePath + i, sprite);
+            }
+
+            if (FileBrowserHelpers.FileExists(effectPath))
+            {
+                var effectData = ResourceManager.GetCSV(FileBrowserHelpers.ReadTextFromFile(effectPath));
+                ResourceManager.instance.GetElementEffect(effectData);
             }
         }
         catch (Exception e)

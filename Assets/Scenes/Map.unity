@@ -4043,7 +4043,7 @@ MonoBehaviour:
         m_Arguments:
           m_ObjectArgument: {fileID: 0}
           m_ObjectArgumentAssemblyTypeName: UnityEngine.Object, UnityEngine
-          m_IntArgument: 10001
+          m_IntArgument: 10040
           m_FloatArgument: 0
           m_StringArgument: SoulPet
           m_BoolArgument: 0
@@ -4060,7 +4060,7 @@ MonoBehaviour:
           m_ObjectArgumentAssemblyTypeName: UnityEngine.Object, UnityEngine
           m_IntArgument: 10943
           m_FloatArgument: 0
-          m_StringArgument: "\u963F\u5C14\u6BD4\u96F6\u795E\u8FF9\u89C9\u9192"
+          m_StringArgument: "\u585E\u897F\u5229\u4E9A\u661F"
           m_BoolArgument: 0
         m_CallState: 2
   onPointerEnterEvent:
@@ -7469,7 +7469,7 @@ MonoBehaviour:
         m_Arguments:
           m_ObjectArgument: {fileID: 0}
           m_ObjectArgumentAssemblyTypeName: UnityEngine.Object, UnityEngine
-          m_IntArgument: 1260
+          m_IntArgument: 10009
           m_FloatArgument: 0
           m_StringArgument: SignReward[activity=2507]
           m_BoolArgument: 0
@@ -7486,7 +7486,7 @@ MonoBehaviour:
           m_ObjectArgumentAssemblyTypeName: UnityEngine.Object, UnityEngine
           m_IntArgument: 0
           m_FloatArgument: 0
-          m_StringArgument: "\u8680\u9B42\u517D"
+          m_StringArgument: "\u8BD5\u70BC\u4E4B\u5854"
           m_BoolArgument: 0
         m_CallState: 2
   onPointerEnterEvent:
@@ -10004,9 +10004,9 @@ MonoBehaviour:
   - {fileID: 459207275}
   activityIconPaths:
   - Pets/icon/1006
-  - Pets/icon/1982
-  - Pets/icon/407
-  - Pets/icon/13848
+  - Pets/icon/10073
+  - Pets/icon/13385
+  - Pets/icon/10050
   mapIntroController: {fileID: 865062019}
   trainIntroController: {fileID: 1019015395}
 --- !u!114 &990813978
@@ -13500,7 +13500,7 @@ MonoBehaviour:
         m_Arguments:
           m_ObjectArgument: {fileID: 0}
           m_ObjectArgumentAssemblyTypeName: UnityEngine.Object, UnityEngine
-          m_IntArgument: 125
+          m_IntArgument: -10010
           m_FloatArgument: 0
           m_StringArgument: WorldMap[world=1]
           m_BoolArgument: 0
@@ -13517,7 +13517,7 @@ MonoBehaviour:
           m_ObjectArgumentAssemblyTypeName: UnityEngine.Object, UnityEngine
           m_IntArgument: 0
           m_FloatArgument: 0
-          m_StringArgument: "\u4E94\u6708\u4E94\uFF0C\u5E86\u7AEF\u5348"
+          m_StringArgument: "\u51DB\u51B0\u67AA\u9A91"
           m_BoolArgument: 0
         m_CallState: 2
   onPointerEnterEvent:
