@@ -413,6 +413,7 @@ public class StoryPanel : Panel
             name = speaker ?? string.Empty,
             storySpeakerSide = actor?.normalizedSide ?? "left",
             storyFlipIcon = actor != null && actor.flipIcon,
+            storyTextStyle = story?.textStyle,
             rawContent = content ?? string.Empty,
             functionHandler = new List<NpcButtonHandler>(),
             replyHandler = replyHandlers ?? new List<NpcButtonHandler>()

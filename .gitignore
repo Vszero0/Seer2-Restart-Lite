@@ -28,6 +28,9 @@
 .idea/
 .vscode/
 
+# Local Codex/Superpowers implementation plans
+/docs/superpowers/
+
 # Gradle cache directory
 .gradle/
 

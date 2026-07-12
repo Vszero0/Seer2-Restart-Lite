@@ -40,7 +40,8 @@
     "fontSize": 20,
     "textColor": "#F4E8C1",
     "outlineColor": "#38251A",
-    "outlineWidth": 0.04
+    "outlineWidth": 0,
+    "bold": true
   }
 }
 ```
@@ -67,6 +68,7 @@
 - `term`：自动匹配的文本；
 - `description`：悬浮解释内容；
 - `color`、`bold`、`italic`、`underline`：词条在正文中的表现；
+- `bold`（文本主题）：整段剧情文本是否加粗，默认不加粗；
 - 后续可扩展图标、音效、跳转链接，但不应让词条直接执行游戏逻辑。
 
 ## 5. 文本处理流程
@@ -132,4 +134,3 @@
 - 在线词典和跨 Mod 依赖；
 - 每句话独立创建字体材质；
 - 为普通 NPC 对话强行接入剧情词典。
-

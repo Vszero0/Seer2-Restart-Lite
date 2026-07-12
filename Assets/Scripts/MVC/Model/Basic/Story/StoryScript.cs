@@ -8,6 +8,7 @@ public class StoryScript
     public List<StoryCommand> commands = new List<StoryCommand>();
     public Dictionary<string, int> labels = new Dictionary<string, int>();
     public StoryLayoutDocument layout;
+    public StoryTextStyleDocument textStyle;
 
     public int GetLabelIndex(string label)
     {
@@ -34,6 +35,17 @@ public class StoryChoice
 }
 
 [Serializable]
+public class StoryTextStyleDocument
+{
+    public string font;
+    public int fontSize;
+    public string textColor;
+    public string outlineColor;
+    public float outlineWidth;
+    public bool bold = false;
+}
+
+[Serializable]
 public class StoryDocument
 {
     public int schemaVersion = 1;
@@ -41,6 +53,7 @@ public class StoryDocument
     public string title;
     public string entry = "start";
     public StoryLayoutDocument layout;
+    public StoryTextStyleDocument style;
     public StoryMissionDocument mission;
     public StoryActorDocument[] actors;
     public StoryNodeDocument[] nodes;
@@ -76,7 +89,8 @@ public class StoryDocument
     {
         StoryScript script = new StoryScript
         {
-            layout = layout
+            layout = layout,
+            textStyle = style
         };
         if (nodes == null)
             return script;

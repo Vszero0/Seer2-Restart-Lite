@@ -43,12 +43,20 @@ public class DialogView : Module
     private Vector2 defaultTextPivot;
     private Vector2 defaultTextAnchoredPosition;
     private Vector2 defaultTextSizeDelta;
+    private TMP_FontAsset defaultFont;
+    private Material defaultFontSharedMaterial;
+    private float defaultFontSize;
+    private FontStyles defaultFontStyle;
+    private Color defaultTextColor;
+    private Color defaultOutlineColor;
+    private float defaultOutlineWidth;
     private bool hasDefaultLayout;
 
     protected override void Awake()
     {
         base.Awake();
         StoreDefaultLayout();
+        StoreDefaultTextStyle();
     }
 
     public void SetReplyClickHandler(Action<NpcButtonHandler> handler)
@@ -128,6 +136,71 @@ public class DialogView : Module
         hasDefaultLayout = true;
     }
 
+    private void StoreDefaultTextStyle()
+    {
+        if (content == null || content.text == null)
+            return;
+
+        defaultFont = content.text.font;
+        defaultFontSharedMaterial = content.text.fontSharedMaterial;
+        defaultFontSize = content.text.fontSize;
+        defaultFontStyle = content.text.fontStyle;
+        defaultTextColor = content.text.color;
+        defaultOutlineColor = content.text.outlineColor;
+        defaultOutlineWidth = content.text.outlineWidth;
+    }
+
+    private void ApplyStoryTextStyle(StoryTextStyleDocument style)
+    {
+        TMP_FontAsset font = null;
+        if (!string.IsNullOrEmpty(style?.font))
+            font = Resources.Load<TMP_FontAsset>(style.font);
+
+        if (font != null)
+        {
+            content.text.font = font;
+            content.text.fontSharedMaterial = font.material;
+        }
+        else
+        {
+            content.text.font = defaultFont;
+            content.text.fontSharedMaterial = defaultFontSharedMaterial;
+        }
+
+        content.text.fontSize = style != null && style.fontSize > 0
+            ? style.fontSize
+            : defaultFontSize;
+        content.text.fontStyle = style != null && style.bold
+            ? FontStyles.Bold
+            : FontStyles.Normal;
+        content.text.color = ParseStoryColor(style?.textColor, Color.white);
+        content.text.outlineColor = ParseStoryColor(style?.outlineColor, new Color32(0, 0, 0, 230));
+        content.text.outlineWidth = style == null
+            ? 0f
+            : Mathf.Clamp(style.outlineWidth, 0f, 0.1f);
+    }
+
+    private static Color ParseStoryColor(string value, Color fallback)
+    {
+        return !string.IsNullOrEmpty(value) && ColorUtility.TryParseHtmlString(value, out Color color)
+            ? color
+            : fallback;
+    }
+
+    private void ResetTextStyle()
+    {
+        if (content == null || content.text == null)
+            return;
+
+        content.text.font = defaultFont;
+        content.text.fontSharedMaterial = defaultFontSharedMaterial;
+        content.text.fontSize = defaultFontSize;
+        content.text.fontStyle = defaultFontStyle;
+        content.text.color = defaultTextColor;
+        content.text.outlineColor = defaultOutlineColor;
+        content.text.outlineWidth = defaultOutlineWidth;
+    }
+
     private void ApplyStoryLayout(DialogInfo info, bool isActiveSpeaker)
     {
         if (contentRect == null || content == null)
@@ -177,9 +250,7 @@ public class DialogView : Module
 
         content.text.enableWordWrapping = true;
         content.text.alignment = TextAlignmentOptions.MidlineLeft;
-        content.text.color = Color.white;
-        content.text.outlineColor = new Color32(0, 0, 0, 230);
-        content.text.outlineWidth = 0.16f;
+        ApplyStoryTextStyle(info?.storyTextStyle);
         content.text.ForceMeshUpdate();
         float textHeight = Mathf.Max(24f, content.text.preferredHeight);
 
@@ -220,6 +291,8 @@ public class DialogView : Module
 
     private void ResetStoryLayout()
     {
+        ResetTextStyle();
+
         if (storySpeakerText != null)
             storySpeakerText.gameObject.SetActive(false);
 
