@@ -153,12 +153,10 @@ ChoiceData
 ├── choiceId
 └── options[]
     ├── optionId
-    ├── text
-    ├── targetPointId
-    └── conditions[]
+    └── text
 ```
 
-目标剧情点必须从当前剧本已有剧情点中选择，不能只允许作者手写 ID。
+选择后继续当前剧情点的下一条命令，不在选项上直接设置目标剧情点。剧情点结束后的 `jump` 命令通过 `ConditionGroup` 根据一个或多个选择结果决定目标；目标剧情点必须从当前剧本已有剧情点中选择，不能只允许作者手写 ID。
 
 选择历史属于 `StoryRuntimeContext`，编辑器只负责维护合法选择和条件数据。
 

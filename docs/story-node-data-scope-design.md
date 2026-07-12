@@ -282,6 +282,6 @@ View 不直接修改 `StoryDocument`。剧情点编辑先进入 `StoryNodeDraftM
 3. `StoryNodeDocument` 增加剧情点级 `style` 和场景集合。
 4. `StoryCommandDocument.scene` 或 `sceneId` 用于切换剧情点内场景。
 5. `StoryChoiceDocument` 增加稳定 ID。
-6. 为旧 JSON 保留读取兼容逻辑，将旧的全局 layout 映射为入口剧情点的默认场景布局。
+6. 当前只有一份旧版“法拉的梦” JSON，改造代码时直接修改为新格式，不额外保留旧 JSON 读取兼容逻辑。
 
 在上述模型确定前，不开始新的 Panel 和剧情点编辑 UI 实现。

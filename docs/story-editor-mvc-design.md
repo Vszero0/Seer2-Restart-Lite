@@ -26,7 +26,7 @@
 
 ```text
 StoryRepository
-    └── 文件系统、序列化、校验、迁移
+    └── 文件系统、序列化、校验
 
 StoryEditorModel
     └── 剧本列表、当前剧本、当前剧情点和管理页状态
@@ -52,7 +52,7 @@ StoryManagementView / StoryPointEditorView
 - 加载和反序列化 `StoryData`。
 - 保存、删除和刷新文件。
 - 调用 `StoryValidator`。
-- 执行旧 JSON 到新结构的迁移。
+- 使用 UTF-8 读写 `Mod/Stories/story_id.json`。
 - 报告带有文件路径和数据位置的错误。
 
 Repository 不保存 UI 选择状态，也不负责打开 Panel。
@@ -231,15 +231,13 @@ StoryPanel.Open("mod:" + storyId, mapId)
 
 预览不能直接播放未保存的 UI 草稿。正式预览与编辑器必须隔离选中框、输入控件和编辑提示。
 
-在预览不影响任务状态的隔离模式完成前，测试剧本使用 `replayable=true`，并向作者明确提示风险。
+当前阶段所有自制剧情使用 `replayable=true`，允许反复进入测试；选择历史只保存在本次运行上下文。
 
-## 8. 兼容原则
+## 8. 当前数据处理原则
 
-- 继续使用现有 `StoryDocument` 等类型作为迁移基础。
+- 现有 `StoryDocument` 等类型只作为运行时重构的参考，不作为旧 JSON 兼容层。
 - 新设计语义分别对应 `StoryData`、`StoryPointData`、`CommandData`。
-- 旧的 `StoryDocument.layout` 只作为兼容输入。
-- 旧的 `scene.bg` / `scene.args` 只作为兼容输入。
-- 旧选项没有稳定 ID 时，在读取和保存过程中补齐。
+- 当前唯一旧版“法拉的梦” JSON 在改造代码时直接改写为新格式。
 - 未知扩展字段不能被静默丢弃；在无法保留时提示作者。
 
 ## 9. 当前不实现
