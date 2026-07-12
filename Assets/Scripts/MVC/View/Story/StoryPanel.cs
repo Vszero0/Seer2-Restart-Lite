@@ -2,7 +2,6 @@ using System;
 using System.Linq;
 using System.Collections;
 using System.Collections.Generic;
-using System.IO;
 using UnityEngine;
 using UnityEngine.UI;
 using TMPro;
@@ -348,7 +347,7 @@ public class StoryPanel : Panel
         DialogManager.instance.SetStoryDialogBackgroundClickHandler(Advance);
         SetActiveActor(actor?.id);
         lastDialogInfo = CreateDialogInfo(actor, speaker, content, new List<NpcButtonHandler>());
-        DialogManager.instance.OpenStoryDialog(lastDialogInfo);
+        DialogManager.instance.OpenStoryDialog(lastDialogInfo, false);
         RefreshOverlayLayering();
     }
 
@@ -360,7 +359,7 @@ public class StoryPanel : Panel
         DialogManager.instance.SetStoryDialogBackgroundClickHandler(Advance);
         SetActiveActor(null);
         lastDialogInfo = CreateDialogInfo(null, NarratorName, content, new List<NpcButtonHandler>());
-        DialogManager.instance.OpenStoryDialog(lastDialogInfo);
+        DialogManager.instance.OpenStoryDialog(lastDialogInfo, false);
         RefreshOverlayLayering();
     }
 
@@ -378,7 +377,7 @@ public class StoryPanel : Panel
         if (lastDialogInfo == null)
         {
             lastDialogInfo = CreateDialogInfo(null, NarrationPrompt, ChoicePrompt, new List<NpcButtonHandler>());
-            DialogManager.instance.OpenStoryDialog(lastDialogInfo);
+            DialogManager.instance.OpenStoryDialog(lastDialogInfo, false);
         }
         DialogManager.instance.ShowStoryChoices(choices.Select(x => x.text).ToList(), choiceIndex =>
         {
@@ -770,9 +769,19 @@ public class StoryPanel : Panel
         if (string.IsNullOrEmpty(path) || path == "none")
             return null;
 
-        Sprite sprite = LoadPetSprite(path);
+        bool isExplicitModPath = path.TryTrimStart("Mod/", out string modPath);
+        string resourcePath = isExplicitModPath ? modPath : path;
+
+        Sprite sprite = ResourceManager.instance.GetLocalAddressables<Sprite>(resourcePath, isExplicitModPath);
         if (sprite != null && sprite != SpriteSet.Empty)
             return sprite;
+
+        if (!isExplicitModPath)
+        {
+            sprite = ResourceManager.instance.GetLocalAddressables<Sprite>(resourcePath, true);
+            if (sprite != null && sprite != SpriteSet.Empty)
+                return sprite;
+        }
 
         sprite = ResourceManager.instance.Get<Sprite>(path);
         if (sprite != null && sprite != SpriteSet.Empty)
@@ -783,31 +792,6 @@ public class StoryPanel : Panel
             return sprite;
 
         return null;
-    }
-
-    private static Sprite LoadPetSprite(string path)
-    {
-        string normalized = path.Replace("\\", "/");
-        if (normalized.StartsWith("Pets/pet/", StringComparison.OrdinalIgnoreCase))
-            return LoadPersistentSprite(normalized);
-
-        if (normalized.StartsWith("Pets/icon/", StringComparison.OrdinalIgnoreCase))
-            return LoadPersistentSprite(normalized);
-
-        return null;
-    }
-
-    private static Sprite LoadPersistentSprite(string normalizedPath)
-    {
-        string relativePath = normalizedPath.EndsWith(".png", StringComparison.OrdinalIgnoreCase)
-            ? normalizedPath
-            : normalizedPath + ".png";
-        string fullPath = Path.Combine(Application.persistentDataPath, "Resources", relativePath.Replace("/", Path.DirectorySeparatorChar.ToString()));
-
-        if (!SaveSystem.TryLoadAllBytes(fullPath, out byte[] bytes))
-            return null;
-
-        return SpriteSet.TryCreateSpriteFromBytes(bytes, out Sprite sprite) ? sprite : null;
     }
 
     private Image CreateImage(string name, Transform parent, Vector2 anchorMin, Vector2 anchorMax, Vector2 pivot, Vector2 anchoredPosition, Vector2 sizeDelta, Color color)

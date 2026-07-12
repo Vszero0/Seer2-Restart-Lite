@@ -60,12 +60,12 @@ public class DialogManager : Manager<DialogManager>
             StopOpenAnimation(dialogLayer, dialogLayerPosition, ref dialogOpenAnimationCoroutine);
     }
 
-    private void SetStoryDialogLayerActive(bool acitve) {
+    private void SetStoryDialogLayerActive(bool acitve, bool playOpenAnimation = true) {
         bool wasActive = dialogStoryLayer.gameObject.activeSelf;
         UILayer.gameObject.SetActive(!acitve);
         dialogStoryLayer.gameObject.SetActive(acitve);
         if (acitve && !wasActive)
-            PlayOpenAnimation(dialogStoryLayer, dialogStoryLayerPosition, ref dialogStoryOpenAnimationCoroutine);
+            PlayOpenAnimation(dialogStoryLayer, dialogStoryLayerPosition, ref dialogStoryOpenAnimationCoroutine, playOpenAnimation);
         else if (!acitve)
             StopOpenAnimation(dialogStoryLayer, dialogStoryLayerPosition, ref dialogStoryOpenAnimationCoroutine);
     }
@@ -92,7 +92,7 @@ public class DialogManager : Manager<DialogManager>
         dialogController.OpenDialog(info);
     }
     
-    public void OpenStoryDialog(DialogInfo info) {
+    public void OpenStoryDialog(DialogInfo info, bool playOpenAnimation = true) {
         Player.instance.isShootMode = false;
         dialogStoryLayer.SetAsLastSibling();
 
@@ -105,7 +105,7 @@ public class DialogManager : Manager<DialogManager>
             SetDialogLayerActive(false);
         }
 
-        SetStoryDialogLayerActive(true);
+        SetStoryDialogLayerActive(true, playOpenAnimation);
         dialogStoryController.OpenDialog(info);
         RefreshStoryOverlayLayering();
     }
@@ -229,11 +229,12 @@ public class DialogManager : Manager<DialogManager>
         Player.instance.currentNpcId = 0;
     }
 
-    private void PlayOpenAnimation(RectTransform layer, Vector2 targetPosition, ref Coroutine coroutine)
+    private void PlayOpenAnimation(RectTransform layer, Vector2 targetPosition, ref Coroutine coroutine,
+        bool playOpenAnimation = true)
     {
         StopOpenAnimation(layer, targetPosition, ref coroutine);
 
-        if (!useOpenAnimation || openAnimationDuration <= 0f)
+        if (!playOpenAnimation || !useOpenAnimation || openAnimationDuration <= 0f)
         {
             ResetDialogLayerVisual(layer, targetPosition);
             return;
