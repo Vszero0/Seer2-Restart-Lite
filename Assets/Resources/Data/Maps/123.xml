@@ -10,6 +10,30 @@
 			<wild>
 				<movement mode="wander" radius="220" speed="34" idle="2,3" step="12,26" moveTick="0.05" snap="1" bob="1.25" bobSpeed="2" originalFacesRight="true" />
 				<talk chance="0.3" duration="2.5">
+					<self image="emoji/toon/alert" />
+					<self image="emoji/toon/angry" />
+					<self image="emoji/toon/annoyed" />
+					<self image="emoji/toon/cool" />
+					<self image="emoji/toon/cry" />
+					<self image="emoji/toon/dizzy" />
+					<self image="emoji/toon/grin" />
+					<self image="emoji/toon/happy" />
+					<self image="emoji/toon/hypno" />
+					<self image="emoji/toon/laugh" />
+					<self image="emoji/toon/love" />
+					<self image="emoji/toon/mute" />
+					<self image="emoji/toon/shocked" />
+					<self image="emoji/toon/shy" />
+					<self image="emoji/toon/sick" />
+					<self image="emoji/toon/silly" />
+					<self image="emoji/toon/skull" />
+					<self image="emoji/toon/sleepy" />
+					<self image="emoji/toon/smug" />
+					<self image="emoji/toon/star_eyes" />
+					<self image="emoji/toon/sunglasses" />
+					<self image="emoji/toon/surprised" />
+					<self image="emoji/toon/sweat" />
+					<self image="emoji/toon/worried" />
 					<self>别看我个子小，我可是很重的哦！踩我脚试试？</self>
 					<self>今天的蘑菇长得不错……算了，还是晒太阳比较重要。</self>
 					<self>光合作用中……请勿打扰！</self>
@@ -42,6 +66,30 @@
 			<wild>
 				<movement mode="wander" radius="220" speed="34" idle="2,3" step="12,26" moveTick="0.05" snap="1" bob="1.25" bobSpeed="2" originalFacesRight="true" />
 				<talk chance="0.3" duration="2.5">
+					<self image="emoji/toon/alert" />
+					<self image="emoji/toon/angry" />
+					<self image="emoji/toon/annoyed" />
+					<self image="emoji/toon/cool" />
+					<self image="emoji/toon/cry" />
+					<self image="emoji/toon/dizzy" />
+					<self image="emoji/toon/grin" />
+					<self image="emoji/toon/happy" />
+					<self image="emoji/toon/hypno" />
+					<self image="emoji/toon/laugh" />
+					<self image="emoji/toon/love" />
+					<self image="emoji/toon/mute" />
+					<self image="emoji/toon/shocked" />
+					<self image="emoji/toon/shy" />
+					<self image="emoji/toon/sick" />
+					<self image="emoji/toon/silly" />
+					<self image="emoji/toon/skull" />
+					<self image="emoji/toon/sleepy" />
+					<self image="emoji/toon/smug" />
+					<self image="emoji/toon/star_eyes" />
+					<self image="emoji/toon/sunglasses" />
+					<self image="emoji/toon/surprised" />
+					<self image="emoji/toon/sweat" />
+					<self image="emoji/toon/worried" />
 					<self>我偷偷练了旋转击！转起来的时候连我自己都晕~</self>
 					<self>听说沙漠那边阳光很好……啊，不小心说出来了。</self>
 					<self>谁说草系不能很重？我这叫"扎根式体重"！</self>
@@ -74,6 +122,30 @@
 			<wild>
 				<movement mode="wander" radius="220" speed="34" idle="2,3" step="12,26" moveTick="0.05" snap="1" bob="1.25" bobSpeed="2" originalFacesRight="true" />
 				<talk chance="0.3" duration="2.5">
+					<self image="emoji/toon/alert" />
+					<self image="emoji/toon/angry" />
+					<self image="emoji/toon/annoyed" />
+					<self image="emoji/toon/cool" />
+					<self image="emoji/toon/cry" />
+					<self image="emoji/toon/dizzy" />
+					<self image="emoji/toon/grin" />
+					<self image="emoji/toon/happy" />
+					<self image="emoji/toon/hypno" />
+					<self image="emoji/toon/laugh" />
+					<self image="emoji/toon/love" />
+					<self image="emoji/toon/mute" />
+					<self image="emoji/toon/shocked" />
+					<self image="emoji/toon/shy" />
+					<self image="emoji/toon/sick" />
+					<self image="emoji/toon/silly" />
+					<self image="emoji/toon/skull" />
+					<self image="emoji/toon/sleepy" />
+					<self image="emoji/toon/smug" />
+					<self image="emoji/toon/star_eyes" />
+					<self image="emoji/toon/sunglasses" />
+					<self image="emoji/toon/surprised" />
+					<self image="emoji/toon/sweat" />
+					<self image="emoji/toon/worried" />
 					<self>再生能力发动！感觉……嗯，还是有点困。</self>
 					<self>我虽然住在蘑菇小径，但我的梦想可不止蘑菇那么大。</self>
 					<self>有时候会想，山谷外面的世界，是不是真的有金色的沙子呢？</self>

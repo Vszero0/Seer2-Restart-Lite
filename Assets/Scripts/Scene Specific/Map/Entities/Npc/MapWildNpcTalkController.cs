@@ -8,6 +8,7 @@ using UnityEditor;
 public class MapWildNpcTalkController : MonoBehaviour
 {
     private const string TalkImageRoot = "Assets/StaticResources/Sprites/Map/talk bubble";
+    private const string TalkImageResourceRoot = "Sprites/Map/talk bubble";
 
     [Serializable]
     private class TalkImageEntry
@@ -117,7 +118,18 @@ public class MapWildNpcTalkController : MonoBehaviour
             return null;
 
         id = NormalizeImageId(id);
-        Sprite sprite = FindImageEntry(id)?.sprite;
+        if (string.IsNullOrEmpty(id))
+            return null;
+
+        Sprite sprite = TryLoadLocalTalkImage(id, true);
+        if (sprite != null)
+            return sprite;
+
+        sprite = TryLoadLocalTalkImage(id, false);
+        if (sprite != null)
+            return sprite;
+
+        sprite = FindImageEntry(id)?.sprite;
         if (sprite != null)
             return sprite;
 
@@ -126,6 +138,16 @@ public class MapWildNpcTalkController : MonoBehaviour
 #else
         return null;
 #endif
+    }
+
+    private static Sprite TryLoadLocalTalkImage(string id, bool isMod)
+    {
+        if (ResourceManager.instance == null)
+            return null;
+
+        return ResourceManager.instance.GetLocalAddressables<Sprite>(
+            $"{TalkImageResourceRoot}/{id}",
+            isMod);
     }
 
 #if UNITY_EDITOR
@@ -227,9 +249,30 @@ public class MapWildNpcTalkController : MonoBehaviour
 
     private static string NormalizeImageId(string id)
     {
-        return string.IsNullOrWhiteSpace(id)
-            ? string.Empty
-            : id.Replace('\\', '/').Trim('/');
+        if (string.IsNullOrWhiteSpace(id))
+            return string.Empty;
+
+        id = id.Replace('\\', '/').Trim('/');
+        foreach (string extension in new[] { ".png", ".jpg", ".jpeg" })
+        {
+            if (id.EndsWith(extension, StringComparison.OrdinalIgnoreCase))
+            {
+                id = id.Substring(0, id.Length - extension.Length);
+                break;
+            }
+        }
+
+        string[] segments = id.Split('/');
+        if (segments.Length <= 0)
+            return string.Empty;
+
+        foreach (string segment in segments)
+        {
+            if (string.IsNullOrWhiteSpace(segment) || segment == "." || segment == "..")
+                return string.Empty;
+        }
+
+        return id;
     }
 
     private void ScheduleNextStationaryTalk()

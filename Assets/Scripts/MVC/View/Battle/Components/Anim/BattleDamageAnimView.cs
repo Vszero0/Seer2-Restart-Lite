@@ -16,8 +16,8 @@ public class BattleDamageAnimView : Module
     [SerializeField] private GameObject healNumberPrefab;
     [SerializeField] private FightCamaraController camara;
     [SerializeField] private float comboDamagePreviewInterval = 0.18f;
-    [SerializeField] private float comboDamagePreviewMinOffset = 50f;
-    [SerializeField] private float comboDamagePreviewMaxOffset = 70f;
+    [SerializeField] private float comboDamagePreviewMinOffset = 15f;
+    [SerializeField] private float comboDamagePreviewMaxOffset = 25f;
     [SerializeField] private float comboDamagePreviewHoldTime = 0.35f;
 
     private SettingsData settingsData => Player.instance.gameData.settingsData;
@@ -95,6 +95,11 @@ public class BattleDamageAnimView : Module
     {
         foreach (var comboDamageInfo in info.ComboDamageInfoList)
         {
+            if (info.DamageType && info.IsHit && (comboDamageInfo.Damage != 0) && comboDamageInfo.IsCritical)
+            {
+                camara.ScreenShake(0.4f);
+            }
+
             SetDamageObject(info, comboDamageInfo.Damage, comboDamageInfo.IsCritical, false,
                 criticalEffectWorldPosition);
             yield return new WaitForSeconds(comboDamagePreviewInterval / Mathf.Max(settingsData.battleAnimSpeed, 1f));
@@ -107,7 +112,7 @@ public class BattleDamageAnimView : Module
         }
         else
         {
-            SetFinalDamageEffects(info, info.Damage, info.IsCritical, criticalEffectWorldPosition, false);
+            SetFinalDamageEffects(info, info.Damage, info.IsCritical, criticalEffectWorldPosition, false, false);
             yield return new WaitForSeconds(comboDamagePreviewHoldTime / Mathf.Max(settingsData.battleAnimSpeed, 1f));
         }
     }
@@ -174,7 +179,7 @@ public class BattleDamageAnimView : Module
     }
 
     private void SetFinalDamageEffects(UnitHudSystem.DamageInfo info, int damage, bool isCritical,
-        Vector3? criticalEffectWorldPosition, bool scaleDamageAnchor)
+        Vector3? criticalEffectWorldPosition, bool scaleDamageAnchor, bool triggerCriticalShake = true)
     {
         bool isDamage = info.IsHit && (damage != 0);
         if (isDamage && isCritical)
@@ -191,7 +196,7 @@ public class BattleDamageAnimView : Module
         if (!info.DamageType || !isDamage)
             return;
 
-        if (isCritical || (settingsData.shakeWhenBigDamage && (damage > 400)))
+        if ((triggerCriticalShake && isCritical) || (settingsData.shakeWhenBigDamage && (damage > 400)))
         {
             camara.ScreenShake();
         }
