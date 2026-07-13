@@ -1,0 +1,195 @@
+{
+  "schemaVersion": 1,
+  "id": "story_model_test",
+  "title": "剧情系统测试",
+  "entry": "start",
+  "replayable": true,
+  "mission": {
+    "id": -10002,
+    "title": "剧情系统测试",
+    "replayable": true,
+    "mapId": 121,
+    "summary": "通过可重复进入的支线，验证剧情数据模型和运行时分支。"
+  },
+  "resourceDefinitions": [
+    { "path": "Maps/bg/121", "kind": "mapBackground", "source": "builtin" },
+    { "path": "Maps/bg/122", "kind": "mapBackground", "source": "builtin" },
+    { "path": "BGM/101/BGM_1.mp3", "kind": "audio", "source": "builtin" },
+    { "path": "Pets/pet/10", "kind": "actorSprite", "source": "builtin" },
+    { "path": "Pets/icon/10", "kind": "actorIcon", "source": "builtin" },
+    { "path": "Pets/pet/11", "kind": "actorSprite", "source": "builtin" },
+    { "path": "Pets/icon/11", "kind": "actorIcon", "source": "builtin" },
+    { "path": "Pets/pet/12", "kind": "actorSprite", "source": "builtin" },
+    { "path": "Pets/icon/12", "kind": "actorIcon", "source": "builtin" }
+  ],
+  "actors": [
+    {
+      "id": "fala",
+      "actorType": "pet",
+      "petId": "10",
+      "name": "法拉",
+      "sprite": "Pets/pet/10",
+      "icon": "Pets/icon/10",
+      "side": "left",
+      "slot": 1,
+      "faceLeft": false,
+      "scale": 1.05
+    },
+    {
+      "id": "fanna",
+      "actorType": "pet",
+      "petId": "11",
+      "name": "法娜",
+      "sprite": "Pets/pet/11",
+      "icon": "Pets/icon/11",
+      "side": "left",
+      "slot": 2,
+      "faceLeft": false,
+      "scale": 1
+    },
+    {
+      "id": "fayina",
+      "actorType": "pet",
+      "petId": "12",
+      "name": "法伊娜",
+      "sprite": "Pets/pet/12",
+      "icon": "Pets/icon/12",
+      "side": "right",
+      "slot": 1,
+      "faceLeft": true,
+      "flipIcon": true,
+      "scale": 1.05
+    }
+  ],
+  "nodes": [
+    {
+      "id": "start",
+      "displayName": "入口：基础数据与第一次选择",
+      "scenes": [
+        {
+          "id": "opening",
+          "mapId": 121,
+          "actorIds": [ "fala", "fanna" ],
+          "layout": {
+            "actorSpacing": 150,
+            "actorHeight": 238,
+            "actorBottom": 166,
+            "centerGap": 118,
+            "stackOffset": 32
+          }
+        }
+      ],
+      "commands": [
+        { "type": "scene", "sceneId": "opening" },
+        { "type": "show", "actor": "fala" },
+        { "type": "show", "actor": "fanna" },
+        { "type": "narrate", "text": "【测试 1/基础数据】当前节点：start。已加载 opening 场景、地图 121，以及地图 XML 默认配置的 BGM。法拉和法娜已显示；接下来记录第一次选择。" },
+        { "type": "choice", "choiceId": "route_choice", "actor": "fala", "text": "【测试 2】法拉（左侧）提问：问题与选项应同时出现，选项应在右侧。请选择路线。", "choices": [
+          { "optionId": "route_a", "text": "选择 A：走左侧路线" },
+          { "optionId": "route_b", "text": "选择 B：走右侧路线" }
+        ] },
+        { "type": "jump", "target": "route_a", "condition": { "operatorType": "AND", "conditions": [ { "type": "ChoiceSelected", "choiceId": "route_choice", "optionId": "route_a" } ] } },
+        { "type": "jump", "target": "route_b", "condition": { "operatorType": "AND", "conditions": [ { "type": "ChoiceSelected", "choiceId": "route_choice", "optionId": "route_b" } ] } }
+      ]
+    },
+    {
+      "id": "route_a",
+      "displayName": "分支 A：记录第一次选择",
+      "commands": [
+        { "type": "say", "actor": "fala", "text": "【测试 2/第一次选择】已进入分支 A，说明第一次选择记录为 route_a。现在进入第二次选择。" },
+        { "type": "jump", "target": "second_choice" }
+      ]
+    },
+    {
+      "id": "route_b",
+      "displayName": "分支 B：记录第一次选择",
+      "commands": [
+        { "type": "say", "actor": "fanna", "text": "【测试 2/第一次选择】已进入分支 B，说明第一次选择记录为 route_b。现在进入第二次选择。" },
+        { "type": "jump", "target": "second_choice" }
+      ]
+    },
+    {
+      "id": "second_choice",
+      "displayName": "第二次选择与多条件判断",
+      "scenes": [
+        {
+          "id": "test_scene",
+          "mapId": 122,
+          "bgmResourcePath": "BGM/101/BGM_1.mp3",
+          "actorIds": [ "fayina" ],
+          "layout": {
+            "actorSpacing": 180,
+            "actorHeight": 260,
+            "actorBottom": 150,
+            "centerGap": 135,
+            "stackOffset": 20
+          }
+        }
+      ],
+      "commands": [
+        { "type": "scene", "sceneId": "test_scene" },
+        { "type": "show", "actor": "fayina" },
+        { "type": "narrate", "text": "【测试 3/场景切换】已切换到 test_scene：背景应变为地图 122。此场景显式覆盖 BGM 为 BGM_1；原场景角色应被清空并加载法伊娜。" },
+        { "type": "choice", "choiceId": "layout_choice", "actor": "fayina", "text": "【测试 4】法伊娜（右侧）提问：问题与选项应同时出现，选项应在左侧。请选择布局方案。", "choices": [
+          { "optionId": "layout_left", "text": "选择左侧布局方案" },
+          { "optionId": "layout_right", "text": "选择右侧布局方案" }
+        ] },
+        { "type": "jump", "target": "sequence_pass", "condition": { "operatorType": "AND", "conditions": [ { "type": "ChoiceSequenceMatched", "optionSequence": [ "route_a", "layout_left" ] } ] } },
+        { "type": "jump", "target": "and_pass", "condition": { "operatorType": "AND", "conditions": [ { "type": "ChoiceSelected", "choiceId": "route_choice", "optionId": "route_a" }, { "type": "ChoiceSelected", "choiceId": "layout_choice", "optionId": "layout_left" } ] } },
+        { "type": "jump", "target": "or_pass", "condition": { "operatorType": "OR", "conditions": [ { "type": "ChoiceSelected", "choiceId": "route_choice", "optionId": "route_a" }, { "type": "ChoiceSelected", "choiceId": "layout_choice", "optionId": "layout_right" } ] } },
+        { "type": "jump", "target": "condition_default" }
+      ]
+    },
+    {
+      "id": "sequence_pass",
+      "displayName": "序列条件命中",
+      "commands": [
+        { "type": "say", "actor": "fayina", "text": "【测试 4/ChoiceSequenceMatched】已命中序列 [route_a, layout_left]。这次同时验证了：第一次选择 A、第二次选择左侧，以及连续选择顺序判断。" },
+        { "type": "jump", "target": "and_probe" }
+      ]
+    },
+    {
+      "id": "and_probe",
+      "displayName": "独立 AND 条件检查",
+      "commands": [
+        { "type": "jump", "target": "and_pass", "condition": { "operatorType": "AND", "conditions": [ { "type": "ChoiceSelected", "choiceId": "route_choice", "optionId": "route_a" }, { "type": "ChoiceSelected", "choiceId": "layout_choice", "optionId": "layout_left" } ] } },
+        { "type": "jump", "target": "condition_default" }
+      ]
+    },
+    {
+      "id": "and_pass",
+      "displayName": "AND 条件命中",
+      "commands": [
+        { "type": "say", "actor": "fayina", "text": "【测试 4/AND】已命中 AND：第一次选择是 A，并且第二次选择是左侧布局。" },
+        { "type": "jump", "target": "visibility_test" }
+      ]
+    },
+    {
+      "id": "or_pass",
+      "displayName": "OR 条件命中",
+      "commands": [
+        { "type": "say", "actor": "fayina", "text": "【测试 4/OR】已命中 OR：至少一个选择条件成立。你可以重进本支线，尝试其他组合。" },
+        { "type": "jump", "target": "visibility_test" }
+      ]
+    },
+    {
+      "id": "condition_default",
+      "displayName": "条件未命中",
+      "commands": [
+        { "type": "narrate", "text": "【测试 4/条件未命中】当前选择组合没有命中预设的序列、AND 或 OR 条件。请记录前两次选项后再判断是否符合预期。" },
+        { "type": "jump", "target": "visibility_test" }
+      ]
+    },
+    {
+      "id": "visibility_test",
+      "displayName": "show/hide 与最终状态",
+      "commands": [
+        { "type": "hide", "actor": "fayina" },
+        { "type": "show", "actor": "fala" },
+        { "type": "narrate", "text": "【测试 5/show-hide】法伊娜已 hide，法拉已重新 show。请观察角色显示状态、左右位置、缩放和朝向是否符合资源定义。" },
+        { "type": "say", "actor": "fala", "text": "【测试完成】本次支线已覆盖：资源定义、角色引用、场景切换、BGM、layout、show/hide、两次选择、AND、OR、选择序列和可重复进入。请退出后再次进入，重复验证。" },
+        { "type": "end" }
+      ]
+    }
+  ]
+}

@@ -398,7 +398,20 @@ public class DialogManager : Manager<DialogManager>
         storyChoiceRoot.anchorMin = new Vector2(xAnchor, 0f);
         storyChoiceRoot.anchorMax = new Vector2(xAnchor, 0f);
         storyChoiceRoot.pivot = new Vector2(xAnchor, 0f);
-        storyChoiceRoot.anchoredPosition = new Vector2(placeLeft ? 90f : -90f, 160f);
+        storyChoiceRoot.anchoredPosition = new Vector2(placeLeft ? 90f : -90f, GetStoryChoiceBottomOffset());
+    }
+
+    private float GetStoryChoiceBottomOffset()
+    {
+        const float margin = 16f;
+        const float fallbackOffset = 160f;
+        if (storyTextBar == null || dialogStoryLayer == null)
+            return fallbackOffset;
+
+        Vector3[] corners = new Vector3[4];
+        storyTextBar.GetWorldCorners(corners);
+        float textBarTop = dialogStoryLayer.InverseTransformPoint(corners[1]).y;
+        return Mathf.Max(fallbackOffset, textBarTop - dialogStoryLayer.rect.yMin + margin);
     }
 
     private RectTransform EnsureStoryActorLayer()

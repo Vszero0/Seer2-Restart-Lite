@@ -229,13 +229,14 @@ public class DialogView : Module
         storySpeakerText.fontStyle = FontStyles.Bold;
         storySpeakerText.color = isActiveSpeaker ? new Color32(255, 230, 92, 255) : new Color32(185, 190, 196, 255);
 
-        contentRect.anchorMin = new Vector2(0.14f, 0f);
-        contentRect.anchorMax = new Vector2(0.86f, 0f);
-        contentRect.pivot = new Vector2(0f, 0f);
-        contentRect.anchoredPosition = new Vector2(0f, 44f);
+        contentRect.anchorMin = defaultContentAnchorMin;
+        contentRect.anchorMax = defaultContentAnchorMax;
+        contentRect.pivot = defaultContentPivot;
+        contentRect.anchoredPosition = defaultContentAnchoredPosition;
+        contentRect.sizeDelta = defaultContentSizeDelta;
 
         Canvas.ForceUpdateCanvases();
-        float barWidth = Mathf.Max(contentRect.rect.width, 680f);
+        float barWidth = contentRect.rect.width > 0f ? contentRect.rect.width : 680f;
         float paddingX = 24f;
         float paddingY = 16f;
         float speakerWidth = hasSpeaker ? 116f : 0f;
@@ -246,26 +247,20 @@ public class DialogView : Module
         contentTextRect.anchorMin = new Vector2(0f, 1f);
         contentTextRect.anchorMax = new Vector2(0f, 1f);
         contentTextRect.pivot = new Vector2(0f, 1f);
-        contentTextRect.sizeDelta = new Vector2(textWidth, 1000f);
+        float barHeight = contentRect.rect.height;
+        float innerHeight = Mathf.Max(0f, barHeight - paddingY * 2f);
+        contentTextRect.sizeDelta = new Vector2(textWidth, innerHeight);
 
         content.text.enableWordWrapping = true;
         content.text.alignment = TextAlignmentOptions.MidlineLeft;
         ApplyStoryTextStyle(info?.storyTextStyle);
-        content.text.ForceMeshUpdate();
-        float textHeight = Mathf.Max(24f, content.text.preferredHeight);
 
         float speakerNameHeight = 26f;
         float speakerIconSize = 46f;
         float speakerIconGap = 6f;
         float speakerHeight = hasSpeaker ? (hasSpeakerIcon ? speakerIconSize + speakerIconGap + speakerNameHeight : speakerNameHeight) : 0f;
-        float barHeight = Mathf.Max(78f, Mathf.Max(textHeight, speakerHeight) + paddingY * 2f);
-        contentRect.SetSizeWithCurrentAnchors(RectTransform.Axis.Vertical, barHeight);
-
-        float innerHeight = Mathf.Max(0f, barHeight - paddingY * 2f);
-        float textOffsetY = paddingY + Mathf.Max(0f, (innerHeight - textHeight) * 0.5f);
         float textX = speakerOnRight ? paddingX : paddingX + speakerWidth + speakerGap;
-        contentTextRect.anchoredPosition = new Vector2(textX, -textOffsetY);
-        contentTextRect.sizeDelta = new Vector2(textWidth, textHeight + 4f);
+        contentTextRect.anchoredPosition = new Vector2(textX, -paddingY);
 
         storySpeakerGroupRect.anchorMin = new Vector2(0f, 1f);
         storySpeakerGroupRect.anchorMax = new Vector2(0f, 1f);

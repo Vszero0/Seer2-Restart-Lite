@@ -534,6 +534,8 @@ public static class StoryValidator
                     break;
                 case "choice":
                     ValidateChoices(command, nodeDict, errors, location);
+                    if (!string.IsNullOrWhiteSpace(command.actor))
+                        ValidateActorReference(command, actorDict, errors, location, false);
                     ValidateConditionGroup(command.condition, errors, location + ".condition");
                     break;
                 case "jump":
@@ -771,6 +773,10 @@ public class StoryCommandDocument
                 return command;
             case "choice":
                 command.type = StoryCommandType.Choice;
+                command.actorId = actor;
+                command.actorInfo = document?.GetActor(actor);
+                command.speaker = GetActorName(document);
+                command.text = text;
                 command.choices = (choices ?? Array.Empty<StoryChoiceDocument>())
                     .Select(x => x?.ToChoice())
                     .Where(x => x != null)

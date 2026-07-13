@@ -31,6 +31,7 @@ public class StoryPanel : Panel
     private int fallbackMapId;
     private int commandIndex;
     private int actorOrder;
+    private int sceneMusicRequestVersion;
     private bool isBuilt;
     private bool isClosing;
     private bool waitingForChoice;
@@ -257,7 +258,7 @@ public class StoryPanel : Panel
                     SetNarration(command.text);
                     return;
                 case StoryCommandType.Choice:
-                    ShowChoices(command.choices);
+                    ShowChoices(command);
                     return;
                 case StoryCommandType.Jump:
                     if (EvaluateCondition(command.condition))
@@ -284,21 +285,47 @@ public class StoryPanel : Panel
         ClearActors();
         nextSideSlots.Clear();
         ApplySceneLayout(command.layout);
-        PlaySceneMusic(command.bgmResourcePath);
+        PlaySceneMusic(command.mapId, command.bgmResourcePath, ++sceneMusicRequestVersion);
     }
 
-    private void PlaySceneMusic(string resourcePath)
+    private void PlaySceneMusic(int mapId, string resourcePath, int requestVersion)
     {
-        if (string.IsNullOrWhiteSpace(resourcePath) || ResourceManager.instance == null)
+        if (AudioSystem.instance == null)
+            return;
+
+        if (string.IsNullOrWhiteSpace(resourcePath))
+        {
+            if (mapId <= 0)
+                return;
+
+            Map.GetMap(mapId, map =>
+            {
+                if (requestVersion != sceneMusicRequestVersion || map?.resources?.bgm == null)
+                    return;
+
+                AudioSystem.instance?.PlayMusic(map.resources.bgm, AudioVolumeType.BGM);
+            });
+            return;
+        }
+
+        if (ResourceManager.instance == null)
             return;
 
         string source = story?.GetResourceSource(resourcePath) ?? "auto";
         bool modOnly = source == "mod" || source == "auto";
         ResourceManager.instance.GetLocalAddressables<AudioClip>(resourcePath, modOnly,
-            clip => AudioSystem.instance?.PlayMusic(clip, AudioVolumeType.BGM),
+            clip =>
+            {
+                if (requestVersion == sceneMusicRequestVersion)
+                    AudioSystem.instance?.PlayMusic(clip, AudioVolumeType.BGM);
+            },
             modOnly && source == "auto"
                 ? _ => ResourceManager.instance.GetLocalAddressables<AudioClip>(resourcePath, false,
-                    clip => AudioSystem.instance?.PlayMusic(clip, AudioVolumeType.BGM))
+                    clip =>
+                    {
+                        if (requestVersion == sceneMusicRequestVersion)
+                            AudioSystem.instance?.PlayMusic(clip, AudioVolumeType.BGM);
+                    })
                 : null);
     }
 
@@ -387,13 +414,17 @@ public class StoryPanel : Panel
         RefreshOverlayLayering();
     }
 
-    private void ShowChoices(List<StoryChoice> choices)
+    private void ShowChoices(StoryCommand command)
     {
+        List<StoryChoice> choices = command?.choices;
         if (choices == null || choices.Count == 0)
         {
             ShowNextCommand();
             return;
         }
+
+        if (!string.IsNullOrWhiteSpace(command.text))
+            SetDialogue(command.actorInfo, command.speaker, command.text);
 
         waitingForChoice = true;
         DialogManager.instance.SetStoryDialogBackgroundClickHandler(Advance);

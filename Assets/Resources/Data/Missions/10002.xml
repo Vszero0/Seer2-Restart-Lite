@@ -1,0 +1,12 @@
+<mission id="10002" type="1" replayable="true">
+    <title>剧情系统测试</title>
+    <reward>
+    </reward>
+    <checkpoint>
+        <branch id="default">
+            <map>121</map>
+            <story>Side/story_model_test</story>
+            <description>用于验证自制剧情数据模型：场景、BGM、角色、选择、条件和资源引用。</description>
+        </branch>
+    </checkpoint>
+</mission>
