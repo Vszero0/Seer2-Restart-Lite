@@ -106,15 +106,17 @@ StoryData.actorDefinitions
     ↓ 引用
 StoryPointData.actorReferences
     ↓ 场景筛选
-SceneData.actorIds
+SceneData.actors[]
+    ↓
+actorId + placementMode + side/order 或 x/y
 ```
 
 点击画布中的角色或角色占位区域，可以：
 
 - 选择已有剧情点角色。
 - 将剧本角色加入当前剧情点。
-- 将角色加入当前场景。
-- 修改当前场景中的位置和布局参数。
+- 将角色加入当前场景并生成自动布局项；`order = 0` 是同侧最靠近画面中心的位置。
+- 修改当前场景中的位置、缩放、朝向和布局参数；拖动后将该角色切换为手动 `x/y` 坐标。
 
 删除角色前必须检查是否仍被 `show`、`hide` 或 `say` 命令引用。
 

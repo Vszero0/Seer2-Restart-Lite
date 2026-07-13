@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "id": "fala_intro",
   "title": "法拉的星际巡查演示",
   "entry": "start",
@@ -42,11 +42,9 @@
       "sprite": "Pets/pet/10",
       "icon": "Pets/icon/10",
       "battleSprite": "Pets/battle/10",
-      "side": "left",
-      "slot": 1,
-      "faceLeft": false,
-      "flipIcon": false,
-      "scale": 1.05
+      "defaultFaceLeft": false,
+      "defaultFlipIcon": false,
+      "defaultScale": 1.05
     },
     {
       "id": "fanna",
@@ -56,11 +54,9 @@
       "sprite": "Pets/pet/11",
       "icon": "Pets/icon/11",
       "battleSprite": "Pets/battle/11",
-      "side": "left",
-      "slot": 2,
-      "faceLeft": false,
-      "flipIcon": false,
-      "scale": 1
+      "defaultFaceLeft": false,
+      "defaultFlipIcon": false,
+      "defaultScale": 1
     },
     {
       "id": "fayina",
@@ -70,11 +66,9 @@
       "sprite": "Pets/pet/12",
       "icon": "Pets/icon/12",
       "battleSprite": "Pets/battle/12",
-      "side": "left",
-      "slot": 3,
-      "faceLeft": false,
-      "flipIcon": false,
-      "scale": 1.12
+      "defaultFaceLeft": false,
+      "defaultFlipIcon": false,
+      "defaultScale": 1.12
     },
     {
       "id": "xiaoxiaokui",
@@ -84,11 +78,9 @@
       "sprite": "Pets/pet/13",
       "icon": "Pets/icon/13",
       "battleSprite": "Pets/battle/13",
-      "side": "right",
-      "slot": 3,
-      "faceLeft": true,
-      "flipIcon": true,
-      "scale": 0.96
+      "defaultFaceLeft": true,
+      "defaultFlipIcon": true,
+      "defaultScale": 0.96
     },
     {
       "id": "buer",
@@ -98,11 +90,9 @@
       "sprite": "Pets/pet/16",
       "icon": "Pets/icon/16",
       "battleSprite": "Pets/battle/16",
-      "side": "right",
-      "slot": 2,
-      "faceLeft": true,
-      "flipIcon": true,
-      "scale": 1.02
+      "defaultFaceLeft": true,
+      "defaultFlipIcon": true,
+      "defaultScale": 1.02
     },
     {
       "id": "bulutuo",
@@ -112,11 +102,9 @@
       "sprite": "Pets/pet/17",
       "icon": "Pets/icon/17",
       "battleSprite": "Pets/battle/17",
-      "side": "right",
-      "slot": 1,
-      "faceLeft": true,
-      "flipIcon": true,
-      "scale": 1.12
+      "defaultFaceLeft": true,
+      "defaultFlipIcon": true,
+      "defaultScale": 1.12
     }
   ],
   "nodes": [
@@ -127,8 +115,16 @@
           "id": "opening",
           "mapId": 121,
           "bgmResourcePath": "BGM/101/BGM_1",
-          "actorIds": [ "fala", "fanna", "fayina", "xiaoxiaokui", "buer", "bulutuo" ],
+          "actors": [
+            { "actorId": "fala", "placementMode": "auto", "side": "left", "order": 2, "scale": 1.05, "faceLeft": false, "flipIcon": false },
+            { "actorId": "fanna", "placementMode": "auto", "side": "left", "order": 1, "scale": 1, "faceLeft": false, "flipIcon": false },
+            { "actorId": "fayina", "placementMode": "auto", "side": "left", "order": 0, "scale": 1.12, "faceLeft": false, "flipIcon": false },
+            { "actorId": "xiaoxiaokui", "placementMode": "auto", "side": "right", "order": 0, "scale": 0.96, "faceLeft": true, "flipIcon": true },
+            { "actorId": "buer", "placementMode": "auto", "side": "right", "order": 1, "scale": 1.02, "faceLeft": true, "flipIcon": true },
+            { "actorId": "bulutuo", "placementMode": "auto", "side": "right", "order": 2, "scale": 1.12, "faceLeft": true, "flipIcon": true }
+          ],
           "layout": {
+            "autoLayoutMode": "invertedV",
             "actorSpacing": 150,
             "actorHeight": 238,
             "actorBottom": 166,

@@ -22,7 +22,8 @@ public class StoryPanel : Panel
     private const float DefaultActorStackOffset = 16f;
 
     private readonly Dictionary<string, StoryActorRuntime> actors = new Dictionary<string, StoryActorRuntime>();
-    private readonly Dictionary<string, int> nextSideSlots = new Dictionary<string, int>();
+    private readonly Dictionary<string, int> nextSideOrders = new Dictionary<string, int>();
+    private readonly Dictionary<string, StorySceneActorLayoutDocument> sceneActorLayouts = new Dictionary<string, StorySceneActorLayoutDocument>(StringComparer.OrdinalIgnoreCase);
     private static readonly Dictionary<Sprite, Vector2> spriteVisiblePivotCache = new Dictionary<Sprite, Vector2>();
 
     private StoryScript story;
@@ -157,7 +158,8 @@ public class StoryPanel : Panel
         isClosing = false;
         waitingForChoice = false;
         ClearActors();
-        nextSideSlots.Clear();
+        nextSideOrders.Clear();
+        sceneActorLayouts.Clear();
         ClearDialogHandlers();
         lastDialogInfo = null;
         activeLayout = ResolveLayout(null);
@@ -283,7 +285,8 @@ public class StoryPanel : Panel
     {
         SetScene(GetArgValue(command.args, "bg", command.args));
         ClearActors();
-        nextSideSlots.Clear();
+        nextSideOrders.Clear();
+        SetSceneActorLayouts(command.actorLayouts);
         ApplySceneLayout(command.layout);
         PlaySceneMusic(command.mapId, command.bgmResourcePath, ++sceneMusicRequestVersion);
     }
@@ -355,17 +358,21 @@ public class StoryPanel : Panel
 
         if (!actors.TryGetValue(actor.id, out StoryActorRuntime runtime))
         {
-            runtime = new StoryActorRuntime { document = actor };
+            runtime = new StoryActorRuntime
+            {
+                document = actor,
+                placement = GetActorPlacement(actor),
+            };
             runtime.image = CreateActorImage(actor);
             runtime.canvasGroup = runtime.image.GetComponent<CanvasGroup>();
             runtime.order = actorOrder++;
-            runtime.slot = actor.slot > 0 ? actor.slot : GetNextSideSlot(actor.normalizedSide);
             actors[actor.id] = runtime;
             PlayActorFade(runtime);
         }
         else
         {
             runtime.document = actor;
+            runtime.placement = GetActorPlacement(actor);
             runtime.image.gameObject.SetActive(true);
         }
 
@@ -465,6 +472,7 @@ public class StoryPanel : Panel
     {
         string iconPath = actor?.icon;
         bool hasIcon = !string.IsNullOrEmpty(iconPath);
+        StorySceneActorLayoutDocument placement = GetActorPlacement(actor);
 
         return new DialogInfo
         {
@@ -473,8 +481,8 @@ public class StoryPanel : Panel
             iconSize = hasIcon ? DefaultIconSize : "0,0",
             iconPos = hasIcon ? DefaultIconPos : "0,0",
             name = speaker ?? string.Empty,
-            storySpeakerSide = actor?.normalizedSide ?? "left",
-            storyFlipIcon = actor != null && actor.flipIcon,
+            storySpeakerSide = placement?.normalizedSide ?? "left",
+            storyFlipIcon = placement != null && placement.flipIcon,
             storyTextStyle = story?.textStyle,
             rawContent = content ?? string.Empty,
             functionHandler = new List<NpcButtonHandler>(),
@@ -593,9 +601,8 @@ public class StoryPanel : Panel
             name = tokens[0],
             sprite = NormalizeSpritePath(tokens[1]),
             icon = NormalizeSpritePath(tokens[1]),
-            side = "left",
-            faceLeft = true,
-            scale = 1f,
+            defaultFaceLeft = true,
+            defaultScale = 1f,
         };
     }
 
@@ -606,6 +613,7 @@ public class StoryPanel : Panel
 
         LayoutActorsBySide("left");
         LayoutActorsBySide("right");
+        LayoutManualActors();
         ApplyInitialActorLayering();
         RefreshOverlayLayering();
     }
@@ -613,20 +621,20 @@ public class StoryPanel : Panel
     private void LayoutActorsBySide(string side)
     {
         List<StoryActorRuntime> sideActors = actors.Values
-            .Where(x => x?.image != null && x.document != null && x.document.normalizedSide == side)
-            .OrderBy(x => x.slot)
+            .Where(x => x?.image != null && x.placement != null && x.placement.normalizedPlacementMode == "auto" && x.placement.normalizedSide == side)
+            .OrderBy(x => x.placement.order)
             .ThenBy(x => x.order)
             .ToList();
 
-        int maxSlot = sideActors.Count == 0 ? 0 : sideActors.Max(x => x.slot);
+        int maxOrder = sideActors.Count == 0 ? 0 : sideActors.Max(x => x.placement.order);
         for (int i = 0; i < sideActors.Count; i++)
         {
             StoryActorRuntime runtime = sideActors[i];
             RectTransform rect = runtime.image.rectTransform;
             bool isRight = side == "right";
-            int visualIndex = Mathf.Max(0, maxSlot - runtime.slot);
-            float yOffset = Mathf.Max(0, runtime.slot - 1) * activeLayout.stackOffset;
-            float scale = Mathf.Max(0.1f, runtime.document.scale <= 0f ? 1f : runtime.document.scale);
+            int visualIndex = Mathf.Max(0, runtime.placement.order);
+            float yOffset = activeLayout.isBottomAligned ? 0f : (maxOrder - visualIndex) * activeLayout.stackOffset;
+            float scale = Mathf.Max(0.1f, runtime.placement.scale);
             Vector2 originalSize = GetSpriteSize(runtime.image.sprite, activeLayout.actorHeight);
             float width = originalSize.x * scale;
             float height = originalSize.y * scale;
@@ -639,9 +647,25 @@ public class StoryPanel : Panel
             rect.anchoredPosition = new Vector2(x, activeLayout.actorBottom + yOffset);
             rect.sizeDelta = new Vector2(width, height);
 
-            bool shouldFaceLeft = runtime.document.faceLeft;
+            bool shouldFaceLeft = runtime.placement.faceLeft;
             float direction = shouldFaceLeft ? -1f : 1f;
             rect.localScale = new Vector3(direction, 1f, 1f);
+        }
+    }
+
+    private void LayoutManualActors()
+    {
+        foreach (StoryActorRuntime runtime in actors.Values.Where(x => x?.image != null && x.placement?.normalizedPlacementMode == "manual"))
+        {
+            RectTransform rect = runtime.image.rectTransform;
+            float scale = Mathf.Max(0.1f, runtime.placement.scale);
+            Vector2 originalSize = GetSpriteSize(runtime.image.sprite, activeLayout.actorHeight);
+            rect.anchorMin = new Vector2(0.5f, 0f);
+            rect.anchorMax = rect.anchorMin;
+            rect.pivot = GetVisibleBottomPivot(runtime.image.sprite);
+            rect.anchoredPosition = new Vector2(runtime.placement.x, runtime.placement.y);
+            rect.sizeDelta = new Vector2(originalSize.x * scale, originalSize.y * scale);
+            rect.localScale = new Vector3(runtime.placement.faceLeft ? -1f : 1f, 1f, 1f);
         }
     }
 
@@ -665,13 +689,38 @@ public class StoryPanel : Panel
         LayoutActors();
     }
 
-    private int GetNextSideSlot(string side)
+    private StorySceneActorLayoutDocument GetActorPlacement(StoryActorDocument actor)
     {
-        if (!nextSideSlots.TryGetValue(side, out int slot))
-            slot = 1;
+        if (actor != null && sceneActorLayouts.TryGetValue(actor.id, out StorySceneActorLayoutDocument placement))
+            return placement;
 
-        nextSideSlots[side] = slot + 1;
-        return slot;
+        if (actor != null && actors.TryGetValue(actor.id, out StoryActorRuntime runtime) && runtime.placement != null)
+            return runtime.placement;
+
+        const string fallbackSide = "left";
+        if (!nextSideOrders.TryGetValue(fallbackSide, out int order))
+            order = 0;
+
+        nextSideOrders[fallbackSide] = order + 1;
+        return new StorySceneActorLayoutDocument
+        {
+            actorId = actor?.id,
+            side = fallbackSide,
+            order = order,
+            scale = actor?.defaultScale > 0f ? actor.defaultScale : 1f,
+            faceLeft = actor == null || actor.defaultFaceLeft,
+            flipIcon = actor != null && actor.defaultFlipIcon,
+        };
+    }
+
+    private void SetSceneActorLayouts(StorySceneActorLayoutDocument[] layouts)
+    {
+        sceneActorLayouts.Clear();
+        foreach (StorySceneActorLayoutDocument layout in layouts ?? Array.Empty<StorySceneActorLayoutDocument>())
+        {
+            if (layout != null && !string.IsNullOrWhiteSpace(layout.actorId))
+                sceneActorLayouts[layout.actorId] = layout;
+        }
     }
 
     private static Vector2 GetSpriteSize(Sprite sprite, float fallbackHeight)
@@ -758,7 +807,8 @@ public class StoryPanel : Panel
     {
         foreach (StoryActorRuntime runtime in actors.Values
             .Where(x => x?.image != null)
-            .OrderByDescending(x => x.slot)
+            .OrderBy(x => x.placement?.normalizedPlacementMode == "manual" ? 1 : 0)
+            .ThenBy(x => x.placement?.normalizedPlacementMode == "manual" ? -x.placement.y : x.placement?.order ?? 0)
             .ThenBy(x => x.order))
         {
             runtime.image.transform.SetAsLastSibling();
@@ -770,6 +820,7 @@ public class StoryPanel : Panel
         StoryLayoutDocument globalLayout = story?.layout;
         return new StoryLayoutRuntime
         {
+            autoLayoutMode = ResolveAutoLayoutMode(sceneLayout?.autoLayoutMode, globalLayout?.autoLayoutMode),
             actorSpacing = FirstPositive(sceneLayout?.actorSpacing, globalLayout?.actorSpacing, DefaultActorSpacing),
             actorHeight = FirstPositive(sceneLayout?.actorHeight, globalLayout?.actorHeight, DefaultActorHeight),
             actorBottom = FirstPositive(sceneLayout?.actorBottom, globalLayout?.actorBottom, DefaultActorBottom),
@@ -787,6 +838,12 @@ public class StoryPanel : Panel
             return secondary.Value;
 
         return fallback;
+    }
+
+    private static string ResolveAutoLayoutMode(string sceneMode, string globalMode)
+    {
+        string mode = string.IsNullOrWhiteSpace(sceneMode) ? globalMode : sceneMode;
+        return string.Equals(mode, "bottomAligned", StringComparison.OrdinalIgnoreCase) ? "bottomAligned" : "invertedV";
     }
 
     private void ClearActors()
@@ -1044,15 +1101,18 @@ public class StoryPanel : Panel
         public CanvasGroup canvasGroup;
         public Coroutine fadeCoroutine;
         public int order;
-        public int slot;
+        public StorySceneActorLayoutDocument placement;
     }
 
     private class StoryLayoutRuntime
     {
+        public string autoLayoutMode;
         public float actorSpacing;
         public float actorHeight;
         public float actorBottom;
         public float centerGap;
         public float stackOffset;
+
+        public bool isBottomAligned => autoLayoutMode == "bottomAligned";
     }
 }

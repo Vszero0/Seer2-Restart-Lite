@@ -93,7 +93,7 @@ SceneData
 ├── id
 ├── mapId
 ├── bgmResourcePath?
-├── actorIds[]
+├── actors[]
 └── layout
 ```
 
@@ -254,20 +254,22 @@ StoryData.actorDefinitions[]
 StoryPointData.actorReferences[]
     └── actorId, optional point override
 
-SceneData.actorIds[]
-    └── 当前场景允许出现的角色
+SceneData.actors[]
+    └── actorId + 当前场景中的角色布局
 ```
 
 约束如下：
 
 1. `say`、`show`、`hide` 引用的角色必须存在于剧情点角色集合。
-2. 场景的 `actorIds` 必须来自剧情点角色集合。
+2. 场景的 `actors[].actorId` 必须来自剧情点角色集合；同一场景内不能重复。
 3. 角色定义中的立绘、头像和战斗图使用逻辑资源路径；精灵角色通过 `petId` 推导本体资源，NPC 和自定义角色使用各自的资源定义。如果存在资源注册声明，则必须通过 `kind` 校验。
 4. 场景通过 `mapId` 引用地图背景，通过 `bgmResourcePath` 引用 BGM；地图不表示 Unity Scene，也不触发真实传送。
 5. 资源路径只维护在 `StoryResourceDefinition` 或明确的资源覆盖字段中。
 6. 场景 layout 只描述当前场景角色的表现，不修改资源定义。
 
-角色名称固定使用游戏中的角色名称，不提供剧情点级名称覆盖。同一角色在本剧本中使用同一套立绘；第一阶段不设计表情、姿势或受伤状态等资源变体。角色定义必须包含默认位置、默认缩放和默认朝向，编辑器以左右两侧的默认角色区域初始化，作者之后可以拖动调整。
+角色名称固定使用游戏中的角色名称，不提供剧情点级名称覆盖。同一角色在本剧本中使用同一套立绘；第一阶段不设计表情、姿势或受伤状态等资源变体。角色定义只保存身份、资源与默认表现（`defaultScale`、`defaultFaceLeft`、`defaultFlipIcon`），不保存任何场景位置。
+
+角色位置是场景数据的职责：`SceneData.actors[]` 的每一项以 `actorId` 指向角色，并保存 `placementMode`、`side`、`order`、`scale`、`faceLeft`、`flipIcon`。`placementMode = auto` 时，`order = 0` 表示同侧最靠近画面中心，数值递增向外排列；`placementMode = manual` 时，使用相对于 16:9 剧情画布中心底部的 `x`、`y` 直接定位。可视化编辑器先以左右两侧的自动布局初始化，作者之后可将任意角色改为手动位置。
 
 这样同一个角色可以在不同剧情点或不同场景拥有不同位置，同一首 BGM 或同一张背景也可以被多个剧情点复用，而不会污染资源定义。
 
@@ -288,8 +290,23 @@ SceneLayout
 ├── actorBottom
 ├── centerGap
 ├── stackOffset
-└── actorSlots[]?
+├── autoLayoutMode: invertedV / bottomAligned
+└── actors[]
+    ├── actorId
+    ├── placementMode: auto / manual
+    ├── side / order
+    ├── scale / faceLeft / flipIcon
+    └── x / y（仅 manual）
 ```
+
+`autoLayoutMode` 只影响 `placementMode = auto` 的角色：
+
+- `invertedV`：同侧 `order = 0` 靠近中心且最高；顺序越靠外，横向距离越大且越接近底线，形成倒 V 构图。
+- `bottomAligned`：同侧仍按 `order` 横向展开，但所有自动角色共用 `actorBottom`，不追加上移。
+
+左右两侧分别独立计算，不为了人数不同而补位或强制对齐；当两侧人数和配置镜像时，位置自然镜像对称。手动 `x/y` 始终覆盖自动布局。
+
+自动布局的默认景深与 `order` 一致：同侧外侧角色（更大的 `order`）视为更靠近镜头，所有角色未激活时应渲染在内侧角色之前，从而允许较大的外侧立绘自然遮住内侧立绘。角色被对白或选项激活时，运行时临时将该角色置于最上层；手动布局未来使用独立的景深字段覆盖该默认规则。
 
 如果剧情点中的多个场景需要相同布局，可以通过编辑器复制布局值，但不默认共享同一个可变对象。
 

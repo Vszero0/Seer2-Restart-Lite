@@ -38,6 +38,7 @@ public class StoryCommand
     public string text;
     public StoryActorDocument actorInfo;
     public StoryLayoutDocument layout;
+    public StorySceneActorLayoutDocument[] actorLayouts;
     public int mapId;
     public string bgmResourcePath;
     public List<StoryChoice> choices = new List<StoryChoice>();
@@ -82,8 +83,33 @@ public class StorySceneDocument
     public string id;
     public int mapId;
     public string bgmResourcePath;
-    public string[] actorIds;
+    public StorySceneActorLayoutDocument[] actors;
     public StoryLayoutDocument layout;
+
+    public StorySceneActorLayoutDocument GetActorLayout(string actorId)
+    {
+        if (string.IsNullOrWhiteSpace(actorId) || actors == null)
+            return null;
+
+        return actors.FirstOrDefault(x => x != null && string.Equals(x.actorId, actorId, StringComparison.OrdinalIgnoreCase));
+    }
+}
+
+[Serializable]
+public class StorySceneActorLayoutDocument
+{
+    public string actorId;
+    public string placementMode = "auto";
+    public string side = "left";
+    public int order;
+    public float scale = 1f;
+    public bool faceLeft = true;
+    public bool flipIcon;
+    public float x;
+    public float y;
+
+    public string normalizedPlacementMode => string.Equals(placementMode, "manual", StringComparison.OrdinalIgnoreCase) ? "manual" : "auto";
+    public string normalizedSide => string.Equals(side, "right", StringComparison.OrdinalIgnoreCase) ? "right" : "left";
 }
 
 [Serializable]
@@ -333,10 +359,29 @@ public static class StoryValidator
             ValidateResourcePath("Maps/bg/" + scene.mapId, "mapBackground", "auto", errors, location + ".mapId");
 
             ValidateResourcePath(scene.bgmResourcePath, "audio", "auto", errors, location + ".bgmResourcePath");
-            foreach (string actorId in scene.actorIds ?? Array.Empty<string>())
+            HashSet<string> sceneActorIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (StorySceneActorLayoutDocument actorLayout in scene.actors ?? Array.Empty<StorySceneActorLayoutDocument>())
             {
+                string actorId = actorLayout?.actorId;
                 if (string.IsNullOrWhiteSpace(actorId) || !actorDict.ContainsKey(actorId))
-                    errors.Add(location + ".actorIds 引用了不存在的角色：" + actorId);
+                    errors.Add(location + ".actors 引用了不存在的角色：" + actorId);
+                else if (!sceneActorIds.Add(actorId))
+                    errors.Add(location + ".actors 存在重复的角色：" + actorId);
+
+                if (actorLayout == null)
+                    continue;
+
+                if (!string.Equals(actorLayout.normalizedPlacementMode, actorLayout.placementMode, StringComparison.OrdinalIgnoreCase))
+                    errors.Add(location + ".actors[" + actorId + "].placementMode 只支持 auto 或 manual");
+
+                if (!string.Equals(actorLayout.normalizedSide, actorLayout.side, StringComparison.OrdinalIgnoreCase))
+                    errors.Add(location + ".actors[" + actorId + "].side 只支持 left 或 right");
+
+                if (actorLayout.order < 0)
+                    errors.Add(location + ".actors[" + actorId + "].order 不能小于 0");
+
+                if (actorLayout.scale <= 0f)
+                    errors.Add(location + ".actors[" + actorId + "].scale 必须大于 0");
             }
         }
     }
@@ -663,20 +708,18 @@ public class StoryActorDocument
     public string sprite;
     public string icon;
     public string battleSprite;
-    public string side = "left";
-    public int slot;
-    public bool faceLeft = true;
-    public bool flipIcon = false;
-    public float scale = 1f;
+    public float defaultScale = 1f;
+    public bool defaultFaceLeft = true;
+    public bool defaultFlipIcon;
 
     public string displayName => string.IsNullOrEmpty(name) ? id : name;
     public string displaySprite => string.IsNullOrEmpty(sprite) ? icon : sprite;
-    public string normalizedSide => string.Equals(side, "right", StringComparison.OrdinalIgnoreCase) ? "right" : "left";
 }
 
 [Serializable]
 public class StoryLayoutDocument
 {
+    public string autoLayoutMode = "invertedV";
     public float actorSpacing;
     public float actorHeight;
     public float actorBottom;
@@ -748,6 +791,7 @@ public class StoryCommandDocument
                     ? (command.mapId > 0 ? "Maps/bg/" + command.mapId : args)
                     : bg;
                 command.layout = scene?.layout ?? GetSceneLayout();
+                command.actorLayouts = scene?.actors;
                 return command;
             case "show":
                 command.type = StoryCommandType.Show;

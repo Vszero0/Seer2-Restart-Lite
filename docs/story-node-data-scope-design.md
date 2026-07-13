@@ -71,13 +71,13 @@ StoryNodeDocument
 - 为剧情点编辑画布预加载头像、立绘和名称。
 - 判断当前场景允许哪些角色出现。
 
-新模型中，角色资源通过剧本资源注册表按 ID 查找，角色定义本身再引用立绘、头像等资源。剧情点只保存角色引用、场景资源引用和必要的剧情点级覆盖。当前代码中的 `StoryDocument.actors` 仅作为旧格式兼容映射，不再作为新模型的扩展边界。
+新模型中，角色资源通过剧本资源注册表按 ID 查找，`StoryDocument.actors` 保存角色身份与默认表现，并引用立绘、头像等资源。剧情点只保存角色引用、场景资源引用和必要的剧情点级覆盖；角色的实际位置只属于具体场景。
 
 ```text
 StoryDocument.actors
-    └── actorId
+    └── actorId + identity/resources/default presentation
 
-StoryNodeDocument.actors
+StoryNodeDocument.actorReferences
     └── actorId
 ```
 
@@ -90,7 +90,7 @@ StoryNodeSceneDocument
 ├── id
 ├── mapId
 ├── background
-├── actorIds[]
+├── actors[]
 └── layout
 ```
 
@@ -98,8 +98,7 @@ StoryNodeSceneDocument
 
 - 当前剧情发生在哪张地图或地图区域。
 - 当前场景使用什么背景。
-- 当前场景允许哪些剧情点角色出现。
-- 当前场景下角色立绘如何布局。
+- 当前场景允许哪些剧情点角色出现，以及每个角色的自动或手动布局。
 
 剧情命令通过 `sceneId` 或 `scene` 命令切换当前场景。剧情点内部可以出现多个场景及其各自的对话和选择。
 
@@ -116,7 +115,7 @@ StoryNodeSceneDocument.layout
 - 角色立绘间距、高度和底部位置。
 - 左右角色区域之间的间隔。
 - 同侧角色的叠放偏移。
-- 角色在当前场景中的固定槽位。
+- `actors[]` 中角色在当前场景中的自动顺序或手动坐标。
 
 同一个角色可以在不同剧情点、不同场景中拥有不同位置，而不会污染其他剧情点。
 

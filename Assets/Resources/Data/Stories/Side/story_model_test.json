@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "id": "story_model_test",
   "title": "剧情系统测试",
   "entry": "start",
@@ -20,7 +20,11 @@
     { "path": "Pets/pet/11", "kind": "actorSprite", "source": "builtin" },
     { "path": "Pets/icon/11", "kind": "actorIcon", "source": "builtin" },
     { "path": "Pets/pet/12", "kind": "actorSprite", "source": "builtin" },
-    { "path": "Pets/icon/12", "kind": "actorIcon", "source": "builtin" }
+    { "path": "Pets/icon/12", "kind": "actorIcon", "source": "builtin" },
+    { "path": "Pets/pet/13", "kind": "actorSprite", "source": "builtin" },
+    { "path": "Pets/icon/13", "kind": "actorIcon", "source": "builtin" },
+    { "path": "Pets/pet/16", "kind": "actorSprite", "source": "builtin" },
+    { "path": "Pets/icon/16", "kind": "actorIcon", "source": "builtin" }
   ],
   "actors": [
     {
@@ -30,10 +34,8 @@
       "name": "法拉",
       "sprite": "Pets/pet/10",
       "icon": "Pets/icon/10",
-      "side": "left",
-      "slot": 1,
-      "faceLeft": false,
-      "scale": 1.05
+      "defaultFaceLeft": false,
+      "defaultScale": 1.05
     },
     {
       "id": "fanna",
@@ -42,10 +44,8 @@
       "name": "法娜",
       "sprite": "Pets/pet/11",
       "icon": "Pets/icon/11",
-      "side": "left",
-      "slot": 2,
-      "faceLeft": false,
-      "scale": 1
+      "defaultFaceLeft": false,
+      "defaultScale": 1
     },
     {
       "id": "fayina",
@@ -54,11 +54,31 @@
       "name": "法伊娜",
       "sprite": "Pets/pet/12",
       "icon": "Pets/icon/12",
-      "side": "right",
-      "slot": 1,
-      "faceLeft": true,
-      "flipIcon": true,
-      "scale": 1.05
+      "defaultFaceLeft": true,
+      "defaultFlipIcon": true,
+      "defaultScale": 1.05
+    },
+    {
+      "id": "xiaoxiaokui",
+      "actorType": "pet",
+      "petId": "13",
+      "name": "小小葵",
+      "sprite": "Pets/pet/13",
+      "icon": "Pets/icon/13",
+      "defaultFaceLeft": true,
+      "defaultFlipIcon": true,
+      "defaultScale": 0.96
+    },
+    {
+      "id": "buer",
+      "actorType": "pet",
+      "petId": "16",
+      "name": "布尔",
+      "sprite": "Pets/pet/16",
+      "icon": "Pets/icon/16",
+      "defaultFaceLeft": true,
+      "defaultFlipIcon": true,
+      "defaultScale": 1.02
     }
   ],
   "nodes": [
@@ -69,8 +89,12 @@
         {
           "id": "opening",
           "mapId": 121,
-          "actorIds": [ "fala", "fanna" ],
+          "actors": [
+            { "actorId": "fala", "placementMode": "auto", "side": "left", "order": 0, "scale": 1.05, "faceLeft": false, "flipIcon": false },
+            { "actorId": "fanna", "placementMode": "auto", "side": "left", "order": 1, "scale": 1, "faceLeft": false, "flipIcon": false }
+          ],
           "layout": {
+            "autoLayoutMode": "invertedV",
             "actorSpacing": 150,
             "actorHeight": 238,
             "actorBottom": 166,
@@ -116,8 +140,11 @@
           "id": "test_scene",
           "mapId": 122,
           "bgmResourcePath": "BGM/101/BGM_1.mp3",
-          "actorIds": [ "fayina" ],
+          "actors": [
+            { "actorId": "fayina", "placementMode": "auto", "side": "right", "order": 0, "scale": 1.05, "faceLeft": true, "flipIcon": true }
+          ],
           "layout": {
+            "autoLayoutMode": "invertedV",
             "actorSpacing": 180,
             "actorHeight": 260,
             "actorBottom": 150,
@@ -187,7 +214,217 @@
         { "type": "hide", "actor": "fayina" },
         { "type": "show", "actor": "fala" },
         { "type": "narrate", "text": "【测试 5/show-hide】法伊娜已 hide，法拉已重新 show。请观察角色显示状态、左右位置、缩放和朝向是否符合资源定义。" },
-        { "type": "say", "actor": "fala", "text": "【测试完成】本次支线已覆盖：资源定义、角色引用、场景切换、BGM、layout、show/hide、两次选择、AND、OR、选择序列和可重复进入。请退出后再次进入，重复验证。" },
+        { "type": "say", "actor": "fala", "text": "【测试 5/show-hide】状态验证完成。下面依次展示两种自动布局与六种左右人数配置；每段旁白停留时可直接观察画面。" },
+        { "type": "jump", "target": "layout_left_1" }
+      ]
+    },
+    {
+      "id": "layout_left_1",
+      "displayName": "布局：左 1",
+      "scenes": [
+        {
+          "id": "left_1_v",
+          "mapId": 121,
+          "actors": [
+            { "actorId": "fala", "placementMode": "auto", "side": "left", "order": 0, "scale": 1.05, "faceLeft": false, "flipIcon": false }
+          ],
+          "layout": { "autoLayoutMode": "invertedV", "actorSpacing": 150, "actorHeight": 238, "actorBottom": 166, "centerGap": 118, "stackOffset": 32 }
+        }
+      ],
+      "commands": [
+        { "type": "scene", "sceneId": "left_1_v" },
+        { "type": "show", "actor": "fala" },
+        { "type": "narrate", "text": "【布局测试 1/9：倒 V】左 1。左侧仅一名角色，应位于左侧内位；倒 V 与底部对齐在单角色时表现相同。" },
+        { "type": "jump", "target": "layout_right_1" }
+      ]
+    },
+    {
+      "id": "layout_right_1",
+      "displayName": "布局：右 1",
+      "scenes": [
+        {
+          "id": "right_1_v",
+          "mapId": 121,
+          "actors": [
+            { "actorId": "fayina", "placementMode": "auto", "side": "right", "order": 0, "scale": 1.05, "faceLeft": true, "flipIcon": true }
+          ],
+          "layout": { "autoLayoutMode": "invertedV", "actorSpacing": 150, "actorHeight": 238, "actorBottom": 166, "centerGap": 118, "stackOffset": 32 }
+        }
+      ],
+      "commands": [
+        { "type": "scene", "sceneId": "right_1_v" },
+        { "type": "show", "actor": "fayina" },
+        { "type": "narrate", "text": "【布局测试 2/9：倒 V】右 1。应与左 1 镜像，位于右侧内位。" },
+        { "type": "jump", "target": "layout_left_1_right_1" }
+      ]
+    },
+    {
+      "id": "layout_left_1_right_1",
+      "displayName": "布局：左 1 + 右 1",
+      "scenes": [
+        {
+          "id": "left_1_right_1_v",
+          "mapId": 121,
+          "actors": [
+            { "actorId": "fala", "placementMode": "auto", "side": "left", "order": 0, "scale": 1.05, "faceLeft": false, "flipIcon": false },
+            { "actorId": "fayina", "placementMode": "auto", "side": "right", "order": 0, "scale": 1.05, "faceLeft": true, "flipIcon": true }
+          ],
+          "layout": { "autoLayoutMode": "invertedV", "actorSpacing": 150, "actorHeight": 238, "actorBottom": 166, "centerGap": 118, "stackOffset": 32 }
+        }
+      ],
+      "commands": [
+        { "type": "scene", "sceneId": "left_1_right_1_v" },
+        { "type": "show", "actor": "fala" },
+        { "type": "show", "actor": "fayina" },
+        { "type": "narrate", "text": "【布局测试 3/9：倒 V】左 1 + 右 1。左右人数相等，因此两者应镜像对称且同一底线。" },
+        { "type": "jump", "target": "layout_left_2" }
+      ]
+    },
+    {
+      "id": "layout_left_2",
+      "displayName": "布局：左 2",
+      "scenes": [
+        {
+          "id": "left_2_v",
+          "mapId": 121,
+          "actors": [
+            { "actorId": "fala", "placementMode": "auto", "side": "left", "order": 0, "scale": 1.05, "faceLeft": false, "flipIcon": false },
+            { "actorId": "fanna", "placementMode": "auto", "side": "left", "order": 1, "scale": 1, "faceLeft": false, "flipIcon": false }
+          ],
+          "layout": { "autoLayoutMode": "invertedV", "actorSpacing": 150, "actorHeight": 238, "actorBottom": 166, "centerGap": 118, "stackOffset": 32 }
+        }
+      ],
+      "commands": [
+        { "type": "scene", "sceneId": "left_2_v" },
+        { "type": "show", "actor": "fala" },
+        { "type": "show", "actor": "fanna" },
+        { "type": "narrate", "text": "【布局测试 4/9：倒 V】左 2。order 0 的法拉靠近中心并上抬 32 像素；order 1 的法娜向左外移并贴近底线。" },
+        { "type": "jump", "target": "layout_right_3" }
+      ]
+    },
+    {
+      "id": "layout_right_3",
+      "displayName": "布局：右 3",
+      "scenes": [
+        {
+          "id": "right_3_v",
+          "mapId": 121,
+          "actors": [
+            { "actorId": "fayina", "placementMode": "auto", "side": "right", "order": 0, "scale": 1.05, "faceLeft": true, "flipIcon": true },
+            { "actorId": "xiaoxiaokui", "placementMode": "auto", "side": "right", "order": 1, "scale": 0.96, "faceLeft": true, "flipIcon": true },
+            { "actorId": "buer", "placementMode": "auto", "side": "right", "order": 2, "scale": 1.02, "faceLeft": true, "flipIcon": true }
+          ],
+          "layout": { "autoLayoutMode": "invertedV", "actorSpacing": 150, "actorHeight": 238, "actorBottom": 166, "centerGap": 118, "stackOffset": 32 }
+        }
+      ],
+      "commands": [
+        { "type": "scene", "sceneId": "right_3_v" },
+        { "type": "show", "actor": "fayina" },
+        { "type": "show", "actor": "xiaoxiaokui" },
+        { "type": "show", "actor": "buer" },
+        { "type": "narrate", "text": "【布局测试 5/9：倒 V】右 3。三名右侧角色分别使用 order 0、1、2；最内侧最高，越向外越接近底线。" },
+        { "type": "jump", "target": "layout_left_2_right_3_v" }
+      ]
+    },
+    {
+      "id": "layout_left_2_right_3_v",
+      "displayName": "布局：左 2 + 右 3（倒 V）",
+      "scenes": [
+        {
+          "id": "left_2_right_3_v",
+          "mapId": 121,
+          "actors": [
+            { "actorId": "fala", "placementMode": "auto", "side": "left", "order": 0, "scale": 1.05, "faceLeft": false, "flipIcon": false },
+            { "actorId": "fanna", "placementMode": "auto", "side": "left", "order": 1, "scale": 1, "faceLeft": false, "flipIcon": false },
+            { "actorId": "fayina", "placementMode": "auto", "side": "right", "order": 0, "scale": 1.05, "faceLeft": true, "flipIcon": true },
+            { "actorId": "xiaoxiaokui", "placementMode": "auto", "side": "right", "order": 1, "scale": 0.96, "faceLeft": true, "flipIcon": true },
+            { "actorId": "buer", "placementMode": "auto", "side": "right", "order": 2, "scale": 1.02, "faceLeft": true, "flipIcon": true }
+          ],
+          "layout": { "autoLayoutMode": "invertedV", "actorSpacing": 150, "actorHeight": 238, "actorBottom": 166, "centerGap": 118, "stackOffset": 32 }
+        }
+      ],
+      "commands": [
+        { "type": "scene", "sceneId": "left_2_right_3_v" },
+        { "type": "show", "actor": "fala" },
+        { "type": "show", "actor": "fanna" },
+        { "type": "show", "actor": "fayina" },
+        { "type": "show", "actor": "xiaoxiaokui" },
+        { "type": "show", "actor": "buer" },
+        { "type": "narrate", "text": "【布局测试 6/9：倒 V】左 2 + 右 3。左右各自按自己的数量排布；右侧多出的一人不会迫使左侧补位或对齐。" },
+        { "type": "jump", "target": "layout_left_2_bottom" }
+      ]
+    },
+    {
+      "id": "layout_left_2_bottom",
+      "displayName": "布局：左 2（底部对齐）",
+      "scenes": [
+        {
+          "id": "left_2_bottom",
+          "mapId": 121,
+          "actors": [
+            { "actorId": "fala", "placementMode": "auto", "side": "left", "order": 0, "scale": 1.05, "faceLeft": false, "flipIcon": false },
+            { "actorId": "fanna", "placementMode": "auto", "side": "left", "order": 1, "scale": 1, "faceLeft": false, "flipIcon": false }
+          ],
+          "layout": { "autoLayoutMode": "bottomAligned", "actorSpacing": 150, "actorHeight": 238, "actorBottom": 166, "centerGap": 118, "stackOffset": 32 }
+        }
+      ],
+      "commands": [
+        { "type": "scene", "sceneId": "left_2_bottom" },
+        { "type": "show", "actor": "fala" },
+        { "type": "show", "actor": "fanna" },
+        { "type": "narrate", "text": "【布局测试 7/9：底部对齐】左 2。横向顺序不变，但两人应共用同一底线。" },
+        { "type": "jump", "target": "layout_right_3_bottom" }
+      ]
+    },
+    {
+      "id": "layout_right_3_bottom",
+      "displayName": "布局：右 3（底部对齐）",
+      "scenes": [
+        {
+          "id": "right_3_bottom",
+          "mapId": 121,
+          "actors": [
+            { "actorId": "fayina", "placementMode": "auto", "side": "right", "order": 0, "scale": 1.05, "faceLeft": true, "flipIcon": true },
+            { "actorId": "xiaoxiaokui", "placementMode": "auto", "side": "right", "order": 1, "scale": 0.96, "faceLeft": true, "flipIcon": true },
+            { "actorId": "buer", "placementMode": "auto", "side": "right", "order": 2, "scale": 1.02, "faceLeft": true, "flipIcon": true }
+          ],
+          "layout": { "autoLayoutMode": "bottomAligned", "actorSpacing": 150, "actorHeight": 238, "actorBottom": 166, "centerGap": 118, "stackOffset": 32 }
+        }
+      ],
+      "commands": [
+        { "type": "scene", "sceneId": "right_3_bottom" },
+        { "type": "show", "actor": "fayina" },
+        { "type": "show", "actor": "xiaoxiaokui" },
+        { "type": "show", "actor": "buer" },
+        { "type": "narrate", "text": "【布局测试 8/9：底部对齐】右 3。三人横向展开，但底部应完全对齐。" },
+        { "type": "jump", "target": "layout_left_2_right_3_bottom" }
+      ]
+    },
+    {
+      "id": "layout_left_2_right_3_bottom",
+      "displayName": "布局：左 2 + 右 3（底部对齐）",
+      "scenes": [
+        {
+          "id": "left_2_right_3_bottom",
+          "mapId": 121,
+          "actors": [
+            { "actorId": "fala", "placementMode": "auto", "side": "left", "order": 0, "scale": 1.05, "faceLeft": false, "flipIcon": false },
+            { "actorId": "fanna", "placementMode": "auto", "side": "left", "order": 1, "scale": 1, "faceLeft": false, "flipIcon": false },
+            { "actorId": "fayina", "placementMode": "auto", "side": "right", "order": 0, "scale": 1.05, "faceLeft": true, "flipIcon": true },
+            { "actorId": "xiaoxiaokui", "placementMode": "auto", "side": "right", "order": 1, "scale": 0.96, "faceLeft": true, "flipIcon": true },
+            { "actorId": "buer", "placementMode": "auto", "side": "right", "order": 2, "scale": 1.02, "faceLeft": true, "flipIcon": true }
+          ],
+          "layout": { "autoLayoutMode": "bottomAligned", "actorSpacing": 150, "actorHeight": 238, "actorBottom": 166, "centerGap": 118, "stackOffset": 32 }
+        }
+      ],
+      "commands": [
+        { "type": "scene", "sceneId": "left_2_right_3_bottom" },
+        { "type": "show", "actor": "fala" },
+        { "type": "show", "actor": "fanna" },
+        { "type": "show", "actor": "fayina" },
+        { "type": "show", "actor": "xiaoxiaokui" },
+        { "type": "show", "actor": "buer" },
+        { "type": "narrate", "text": "【布局测试 9/9：底部对齐】左 2 + 右 3。左右独立排布，不强制跨侧对齐；同侧角色各自底部对齐。观察结束后可退出任务重进。" },
         { "type": "end" }
       ]
     }
