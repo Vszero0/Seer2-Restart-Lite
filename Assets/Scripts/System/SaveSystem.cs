@@ -868,8 +868,18 @@ public static class SaveSystem
             foreach (var path in GetStoryJsonPaths(storyPath))
             {
                 string json = FileBrowserHelpers.ReadTextFromFile(path);
-                StoryDocument document = JsonUtility.FromJson<StoryDocument>(json);
-                if (!StoryValidator.Validate(document, out string validationError))
+                if (!StoryDocumentCodec.TryDeserialize(json, false, out StoryDocument document, out string validationError))
+                    throw new Exception("Story json format error: " + path + "\n" + validationError);
+
+                if (document.isDraft)
+                {
+                    if (!StoryValidator.ValidateDraft(document, out validationError))
+                        throw new Exception("Story json format error: " + path + "\n" + validationError);
+
+                    continue;
+                }
+
+                if (!StoryValidator.Validate(document, out validationError))
                     throw new Exception("Story json format error: " + path + "\n" + validationError);
 
                 if (storyDict.ContainsKey(document.id))
@@ -885,7 +895,7 @@ public static class SaveSystem
             return false;
         }
 
-        return storyDict.Count > 0;
+        return true;
     }
 
     private static IEnumerable<string> GetStoryJsonPaths(string storyPath)

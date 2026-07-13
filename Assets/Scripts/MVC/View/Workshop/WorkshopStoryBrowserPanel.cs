@@ -5,21 +5,24 @@ using UnityEngine;
 using UnityEngine.UI;
 
 /// <summary>
-/// 自制剧情的入口页：只负责浏览当前 Mod 的剧本和剧情点。
-/// 编辑器本身将在后续独立页面实现，不在这里叠加业务控件。
+/// 自制剧情入口页：负责剧本与剧情点的选择、创建、删除和保存。
+/// 具体剧情点的可视化编辑将在独立页面完成，避免在入口页堆叠编辑控件。
 /// </summary>
 public class WorkshopStoryBrowserPanel : Panel
 {
     private static readonly Color Cyan = new Color32(82, 229, 249, 255);
     private static readonly Color HintColor = new Color32(180, 220, 230, 255);
+    private static readonly Color WarningColor = new Color32(255, 232, 71, 255);
 
     private readonly WorkshopStoryBrowserController controller = new WorkshopStoryBrowserController(
         new WorkshopStoryBrowserModel(new WorkshopStoryRepository()));
 
     private RectTransform storyContent;
     private RectTransform nodeContent;
+    private Text storyInfoText;
     private Font font;
     private GameObject listButtonPrefab;
+    private GameObject actionButtonPrefab;
     private Image projectFrameImage;
     private Outline projectFrameOutline;
     private bool hasBuilt;
@@ -33,6 +36,7 @@ public class WorkshopStoryBrowserPanel : Panel
         hasBuilt = true;
         font = ResourceManager.instance.GetFont("Zongyi");
         listButtonPrefab = Resources.Load<GameObject>("Prefabs/Scroll List Button");
+        actionButtonPrefab = FindWorkshopActionButtonPrefab();
         background = GetComponent<Image>();
         BuildLayout();
         Reload();
@@ -48,16 +52,28 @@ public class WorkshopStoryBrowserPanel : Panel
         root.anchoredPosition = Vector2.zero;
 
         ApplyProjectFrame(background);
-
         CreateTitleDecoration();
         CreateProjectTitle();
-
         CreateCloseButton();
 
-        RectTransform storySection = CreateSection("剧本", new Vector2(20f, -76f));
-        RectTransform nodeSection = CreateSection("剧情点", new Vector2(470f, -76f));
-        storyContent = CreateScrollContent(storySection);
-        nodeContent = CreateScrollContent(nodeSection);
+        RectTransform storySection = CreateSection("剧本", new Vector2(18f, -76f), new Vector2(236f, 402f));
+        RectTransform infoSection = CreateSection("剧本信息", new Vector2(270f, -76f), new Vector2(632f, 116f));
+        RectTransform nodeSection = CreateSection("剧情点", new Vector2(270f, -204f), new Vector2(632f, 274f));
+
+        CreateActionButton(storySection, "新建", new Vector2(16f, -50f), new Vector2(96f, 28f), CreateStory);
+        CreateActionButton(storySection, "删除", new Vector2(124f, -50f), new Vector2(96f, 28f), DeleteStory);
+        storyContent = CreateScrollContent(storySection, new Vector2(14f, 14f), new Vector2(-14f, -86f));
+
+        CreateActionButton(infoSection, "保存", new Vector2(-16f, -50f), new Vector2(96f, 28f), SaveStory, TextAnchor.UpperRight);
+        storyInfoText = CreateText("Story Info", infoSection, string.Empty, 16, TextAnchor.UpperLeft, HintColor,
+            new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(18f, -50f), new Vector2(480f, 52f));
+        storyInfoText.horizontalOverflow = HorizontalWrapMode.Wrap;
+        storyInfoText.verticalOverflow = VerticalWrapMode.Overflow;
+
+        CreateActionButton(nodeSection, "新建", new Vector2(16f, -50f), new Vector2(94f, 28f), CreateNode);
+        CreateActionButton(nodeSection, "删除", new Vector2(120f, -50f), new Vector2(94f, 28f), DeleteNode);
+        CreateActionButton(nodeSection, "设为入口", new Vector2(224f, -50f), new Vector2(116f, 28f), SetEntryNode);
+        nodeContent = CreateScrollContent(nodeSection, new Vector2(14f, 14f), new Vector2(-14f, -86f));
     }
 
     private void CreateTitleDecoration()
@@ -88,8 +104,8 @@ public class WorkshopStoryBrowserPanel : Panel
         Transform source = missionPanel == null
             ? null
             : missionPanel.GetComponentsInChildren<Transform>(true)
-                .FirstOrDefault(transform => transform.gameObject.name == "Title" &&
-                    transform.GetComponentInChildren<TMP_Text>(true)?.text == "任务");
+                .FirstOrDefault(value => value.gameObject.name == "Title"
+                    && value.GetComponentInChildren<TMP_Text>(true)?.text == "任务");
         if (source == null)
             return;
 
@@ -115,7 +131,6 @@ public class WorkshopStoryBrowserPanel : Panel
             ? null
             : workshopPrefab.GetComponentsInChildren<IButton>(true)
                 .FirstOrDefault(button => button.gameObject.name == "ESC Button");
-
         if (source == null)
             return;
 
@@ -132,8 +147,12 @@ public class WorkshopStoryBrowserPanel : Panel
         ESCButton.onPointerClickEvent.SetListener(ClosePanel);
     }
 
-    private RectTransform CreateSection(string title, Vector2 position)
+    private RectTransform CreateSection(string title, Vector2 position, Vector2 dimensions)
     {
+        const float innerTopPadding = 8f;
+        const float actionButtonTop = 50f;
+        const float headingHeight = 30f;
+
         GameObject section = new GameObject(title + " Area", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));
         section.transform.SetParent(transform, false);
 
@@ -142,25 +161,25 @@ public class WorkshopStoryBrowserPanel : Panel
         rect.anchorMax = new Vector2(0f, 1f);
         rect.pivot = new Vector2(0f, 1f);
         rect.anchoredPosition = position;
-        rect.sizeDelta = new Vector2(430f, 402f);
+        rect.sizeDelta = dimensions;
 
         ApplyProjectFrame(section.GetComponent<Image>());
-
-        CreateText("Heading", section.transform, title, 24, TextAnchor.MiddleCenter, Cyan,
-            new Vector2(.5f, 1f), new Vector2(.5f, 1f), new Vector2(0f, -32f), new Vector2(220f, 32f));
+        CreateText("Heading", section.transform, title, 22, TextAnchor.MiddleCenter, Cyan,
+            new Vector2(.5f, 1f), new Vector2(.5f, 1f),
+            new Vector2(0f, -((innerTopPadding + actionButtonTop) * .5f - headingHeight * .5f)),
+            new Vector2(220f, headingHeight));
         return rect;
     }
 
-    private RectTransform CreateScrollContent(RectTransform section)
+    private RectTransform CreateScrollContent(RectTransform section, Vector2 offsetMin, Vector2 offsetMax)
     {
         GameObject viewportObject = new GameObject("List Viewport", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image), typeof(Mask), typeof(ScrollRect));
         viewportObject.transform.SetParent(section, false);
-
         RectTransform viewport = viewportObject.GetComponent<RectTransform>();
         viewport.anchorMin = Vector2.zero;
         viewport.anchorMax = Vector2.one;
-        viewport.offsetMin = new Vector2(18f, 18f);
-        viewport.offsetMax = new Vector2(-18f, -60f);
+        viewport.offsetMin = offsetMin;
+        viewport.offsetMax = offsetMax;
 
         Image image = viewportObject.GetComponent<Image>();
         image.color = new Color32(0, 8, 12, 255);
@@ -170,8 +189,8 @@ public class WorkshopStoryBrowserPanel : Panel
         GameObject contentObject = new GameObject("Content", typeof(RectTransform));
         contentObject.transform.SetParent(viewport, false);
         RectTransform content = contentObject.GetComponent<RectTransform>();
-        content.anchorMin = new Vector2(.5f, 1f);
-        content.anchorMax = new Vector2(.5f, 1f);
+        content.anchorMin = new Vector2(0f, 1f);
+        content.anchorMax = new Vector2(1f, 1f);
         content.pivot = new Vector2(.5f, 1f);
         content.anchoredPosition = Vector2.zero;
         content.sizeDelta = new Vector2(0f, 10f);
@@ -186,6 +205,39 @@ public class WorkshopStoryBrowserPanel : Panel
         return content;
     }
 
+    private void CreateActionButton(RectTransform parent, string label, Vector2 position, Vector2 dimensions, Action callback,
+        TextAnchor horizontalAnchor = TextAnchor.UpperLeft)
+    {
+        if (actionButtonPrefab == null)
+            return;
+
+        GameObject item = Instantiate(actionButtonPrefab, parent);
+        item.name = label + " Button";
+        RectTransform rect = item.GetComponent<RectTransform>();
+        if (horizontalAnchor == TextAnchor.UpperRight)
+        {
+            rect.anchorMin = Vector2.one;
+            rect.anchorMax = Vector2.one;
+            rect.pivot = Vector2.one;
+        }
+        else
+        {
+            rect.anchorMin = new Vector2(0f, 1f);
+            rect.anchorMax = new Vector2(0f, 1f);
+            rect.pivot = new Vector2(0f, 1f);
+        }
+        rect.anchoredPosition = position;
+        rect.sizeDelta = dimensions;
+
+        IButton button = item.GetComponent<IButton>();
+        button.button.onClick = new Button.ButtonClickedEvent();
+        button.onPointerClickEvent = new UnityEngine.Events.UnityEvent();
+        button.onPointerClickEvent.AddListener(callback.Invoke);
+        Text text = item.GetComponentInChildren<Text>();
+        text.raycastTarget = false;
+        text.text = label;
+    }
+
     private void Reload()
     {
         if (!controller.Open(out string error) && !string.IsNullOrEmpty(error))
@@ -193,9 +245,51 @@ public class WorkshopStoryBrowserPanel : Panel
         RefreshView();
     }
 
+    private void CreateStory()
+    {
+        if (!controller.CreateDraft(out string error) && !string.IsNullOrEmpty(error))
+            Hintbox.OpenHintboxWithContent(error, 16);
+        RefreshView();
+    }
+
+    private void DeleteStory()
+    {
+        if (!controller.DeleteSelected(out string error) && !string.IsNullOrEmpty(error))
+            Hintbox.OpenHintboxWithContent(error, 16);
+        RefreshView();
+    }
+
+    private void SaveStory()
+    {
+        if (!controller.SaveSelected(out string error) && !string.IsNullOrEmpty(error))
+            Hintbox.OpenHintboxWithContent(error, 16);
+        RefreshView();
+    }
+
     private void SelectStory(string path)
     {
         if (!controller.SelectStory(path, out string error) && !string.IsNullOrEmpty(error))
+            Hintbox.OpenHintboxWithContent(error, 16);
+        RefreshView();
+    }
+
+    private void CreateNode()
+    {
+        if (!controller.CreateNode(out string error) && !string.IsNullOrEmpty(error))
+            Hintbox.OpenHintboxWithContent(error, 16);
+        RefreshView();
+    }
+
+    private void DeleteNode()
+    {
+        if (!controller.DeleteSelectedNode(out string error) && !string.IsNullOrEmpty(error))
+            Hintbox.OpenHintboxWithContent(error, 16);
+        RefreshView();
+    }
+
+    private void SetEntryNode()
+    {
+        if (!controller.SetSelectedNodeAsEntry(out string error) && !string.IsNullOrEmpty(error))
             Hintbox.OpenHintboxWithContent(error, 16);
         RefreshView();
     }
@@ -208,6 +302,13 @@ public class WorkshopStoryBrowserPanel : Panel
 
     private void RefreshView()
     {
+        RefreshStories();
+        RefreshStoryInfo();
+        RefreshNodes();
+    }
+
+    private void RefreshStories()
+    {
         ClearChildren(storyContent);
         int index = 0;
         foreach (WorkshopStorySummary story in controller.Stories)
@@ -216,33 +317,53 @@ public class WorkshopStoryBrowserPanel : Panel
             string path = story.path;
             CreateListButton(storyContent, title, story == controller.SelectedStory, index++, () => SelectStory(path));
         }
-        RefreshNodes();
+
+        if (index == 0)
+            CreateHint(storyContent, "点击“新建”创建第一个剧本。");
+        else
+            storyContent.sizeDelta = new Vector2(0f, 12f + index * 42f);
+    }
+
+    private void RefreshStoryInfo()
+    {
+        if (storyInfoText == null)
+            return;
+
+        StoryDocument document = controller.SelectedDocument;
+        if (document == null)
+        {
+            storyInfoText.text = "请选择左侧剧本查看信息。";
+            return;
+        }
+
+        string status = document.isDraft ? "草稿" : "已发布";
+        string description = string.IsNullOrWhiteSpace(document.summary) ? "暂无简介" : document.summary;
+        int nodeCount = (document.nodes ?? Array.Empty<StoryNodeDocument>()).Count(node => node != null);
+        storyInfoText.text = "标题：" + document.title + "    状态：" + status + "    剧情点：" + nodeCount
+            + "\n简介：" + description;
+        storyInfoText.color = document.isDraft ? HintColor : WarningColor;
     }
 
     private void RefreshNodes()
     {
         ClearChildren(nodeContent);
         StoryNodeDocument[] nodes = controller.SelectedDocument?.nodes ?? Array.Empty<StoryNodeDocument>();
-        if (nodes.Length == 0)
-        {
-            string hint = controller.Stories.Count == 0 ? "当前 Mod/Stories 中暂无剧本。" : "请选择左侧剧本。";
-            CreateText("Hint", nodeContent, hint, 17, TextAnchor.MiddleCenter, HintColor,
-                new Vector2(.5f, 1f), new Vector2(.5f, 1f), new Vector2(0f, -72f), new Vector2(360f, 48f));
-            nodeContent.sizeDelta = new Vector2(0f, 120f);
-            return;
-        }
-
         int index = 0;
         foreach (StoryNodeDocument node in nodes)
         {
             if (node == null)
                 continue;
 
-            string label = (node.id == controller.SelectedDocument.entry ? "入口 · " : string.Empty) + (node.displayName ?? node.id);
+            string label = (node.id == controller.SelectedDocument.entry ? "入口 · " : string.Empty)
+                + (string.IsNullOrWhiteSpace(node.displayName) ? node.id : node.displayName);
             string nodeId = node.id;
             CreateListButton(nodeContent, label, node == controller.SelectedNode, index++, () => SelectNode(nodeId));
         }
-        nodeContent.sizeDelta = new Vector2(0f, 14f + index * 42f);
+
+        if (index == 0)
+            CreateHint(nodeContent, controller.SelectedDocument == null ? "请选择剧本。" : "当前剧本没有剧情点。");
+        else
+            nodeContent.sizeDelta = new Vector2(0f, 12f + index * 42f);
     }
 
     private void CreateListButton(RectTransform parent, string label, bool selected, int index, Action callback)
@@ -253,28 +374,48 @@ public class WorkshopStoryBrowserPanel : Panel
         GameObject item = Instantiate(listButtonPrefab, parent);
         item.name = "Story List Button";
         RectTransform rect = item.GetComponent<RectTransform>();
-        rect.anchorMin = new Vector2(.5f, 1f);
-        rect.anchorMax = new Vector2(.5f, 1f);
+        rect.anchorMin = new Vector2(0f, 1f);
+        rect.anchorMax = new Vector2(1f, 1f);
         rect.pivot = new Vector2(.5f, 1f);
         rect.anchoredPosition = new Vector2(0f, -8f - index * 42f);
-        rect.sizeDelta = new Vector2(382f, 36f);
+        rect.sizeDelta = new Vector2(0f, 36f);
 
         IButton button = item.GetComponent<IButton>();
         button.onPointerClickEvent.SetListener(callback.Invoke);
-        if (selected && button.button.spriteState.selectedSprite != null)
-            button.image.sprite = button.button.spriteState.selectedSprite;
+        ConfigureListButtonVisual(button, selected);
 
         Text text = item.GetComponentInChildren<Text>();
         text.font = font;
-        text.fontSize = 18;
+        text.fontSize = 17;
         text.fontStyle = FontStyle.Normal;
         text.alignment = TextAnchor.MiddleCenter;
-        text.color = selected ? new Color32(255, 232, 71, 255) : Cyan;
+        text.color = selected ? WarningColor : Cyan;
         text.raycastTarget = false;
         text.text = label;
     }
 
-    private void CreateText(string name, Transform parent, string value, int size, TextAnchor alignment, Color color,
+    private static void ConfigureListButtonVisual(IButton button, bool selected)
+    {
+        button.image.sprite = button.initSprite;
+        button.button.transition = Selectable.Transition.ColorTint;
+
+        ColorBlock colors = button.button.colors;
+        colors.normalColor = selected ? Color.white : new Color(.86f, .93f, .96f, 1f);
+        colors.highlightedColor = Color.white;
+        colors.pressedColor = new Color(.72f, .82f, .88f, 1f);
+        colors.selectedColor = Color.white;
+        colors.fadeDuration = .08f;
+        button.button.colors = colors;
+    }
+
+    private void CreateHint(RectTransform parent, string value)
+    {
+        CreateText("Hint", parent, value, 15, TextAnchor.MiddleCenter, HintColor,
+            new Vector2(.5f, 1f), new Vector2(.5f, 1f), new Vector2(0f, -64f), new Vector2(200f, 42f));
+        parent.sizeDelta = new Vector2(0f, 96f);
+    }
+
+    private Text CreateText(string name, Transform parent, string value, int size, TextAnchor alignment, Color color,
         Vector2 anchor, Vector2 pivot, Vector2 position, Vector2 dimensions)
     {
         GameObject obj = new GameObject(name, typeof(RectTransform), typeof(CanvasRenderer), typeof(Text));
@@ -295,6 +436,7 @@ public class WorkshopStoryBrowserPanel : Panel
         text.verticalOverflow = VerticalWrapMode.Overflow;
         text.raycastTarget = false;
         text.text = value;
+        return text;
     }
 
     private static void ClearChildren(Transform parent)
@@ -303,10 +445,17 @@ public class WorkshopStoryBrowserPanel : Panel
             Destroy(child.gameObject);
     }
 
-    /// <summary>
-    /// 复用任务面板的黑底白框配置：同一张九宫格底图、同一组描边参数。
-    /// 不自行猜测边框的厚度或偏移。
-    /// </summary>
+    private GameObject FindWorkshopActionButtonPrefab()
+    {
+        GameObject workshopPanel = ResourceManager.instance.GetPanel("Workshop");
+        if (workshopPanel == null)
+            return null;
+
+        IButton button = workshopPanel.GetComponentsInChildren<IButton>(true)
+            .FirstOrDefault(value => value.GetComponentInChildren<Text>(true)?.text == "导出 mod");
+        return button?.gameObject;
+    }
+
     private void ApplyProjectFrame(Image target)
     {
         CacheProjectFrameTemplate();

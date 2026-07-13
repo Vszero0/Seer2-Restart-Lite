@@ -9,6 +9,7 @@ public sealed class WorkshopStoryBrowserController
     public WorkshopStorySummary SelectedStory => model.SelectedStory;
     public StoryDocument SelectedDocument => model.SelectedDocument;
     public StoryNodeDocument SelectedNode => model.SelectedNode;
+    public bool HasUnsavedChanges => model.HasUnsavedChanges;
 
     public WorkshopStoryBrowserController(WorkshopStoryBrowserModel model)
     {
@@ -28,5 +29,45 @@ public sealed class WorkshopStoryBrowserController
     public void SelectNode(string nodeId)
     {
         model.SelectNode(nodeId);
+    }
+
+    public bool UpdateSelectedStoryMetadata(string title, string summary, bool replayable, out string error)
+    {
+        return model.UpdateSelectedStoryMetadata(title, summary, replayable, out error);
+    }
+
+    public bool CreateNode(out string error)
+    {
+        return model.CreateNode(out error);
+    }
+
+    public bool RenameSelectedNode(string displayName, out string error)
+    {
+        return model.RenameSelectedNode(displayName, out error);
+    }
+
+    public bool SetSelectedNodeAsEntry(out string error)
+    {
+        return model.SetSelectedNodeAsEntry(out error);
+    }
+
+    public bool DeleteSelectedNode(out string error)
+    {
+        return model.DeleteSelectedNode(out error);
+    }
+
+    public bool CreateDraft(out string error)
+    {
+        return model.CreateDraft(out error);
+    }
+
+    public bool SaveSelected(out string error)
+    {
+        return model.SaveSelected(out error);
+    }
+
+    public bool DeleteSelected(out string error)
+    {
+        return model.DeleteSelected(out error);
     }
 }

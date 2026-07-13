@@ -1,6 +1,5 @@
 using System;
 using System.Linq;
-using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
@@ -8,30 +7,16 @@ using TMPro;
 
 public class StoryPanel : Panel
 {
-    private const string StoryResourceRoot = "Data/Stories/";
-    private const string ModStoryPrefix = "mod:";
     private const string NarrationPrompt = "\u9009\u62E9\u56DE\u5E94";
     private const string NarratorName = "\u65C1\u767D";
     private const string ChoicePrompt = "\u8BF7\u9009\u62E9\u63A5\u4E0B\u6765\u7684\u56DE\u5E94\u3002";
     private const string DefaultIconSize = "90,120";
     private const string DefaultIconPos = "0,45";
-    private const float DefaultActorSpacing = 132f;
-    private const float DefaultActorHeight = 250f;
-    private const float DefaultActorBottom = 166f;
-    private const float DefaultActorCenterGap = 112f;
-    private const float DefaultActorStackOffset = 16f;
-
-    private readonly Dictionary<string, StoryActorRuntime> actors = new Dictionary<string, StoryActorRuntime>();
-    private readonly Dictionary<string, int> nextSideOrders = new Dictionary<string, int>();
-    private readonly Dictionary<string, StorySceneActorLayoutDocument> sceneActorLayouts = new Dictionary<string, StorySceneActorLayoutDocument>(StringComparer.OrdinalIgnoreCase);
-    private static readonly Dictionary<Sprite, Vector2> spriteVisiblePivotCache = new Dictionary<Sprite, Vector2>();
-
     private StoryScript story;
-    private StoryLayoutRuntime activeLayout;
+    private StoryActorStage actorStage;
     private string pendingStoryId;
     private int fallbackMapId;
     private int commandIndex;
-    private int actorOrder;
     private int sceneMusicRequestVersion;
     private bool isBuilt;
     private bool isClosing;
@@ -72,30 +57,7 @@ public class StoryPanel : Panel
 
     public static bool CanOpenStory(string storyId, out string error)
     {
-        error = string.Empty;
-        if (string.IsNullOrEmpty(storyId))
-        {
-            error = "剧情脚本为空";
-            return false;
-        }
-
-        if (!IsModStory(storyId))
-        {
-            if (!TryLoadStoryDocument(storyId, out _, out error))
-                return false;
-
-            return true;
-        }
-
-        string modStoryId = storyId.Substring(ModStoryPrefix.Length);
-        StoryDocument document = Database.instance.GetStoryInfo(modStoryId);
-        if (!StoryValidator.Validate(document, out string validationError))
-        {
-            error = "找不到对应的Mod剧情，或剧情文件格式错误：\n" + validationError;
-            return false;
-        }
-
-        return true;
+        return StoryDocumentLoader.CanOpen(storyId, out error);
     }
 
     public override void Init()
@@ -111,7 +73,7 @@ public class StoryPanel : Panel
     public override void ClosePanel()
     {
         ClearDialogHandlers();
-        ClearActors();
+        actorStage?.Clear();
         DialogManager.instance?.CloseDialog();
         if (exitButton != null)
             Destroy(exitButton);
@@ -139,6 +101,11 @@ public class StoryPanel : Panel
         actorLayer = DialogManager.instance != null
             ? DialogManager.instance.GetStoryActorLayer()
             : CreateRect("Story Actors", transform, Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero, Vector2.zero);
+        actorStage = new StoryActorStage(
+            actorLayer,
+            this,
+            RefreshOverlayLayering,
+            path => story?.GetResourceSource(path) ?? "auto");
         CreateExitButton();
     }
 
@@ -147,76 +114,20 @@ public class StoryPanel : Panel
         if (fallbackMapId != 0)
             SetScene("Maps/bg/" + fallbackMapId);
 
-        if (!TryBuildStoryScript(storyId, out story, out string error))
+        if (!StoryDocumentLoader.TryBuildRuntimeScript(storyId, out story, out string error))
         {
             SetDialogue(null, "\u7CFB\u7EDF", error);
             return;
         }
 
         commandIndex = 0;
-        actorOrder = 0;
         isClosing = false;
         waitingForChoice = false;
-        ClearActors();
-        nextSideOrders.Clear();
-        sceneActorLayouts.Clear();
+        actorStage.Reset(story.layout);
         ClearDialogHandlers();
         lastDialogInfo = null;
-        activeLayout = ResolveLayout(null);
 
         ShowNextCommand();
-    }
-
-    private static bool TryBuildStoryScript(string storyId, out StoryScript story, out string error)
-    {
-        story = null;
-        error = string.Empty;
-        if (IsModStory(storyId))
-        {
-            string modStoryId = storyId.Substring(ModStoryPrefix.Length);
-            StoryDocument modDocument = Database.instance.GetStoryInfo(modStoryId);
-            if (!StoryValidator.Validate(modDocument, out string validationError))
-            {
-                error = "Mod剧情文件格式错误：\n" + validationError;
-                return false;
-            }
-
-            story = modDocument.ToScript();
-            return story != null;
-        }
-
-        if (!TryLoadStoryDocument(storyId, out StoryDocument document, out error))
-            return false;
-
-        story = document.ToScript();
-        return story != null;
-    }
-
-    private static bool TryLoadStoryDocument(string storyId, out StoryDocument document, out string error)
-    {
-        document = null;
-        error = string.Empty;
-
-        TextAsset textAsset = Resources.Load<TextAsset>(StoryResourceRoot + storyId);
-        if (textAsset != null)
-        {
-            document = JsonUtility.FromJson<StoryDocument>(textAsset.text);
-            if (!StoryValidator.Validate(document, out string validationError))
-            {
-                error = "剧情 JSON 格式错误：\n" + validationError;
-                return false;
-            }
-
-            return true;
-        }
-
-        error = "未找到剧情 JSON：" + storyId;
-        return false;
-    }
-
-    private static bool IsModStory(string storyId)
-    {
-        return !string.IsNullOrEmpty(storyId) && storyId.StartsWith(ModStoryPrefix, StringComparison.OrdinalIgnoreCase);
     }
 
     private void Advance()
@@ -263,7 +174,7 @@ public class StoryPanel : Panel
                     ShowChoices(command);
                     return;
                 case StoryCommandType.Jump:
-                    if (EvaluateCondition(command.condition))
+                    if (StoryConditionEvaluator.Evaluate(story, command.condition))
                         JumpTo(command.args);
                     continue;
                 case StoryCommandType.Mission:
@@ -283,11 +194,8 @@ public class StoryPanel : Panel
 
     private void ApplyScene(StoryCommand command)
     {
-        SetScene(GetArgValue(command.args, "bg", command.args));
-        ClearActors();
-        nextSideOrders.Clear();
-        SetSceneActorLayouts(command.actorLayouts);
-        ApplySceneLayout(command.layout);
+        SetScene(StoryCommandArguments.GetValue(command.args, "bg", command.args));
+        actorStage.ApplyScene(command.actorLayouts, command.layout);
         PlaySceneMusic(command.mapId, command.bgmResourcePath, ++sceneMusicRequestVersion);
     }
 
@@ -334,12 +242,15 @@ public class StoryPanel : Panel
 
     private void SetScene(string path)
     {
-        Sprite sprite = LoadSprite(path);
+        Sprite sprite = StorySpriteResolver.Load(path, story?.GetResourceSource(path));
         if (sprite == null && path.TryTrimStart("Maps/bg/", out string mapIdText) && int.TryParse(mapIdText, out int mapId))
         {
             Map map = Map.GetMap(mapId);
             if (map != null && map.resId != 0 && map.resId != mapId)
-                sprite = LoadSprite("Maps/bg/" + map.resId);
+            {
+                string fallbackPath = "Maps/bg/" + map.resId;
+                sprite = StorySpriteResolver.Load(fallbackPath, story?.GetResourceSource(fallbackPath));
+            }
         }
 
         sceneImage.sprite = sprite;
@@ -356,45 +267,13 @@ public class StoryPanel : Panel
         if (actor == null || string.IsNullOrEmpty(actor.id))
             return;
 
-        if (!actors.TryGetValue(actor.id, out StoryActorRuntime runtime))
-        {
-            runtime = new StoryActorRuntime
-            {
-                document = actor,
-                placement = GetActorPlacement(actor),
-            };
-            runtime.image = CreateActorImage(actor);
-            runtime.canvasGroup = runtime.image.GetComponent<CanvasGroup>();
-            runtime.order = actorOrder++;
-            actors[actor.id] = runtime;
-            PlayActorFade(runtime);
-        }
-        else
-        {
-            runtime.document = actor;
-            runtime.placement = GetActorPlacement(actor);
-            runtime.image.gameObject.SetActive(true);
-        }
-
-        LayoutActors();
+        actorStage.Show(actor);
     }
 
     private void UnregisterActor(string args)
     {
-        string[] tokens = SplitArgs(args);
-        if (tokens.Length == 0 || tokens[0] == "all")
-        {
-            ClearActors();
-            return;
-        }
-
-        if (actors.TryGetValue(tokens[0], out StoryActorRuntime runtime))
-        {
-            if (runtime.image != null)
-                Destroy(runtime.image.gameObject);
-            actors.Remove(tokens[0]);
-            LayoutActors();
-        }
+        string[] tokens = StoryCommandArguments.Split(args);
+        actorStage.Hide(tokens.Length == 0 ? null : tokens[0]);
     }
 
     private void SetDialogue(StoryActorDocument actor, string speaker, string content)
@@ -403,7 +282,7 @@ public class StoryPanel : Panel
         DialogManager.instance.SetStoryDialogReplyClickHandler(null);
         DialogManager.instance.ClearStoryChoices();
         DialogManager.instance.SetStoryDialogBackgroundClickHandler(Advance);
-        SetActiveActor(actor?.id);
+        actorStage?.SetActiveActor(actor?.id);
         lastDialogInfo = CreateDialogInfo(actor, speaker, content, new List<NpcButtonHandler>());
         DialogManager.instance.OpenStoryDialog(lastDialogInfo, false);
         RefreshOverlayLayering();
@@ -415,7 +294,7 @@ public class StoryPanel : Panel
         DialogManager.instance.SetStoryDialogReplyClickHandler(null);
         DialogManager.instance.ClearStoryChoices();
         DialogManager.instance.SetStoryDialogBackgroundClickHandler(Advance);
-        SetActiveActor(null);
+        actorStage?.SetActiveActor(null);
         lastDialogInfo = CreateDialogInfo(null, NarratorName, content, new List<NpcButtonHandler>());
         DialogManager.instance.OpenStoryDialog(lastDialogInfo, false);
         RefreshOverlayLayering();
@@ -472,7 +351,7 @@ public class StoryPanel : Panel
     {
         string iconPath = actor?.icon;
         bool hasIcon = !string.IsNullOrEmpty(iconPath);
-        StorySceneActorLayoutDocument placement = GetActorPlacement(actor);
+        StorySceneActorLayoutDocument placement = actorStage?.GetPlacement(actor);
 
         return new DialogInfo
         {
@@ -512,7 +391,7 @@ public class StoryPanel : Panel
 
     private void ExecuteMission(string args)
     {
-        string[] tokens = SplitArgs(args);
+        string[] tokens = StoryCommandArguments.Split(args);
         if (tokens.Length < 2 || !int.TryParse(tokens[0], out int missionId))
             return;
 
@@ -549,49 +428,9 @@ public class StoryPanel : Panel
         TeleportHandler.Teleport(mapId);
     }
 
-    private Image CreateActorImage(StoryActorDocument actor)
-    {
-        Image image = CreateImage("Story Actor " + actor.id, actorLayer, Vector2.zero, Vector2.zero, new Vector2(0.5f, 0f), Vector2.zero, Vector2.zero, Color.white);
-        image.raycastTarget = false;
-        image.preserveAspect = true;
-        image.sprite = LoadSprite(actor.displaySprite);
-        image.gameObject.SetActive(image.sprite != null);
-        CanvasGroup canvasGroup = image.gameObject.AddComponent<CanvasGroup>();
-        canvasGroup.alpha = 0f;
-        return image;
-    }
-
-    private void PlayActorFade(StoryActorRuntime runtime)
-    {
-        if (runtime == null || runtime.canvasGroup == null)
-            return;
-
-        if (runtime.fadeCoroutine != null)
-            StopCoroutine(runtime.fadeCoroutine);
-
-        runtime.fadeCoroutine = StartCoroutine(ActorFadeCoroutine(runtime));
-    }
-
-    private IEnumerator ActorFadeCoroutine(StoryActorRuntime runtime)
-    {
-        const float duration = 0.18f;
-        float time = 0f;
-        runtime.canvasGroup.alpha = 0f;
-
-        while (time < duration)
-        {
-            runtime.canvasGroup.alpha = Mathf.Clamp01(time / duration);
-            time += Time.unscaledDeltaTime;
-            yield return null;
-        }
-
-        runtime.canvasGroup.alpha = 1f;
-        runtime.fadeCoroutine = null;
-    }
-
     private StoryActorDocument BuildLegacyActor(string args)
     {
-        string[] tokens = SplitArgs(args);
+        string[] tokens = StoryCommandArguments.Split(args);
         if (tokens.Length < 2)
             return null;
 
@@ -599,375 +438,17 @@ public class StoryPanel : Panel
         {
             id = tokens[0],
             name = tokens[0],
-            sprite = NormalizeSpritePath(tokens[1]),
-            icon = NormalizeSpritePath(tokens[1]),
+            sprite = StorySpriteResolver.Normalize(tokens[1]),
+            icon = StorySpriteResolver.Normalize(tokens[1]),
             defaultFaceLeft = true,
             defaultScale = 1f,
         };
-    }
-
-    private void LayoutActors()
-    {
-        if (activeLayout == null)
-            activeLayout = ResolveLayout(null);
-
-        LayoutActorsBySide("left");
-        LayoutActorsBySide("right");
-        LayoutManualActors();
-        ApplyInitialActorLayering();
-        RefreshOverlayLayering();
-    }
-
-    private void LayoutActorsBySide(string side)
-    {
-        List<StoryActorRuntime> sideActors = actors.Values
-            .Where(x => x?.image != null && x.placement != null && x.placement.normalizedPlacementMode == "auto" && x.placement.normalizedSide == side)
-            .OrderBy(x => x.placement.order)
-            .ThenBy(x => x.order)
-            .ToList();
-
-        int maxOrder = sideActors.Count == 0 ? 0 : sideActors.Max(x => x.placement.order);
-        for (int i = 0; i < sideActors.Count; i++)
-        {
-            StoryActorRuntime runtime = sideActors[i];
-            RectTransform rect = runtime.image.rectTransform;
-            bool isRight = side == "right";
-            int visualIndex = Mathf.Max(0, runtime.placement.order);
-            float yOffset = activeLayout.isBottomAligned ? 0f : (maxOrder - visualIndex) * activeLayout.stackOffset;
-            float scale = Mathf.Max(0.1f, runtime.placement.scale);
-            Vector2 originalSize = GetSpriteSize(runtime.image.sprite, activeLayout.actorHeight);
-            float width = originalSize.x * scale;
-            float height = originalSize.y * scale;
-            float sideOffset = activeLayout.centerGap + visualIndex * activeLayout.actorSpacing;
-            float x = isRight ? sideOffset : -sideOffset;
-
-            rect.anchorMin = new Vector2(0.5f, 0f);
-            rect.anchorMax = rect.anchorMin;
-            rect.pivot = GetVisibleBottomPivot(runtime.image.sprite);
-            rect.anchoredPosition = new Vector2(x, activeLayout.actorBottom + yOffset);
-            rect.sizeDelta = new Vector2(width, height);
-
-            bool shouldFaceLeft = runtime.placement.faceLeft;
-            float direction = shouldFaceLeft ? -1f : 1f;
-            rect.localScale = new Vector3(direction, 1f, 1f);
-        }
-    }
-
-    private void LayoutManualActors()
-    {
-        foreach (StoryActorRuntime runtime in actors.Values.Where(x => x?.image != null && x.placement?.normalizedPlacementMode == "manual"))
-        {
-            RectTransform rect = runtime.image.rectTransform;
-            float scale = Mathf.Max(0.1f, runtime.placement.scale);
-            Vector2 originalSize = GetSpriteSize(runtime.image.sprite, activeLayout.actorHeight);
-            rect.anchorMin = new Vector2(0.5f, 0f);
-            rect.anchorMax = rect.anchorMin;
-            rect.pivot = GetVisibleBottomPivot(runtime.image.sprite);
-            rect.anchoredPosition = new Vector2(runtime.placement.x, runtime.placement.y);
-            rect.sizeDelta = new Vector2(originalSize.x * scale, originalSize.y * scale);
-            rect.localScale = new Vector3(runtime.placement.faceLeft ? -1f : 1f, 1f, 1f);
-        }
-    }
-
-    private void SetActiveActor(string actorId)
-    {
-        foreach (StoryActorRuntime runtime in actors.Values)
-        {
-            if (runtime?.image == null)
-                continue;
-
-            bool active = !string.IsNullOrEmpty(actorId) && runtime.document.id == actorId;
-            runtime.image.color = active ? Color.white : new Color32(118, 118, 126, 255);
-            if (active)
-                runtime.image.transform.SetAsLastSibling();
-        }
-    }
-
-    private void ApplySceneLayout(StoryLayoutDocument sceneLayout)
-    {
-        activeLayout = ResolveLayout(sceneLayout);
-        LayoutActors();
-    }
-
-    private StorySceneActorLayoutDocument GetActorPlacement(StoryActorDocument actor)
-    {
-        if (actor != null && sceneActorLayouts.TryGetValue(actor.id, out StorySceneActorLayoutDocument placement))
-            return placement;
-
-        if (actor != null && actors.TryGetValue(actor.id, out StoryActorRuntime runtime) && runtime.placement != null)
-            return runtime.placement;
-
-        const string fallbackSide = "left";
-        if (!nextSideOrders.TryGetValue(fallbackSide, out int order))
-            order = 0;
-
-        nextSideOrders[fallbackSide] = order + 1;
-        return new StorySceneActorLayoutDocument
-        {
-            actorId = actor?.id,
-            side = fallbackSide,
-            order = order,
-            scale = actor?.defaultScale > 0f ? actor.defaultScale : 1f,
-            faceLeft = actor == null || actor.defaultFaceLeft,
-            flipIcon = actor != null && actor.defaultFlipIcon,
-        };
-    }
-
-    private void SetSceneActorLayouts(StorySceneActorLayoutDocument[] layouts)
-    {
-        sceneActorLayouts.Clear();
-        foreach (StorySceneActorLayoutDocument layout in layouts ?? Array.Empty<StorySceneActorLayoutDocument>())
-        {
-            if (layout != null && !string.IsNullOrWhiteSpace(layout.actorId))
-                sceneActorLayouts[layout.actorId] = layout;
-        }
-    }
-
-    private static Vector2 GetSpriteSize(Sprite sprite, float fallbackHeight)
-    {
-        if (sprite == null || sprite.rect.width <= 0f || sprite.rect.height <= 0f)
-        {
-            float height = fallbackHeight > 0f ? fallbackHeight : DefaultActorHeight;
-            return new Vector2(height * 0.72f, height);
-        }
-
-        return new Vector2(sprite.rect.width, sprite.rect.height);
-    }
-
-    private static Vector2 GetVisibleBottomPivot(Sprite sprite)
-    {
-        if (sprite == null)
-            return new Vector2(0.5f, 0f);
-
-        if (spriteVisiblePivotCache.TryGetValue(sprite, out Vector2 cachedPivot))
-            return cachedPivot;
-
-        Vector2 pivot = CalculateVisibleBottomPivot(sprite);
-        spriteVisiblePivotCache[sprite] = pivot;
-        return pivot;
-    }
-
-    private static Vector2 CalculateVisibleBottomPivot(Sprite sprite)
-    {
-        Rect rect = sprite.rect;
-        if (rect.width <= 0f || rect.height <= 0f || sprite.texture == null)
-            return new Vector2(0.5f, 0f);
-
-        try
-        {
-            Texture2D texture = sprite.texture;
-            Color32[] pixels = texture.GetPixels32();
-            int textureWidth = texture.width;
-            int xMin = Mathf.FloorToInt(rect.xMin);
-            int yMin = Mathf.FloorToInt(rect.yMin);
-            int width = Mathf.RoundToInt(rect.width);
-            int height = Mathf.RoundToInt(rect.height);
-            int minX = width;
-            int minY = height;
-            int maxX = -1;
-
-            for (int y = 0; y < height; y++)
-            {
-                int pixelY = yMin + y;
-                if (pixelY < 0 || pixelY >= texture.height)
-                    continue;
-
-                for (int x = 0; x < width; x++)
-                {
-                    int pixelX = xMin + x;
-                    if (pixelX < 0 || pixelX >= textureWidth)
-                        continue;
-
-                    if (pixels[pixelY * textureWidth + pixelX].a <= 8)
-                        continue;
-
-                    if (x < minX)
-                        minX = x;
-                    if (x > maxX)
-                        maxX = x;
-                    if (y < minY)
-                        minY = y;
-                }
-            }
-
-            if (maxX < minX || minY >= height)
-                return new Vector2(0.5f, 0f);
-
-            float pivotX = ((minX + maxX + 1f) * 0.5f) / width;
-            float pivotY = minY / (float)height;
-            return new Vector2(Mathf.Clamp01(pivotX), Mathf.Clamp01(pivotY));
-        }
-        catch (UnityException)
-        {
-            return new Vector2(0.5f, 0f);
-        }
-    }
-
-    private void ApplyInitialActorLayering()
-    {
-        foreach (StoryActorRuntime runtime in actors.Values
-            .Where(x => x?.image != null)
-            .OrderBy(x => x.placement?.normalizedPlacementMode == "manual" ? 1 : 0)
-            .ThenBy(x => x.placement?.normalizedPlacementMode == "manual" ? -x.placement.y : x.placement?.order ?? 0)
-            .ThenBy(x => x.order))
-        {
-            runtime.image.transform.SetAsLastSibling();
-        }
-    }
-
-    private StoryLayoutRuntime ResolveLayout(StoryLayoutDocument sceneLayout)
-    {
-        StoryLayoutDocument globalLayout = story?.layout;
-        return new StoryLayoutRuntime
-        {
-            autoLayoutMode = ResolveAutoLayoutMode(sceneLayout?.autoLayoutMode, globalLayout?.autoLayoutMode),
-            actorSpacing = FirstPositive(sceneLayout?.actorSpacing, globalLayout?.actorSpacing, DefaultActorSpacing),
-            actorHeight = FirstPositive(sceneLayout?.actorHeight, globalLayout?.actorHeight, DefaultActorHeight),
-            actorBottom = FirstPositive(sceneLayout?.actorBottom, globalLayout?.actorBottom, DefaultActorBottom),
-            centerGap = FirstPositive(sceneLayout?.centerGap, globalLayout?.centerGap, DefaultActorCenterGap),
-            stackOffset = FirstPositive(sceneLayout?.stackOffset, globalLayout?.stackOffset, DefaultActorStackOffset),
-        };
-    }
-
-    private static float FirstPositive(float? primary, float? secondary, float fallback)
-    {
-        if (primary.HasValue && primary.Value > 0f)
-            return primary.Value;
-
-        if (secondary.HasValue && secondary.Value > 0f)
-            return secondary.Value;
-
-        return fallback;
-    }
-
-    private static string ResolveAutoLayoutMode(string sceneMode, string globalMode)
-    {
-        string mode = string.IsNullOrWhiteSpace(sceneMode) ? globalMode : sceneMode;
-        return string.Equals(mode, "bottomAligned", StringComparison.OrdinalIgnoreCase) ? "bottomAligned" : "invertedV";
-    }
-
-    private void ClearActors()
-    {
-        foreach (StoryActorRuntime runtime in actors.Values)
-        {
-            if (runtime?.image != null)
-                Destroy(runtime.image.gameObject);
-        }
-
-        actors.Clear();
-    }
-
-    private static string[] SplitArgs(string args)
-    {
-        return args.Split(new[] { ' ', '\t' }, StringSplitOptions.RemoveEmptyEntries);
-    }
-
-    private static string GetArgValue(string args, string key, string defaultValue = "")
-    {
-        string prefix = key + ":";
-        string value = SplitArgs(args).FirstOrDefault(x => x.StartsWith(prefix, StringComparison.OrdinalIgnoreCase));
-        return string.IsNullOrEmpty(value) ? defaultValue : value.Substring(prefix.Length);
-    }
-
-    private static string NormalizeSpritePath(string path)
-    {
-        if (string.IsNullOrEmpty(path))
-            return path;
-
-        if (path.StartsWith("pet:", StringComparison.OrdinalIgnoreCase))
-            return "Pets/pet/" + path.Substring("pet:".Length);
-
-        if (path.StartsWith("npc:", StringComparison.OrdinalIgnoreCase))
-            return "Npc/" + path.Substring("npc:".Length);
-
-        return path;
-    }
-
-    private static Sprite LoadSprite(string path)
-    {
-        path = NormalizeSpritePath(path);
-        if (string.IsNullOrEmpty(path) || path == "none")
-            return null;
-
-        bool isExplicitModPath = path.TryTrimStart("Mod/", out string modPath);
-        string resourcePath = isExplicitModPath ? modPath : path;
-
-        Sprite sprite = ResourceManager.instance.GetLocalAddressables<Sprite>(resourcePath, isExplicitModPath);
-        if (sprite != null && sprite != SpriteSet.Empty)
-            return sprite;
-
-        if (!isExplicitModPath)
-        {
-            sprite = ResourceManager.instance.GetLocalAddressables<Sprite>(resourcePath, true);
-            if (sprite != null && sprite != SpriteSet.Empty)
-                return sprite;
-        }
-
-        sprite = ResourceManager.instance.Get<Sprite>(path);
-        if (sprite != null && sprite != SpriteSet.Empty)
-            return sprite;
-
-        sprite = NpcInfo.GetIcon(path);
-        if (sprite != null && sprite != SpriteSet.Empty)
-            return sprite;
-
-        return null;
     }
 
     private StoryCommand GetCurrentChoiceCommand()
     {
         int index = Mathf.Clamp(commandIndex - 1, 0, story?.commands.Count - 1 ?? 0);
         return story == null || story.commands.Count == 0 ? null : story.commands[index];
-    }
-
-    private bool EvaluateCondition(ConditionGroupDocument group)
-    {
-        if (group == null)
-            return true;
-
-        bool useAnd = !string.Equals(group.operatorType, "OR", StringComparison.OrdinalIgnoreCase);
-        List<bool> results = new List<bool>();
-        foreach (StoryConditionDocument condition in group.conditions ?? Array.Empty<StoryConditionDocument>())
-            results.Add(EvaluateCondition(condition));
-
-        if (results.Count == 0)
-            return true;
-
-        return useAnd ? results.All(x => x) : results.Any(x => x);
-    }
-
-    private bool EvaluateCondition(StoryConditionDocument condition)
-    {
-        if (condition == null || string.IsNullOrWhiteSpace(condition.type))
-            return false;
-
-        switch (condition.type.Trim().ToLower())
-        {
-            case "choiceselected":
-                return story.choiceHistory.Any(x =>
-                    (string.IsNullOrEmpty(condition.commandId) || x.commandId == condition.commandId) &&
-                    (string.IsNullOrEmpty(condition.choiceId) || x.choiceId == condition.choiceId) &&
-                    (string.IsNullOrEmpty(condition.optionId) || x.optionId == condition.optionId));
-            case "choicesequencematched":
-                string[] sequence = condition.optionSequence ?? Array.Empty<string>();
-                if (sequence.Length == 0 || story.choiceHistory.Count < sequence.Length)
-                    return false;
-
-                int start = story.choiceHistory.Count - sequence.Length;
-                return sequence.Select((optionId, index) => optionId == story.choiceHistory[start + index].optionId).All(x => x);
-            case "missionstate":
-                Mission mission = Mission.Find(condition.missionId);
-                if (mission == null)
-                    return false;
-
-                return string.Equals(condition.missionState, "complete", StringComparison.OrdinalIgnoreCase)
-                    ? mission.isDone
-                    : !mission.isDone;
-            case "storyflag":
-                return false;
-            default:
-                return false;
-        }
     }
 
     private Image CreateImage(string name, Transform parent, Vector2 anchorMin, Vector2 anchorMax, Vector2 pivot, Vector2 anchoredPosition, Vector2 sizeDelta, Color color)
@@ -1094,25 +575,4 @@ public class StoryPanel : Panel
         return fallback;
     }
 
-    private class StoryActorRuntime
-    {
-        public StoryActorDocument document;
-        public Image image;
-        public CanvasGroup canvasGroup;
-        public Coroutine fadeCoroutine;
-        public int order;
-        public StorySceneActorLayoutDocument placement;
-    }
-
-    private class StoryLayoutRuntime
-    {
-        public string autoLayoutMode;
-        public float actorSpacing;
-        public float actorHeight;
-        public float actorBottom;
-        public float centerGap;
-        public float stackOffset;
-
-        public bool isBottomAligned => autoLayoutMode == "bottomAligned";
-    }
 }
