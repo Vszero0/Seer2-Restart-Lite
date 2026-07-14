@@ -193,13 +193,13 @@ public class WorkshopStoryNodeEditorPanel : Panel
 
         CreateText("Scene Group", editorActions, "场景", 13, TextAnchor.MiddleLeft, Cyan,
             new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(10f, -5f), new Vector2(34f, 20f));
-        sceneDropdown = CreateDropdown(editorActions, new Vector2(46f, -3f), new Vector2(154f, 25f), OnSceneDropdownChanged);
+        sceneDropdown = CreateDropdown(editorActions, new Vector2(46f, -3f), new Vector2(90f, 25f), OnSceneDropdownChanged);
         sceneDropdownValueText = CreateSelectorValueText(sceneDropdown);
-        CreateToolbarButton(editorActions, "新建", new Vector2(208f, -3f), new Vector2(58f, 25f), OpenCreateScenePicker, false);
-        CreateToolbarButton(editorActions, "删除", new Vector2(274f, -3f), new Vector2(58f, 25f), RemoveActiveScene, false);
-        CreateToolbarButton(editorActions, "更换背景", new Vector2(340f, -3f), new Vector2(82f, 25f), OpenChangeSceneMapPicker, false);
+        CreateToolbarButton(editorActions, "新建", new Vector2(144f, -3f), new Vector2(58f, 25f), OpenCreateScenePicker, false);
+        CreateToolbarButton(editorActions, "删除", new Vector2(210f, -3f), new Vector2(58f, 25f), RemoveActiveScene, false);
+        CreateToolbarButton(editorActions, "更换背景", new Vector2(276f, -3f), new Vector2(82f, 25f), OpenChangeSceneMapPicker, false);
         sceneStateText = CreateText("Scene State", editorActions, string.Empty, 12, TextAnchor.MiddleLeft, Color.white,
-            new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(430f, -5f), new Vector2(164f, 20f));
+            new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(366f, -5f), new Vector2(228f, 20f));
 
         CreateText("Actor Group", editorActions, "角色", 13, TextAnchor.MiddleLeft, Cyan,
             new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(10f, -33f), new Vector2(34f, 20f));
@@ -215,14 +215,16 @@ public class WorkshopStoryNodeEditorPanel : Panel
 
         CreateText("Content Group", editorActions, "内容", 13, TextAnchor.MiddleLeft, Cyan,
             new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(10f, -61f), new Vector2(34f, 20f));
-        sceneContentDropdown = CreateDropdown(editorActions, new Vector2(46f, -59f), new Vector2(190f, 25f), OnSceneContentDropdownChanged);
+        sceneContentDropdown = CreateDropdown(editorActions, new Vector2(46f, -59f), new Vector2(200f, 25f), OnSceneContentDropdownChanged);
         sceneContentDropdownValueText = CreateSelectorValueText(sceneContentDropdown);
-        CreateToolbarButton(editorActions, "+旁白", new Vector2(244f, -59f), new Vector2(58f, 25f), CreateNarration, false);
-        CreateToolbarButton(editorActions, "+对白", new Vector2(310f, -59f), new Vector2(58f, 25f), OpenSayActorPicker, false);
-        CreateToolbarButton(editorActions, "删除内容", new Vector2(376f, -59f), new Vector2(70f, 25f), RemoveActiveSceneContent, false);
-        dirtyStateText = CreateText("Dirty State", editorActions, string.Empty, 12, TextAnchor.MiddleRight,
+        CreateToolbarButton(editorActions, "+旁白", new Vector2(254f, -59f), new Vector2(54f, 25f), CreateNarration, false);
+        CreateToolbarButton(editorActions, "+对白", new Vector2(316f, -59f), new Vector2(54f, 25f), OpenSayActorPicker, false);
+        CreateToolbarButton(editorActions, "上移", new Vector2(378f, -59f), new Vector2(42f, 25f), () => MoveActiveSceneContent(false), false);
+        CreateToolbarButton(editorActions, "下移", new Vector2(428f, -59f), new Vector2(42f, 25f), () => MoveActiveSceneContent(true), false);
+        CreateToolbarButton(editorActions, "删除", new Vector2(478f, -59f), new Vector2(60f, 25f), RemoveActiveSceneContent, false);
+        dirtyStateText = CreateText("Dirty State", editorActions, string.Empty, 12, TextAnchor.MiddleCenter,
             new Color32(255, 230, 92, 255), new Vector2(0f, 1f), new Vector2(0f, 1f),
-            new Vector2(454f, -61f), new Vector2(138f, 20f));
+            new Vector2(546f, -61f), new Vector2(78f, 20f));
         toolbar.SetAsLastSibling();
         editorActions.SetAsLastSibling();
     }
@@ -260,7 +262,7 @@ public class WorkshopStoryNodeEditorPanel : Panel
             ?? sections.FirstOrDefault(section => section?.scene != null)?.scene;
         activeSceneId = activeScene?.id;
         if (sceneStateText != null)
-            sceneStateText.text = activeScene == null ? "请先通过“地图资源”添加地图" : "当前地图：" + activeScene.mapId;
+            sceneStateText.text = GetSceneMapLabel(activeScene);
         RefreshSceneSelectors(node, activeScene);
         RefreshSceneActorSelector(activeScene);
         RefreshLayoutModeLabel(activeScene);
@@ -756,8 +758,7 @@ public class WorkshopStoryNodeEditorPanel : Panel
             if (sceneDropdown != null)
             {
                 sceneDropdown.ClearOptions();
-                sceneDropdown.AddOptions(sections.Select((section, index) => "场景 " + (index + 1) + " · 地图 "
-                    + section.scene.mapId + " · " + section.contentCount + " 条内容").ToList());
+                sceneDropdown.AddOptions(sections.Select((section, index) => "场景 " + (index + 1)).ToList());
                 sceneDropdown.value = Mathf.Max(0, scenes.FindIndex(scene => scene.id == activeScene?.id));
                 sceneDropdown.RefreshShownValue();
                 sceneDropdown.interactable = scenes.Count > 0;
@@ -854,9 +855,39 @@ public class WorkshopStoryNodeEditorPanel : Panel
     {
         string type = string.Equals(command?.type, "say", StringComparison.OrdinalIgnoreCase) ? "对白" : "旁白";
         string preview = (command?.text ?? string.Empty).Replace('\n', ' ').Trim();
-        if (preview.Length > 18)
-            preview = preview.Substring(0, 18) + "…";
-        return (index + 1) + ". " + type + " · " + (string.IsNullOrEmpty(preview) ? "未填写" : preview);
+        if (preview.Length > 5)
+            preview = preview.Substring(0, 5) + "...";
+        return (index + 1).ToString("00") + "｜" + type + "｜" + (string.IsNullOrEmpty(preview) ? "未填写" : preview);
+    }
+
+    private string GetSceneMapLabel(StorySceneDocument scene)
+    {
+        if (scene == null)
+            return "请先新建场景并选择地图";
+
+        WorkshopStoryPointResourceOption map = controller.GetSelectedMapOptions()
+            .FirstOrDefault(option => option != null && option.id == scene.mapId);
+        string mapName = string.IsNullOrWhiteSpace(map?.name) ? "未命名地图" : map.name;
+        if (mapName.Length > 8)
+            mapName = mapName.Substring(0, 8) + "…";
+        return "当前地图：" + scene.mapId + "｜" + mapName;
+    }
+
+    private void MoveActiveSceneContent(bool moveDown)
+    {
+        if (activeDialogueCommand == null)
+        {
+            Hintbox.OpenHintboxWithContent("请先选择要调整的旁白或对白。", 16);
+            return;
+        }
+
+        if (!controller.MoveSceneTextCommand(activeSceneId, activeDialogueCommand.commandId, moveDown, out string error))
+        {
+            Hintbox.OpenHintboxWithContent(error, 16);
+            return;
+        }
+
+        RefreshCanvas();
     }
 
     private void SetActiveActorSide(string side)

@@ -385,6 +385,61 @@ public sealed class WorkshopStoryNodeEditorModel
         return true;
     }
 
+    public bool MoveSceneTextCommand(string sceneId, string commandId, bool moveDown, out string error)
+    {
+        if (DraftNode?.commands == null || string.IsNullOrWhiteSpace(sceneId) || string.IsNullOrWhiteSpace(commandId))
+        {
+            error = "没有可调整顺序的剧情内容。";
+            return false;
+        }
+
+        WorkshopStorySceneSection section = GetSceneSections()
+            .FirstOrDefault(value => value?.scene != null && string.Equals(value.scene.id, sceneId, StringComparison.OrdinalIgnoreCase));
+        if (section == null)
+        {
+            error = "当前场景无效。";
+            return false;
+        }
+
+        int currentIndex = -1;
+        for (int index = section.commandStartIndex + 1; index < section.commandEndIndex; index++)
+        {
+            StoryCommandDocument command = DraftNode.commands[index];
+            if (command != null && string.Equals(command.commandId, commandId, StringComparison.OrdinalIgnoreCase))
+            {
+                currentIndex = index;
+                break;
+            }
+        }
+
+        if (currentIndex < 0 || !IsSceneTextCommand(DraftNode.commands[currentIndex]))
+        {
+            error = "找不到要调整的旁白或对白。";
+            return false;
+        }
+
+        int step = moveDown ? 1 : -1;
+        int targetIndex = currentIndex + step;
+        while (targetIndex > section.commandStartIndex && targetIndex < section.commandEndIndex
+            && !IsSceneTextCommand(DraftNode.commands[targetIndex]))
+        {
+            targetIndex += step;
+        }
+
+        if (targetIndex <= section.commandStartIndex || targetIndex >= section.commandEndIndex)
+        {
+            error = moveDown ? "该内容已经位于当前场景末尾。" : "该内容已经位于当前场景开头。";
+            return false;
+        }
+
+        StoryCommandDocument current = DraftNode.commands[currentIndex];
+        DraftNode.commands[currentIndex] = DraftNode.commands[targetIndex];
+        DraftNode.commands[targetIndex] = current;
+        HasUnsavedChanges = true;
+        error = string.Empty;
+        return true;
+    }
+
     public bool RemoveScene(string sceneId, bool removeSectionContent, out string error)
     {
         StorySceneDocument scene = DraftNode?.GetScene(sceneId);
@@ -1013,6 +1068,12 @@ public sealed class WorkshopStoryNodeEditorModel
             for (int index = 0; index < layouts.Count; index++)
                 layouts[index].order = index;
         }
+    }
+
+    private static bool IsSceneTextCommand(StoryCommandDocument command)
+    {
+        return command != null && (string.Equals(command.type, "say", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(command.type, "narrate", StringComparison.OrdinalIgnoreCase));
     }
 
     private static void EnsurePointResources(StoryDocument document)

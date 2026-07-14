@@ -97,6 +97,11 @@ public sealed class WorkshopStoryNodeEditorController
         return model.RemoveSceneTextCommand(sceneId, commandId, out error);
     }
 
+    public bool MoveSceneTextCommand(string sceneId, string commandId, bool moveDown, out string error)
+    {
+        return model.MoveSceneTextCommand(sceneId, commandId, moveDown, out error);
+    }
+
     public bool SetSceneMap(string sceneId, int mapId, out string error)
     {
         return model.SetSceneMap(sceneId, mapId, out error);
