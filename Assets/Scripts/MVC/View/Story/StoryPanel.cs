@@ -15,12 +15,17 @@ public class StoryPanel : Panel
     private StoryScript story;
     private StoryActorStage actorStage;
     private string pendingStoryId;
+    private StoryScript pendingPreviewStory;
+    private string pendingPreviewStartNodeId;
+    private Action previewClosedCallback;
     private int fallbackMapId;
     private int commandIndex;
+    private int sceneVisualRequestVersion;
     private int sceneMusicRequestVersion;
     private bool isBuilt;
     private bool isClosing;
     private bool waitingForChoice;
+    private bool isPreviewMode;
 
     private Image sceneImage;
     private RectTransform actorLayer;
@@ -60,18 +65,59 @@ public class StoryPanel : Panel
         return StoryDocumentLoader.CanOpen(storyId, out error);
     }
 
+    /// <summary>
+    /// 用真实播放器预览内存中的剧情草稿；不写入文件，也不要求草稿通过发布校验。
+    /// </summary>
+    public static StoryPanel OpenPreview(StoryDocument document, string startNodeId, Action onClosed = null)
+    {
+        if (document == null)
+            return null;
+
+        GameObject canvas = GameObject.Find("Canvas");
+        if (canvas == null)
+            return null;
+
+        GameObject obj = new GameObject("Story Preview Panel", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image), typeof(Button), typeof(StoryPanel));
+        obj.transform.SetParent(canvas.transform, false);
+        obj.transform.SetAsLastSibling();
+
+        RectTransform rect = obj.GetComponent<RectTransform>();
+        rect.anchorMin = Vector2.zero;
+        rect.anchorMax = Vector2.one;
+        rect.offsetMin = Vector2.zero;
+        rect.offsetMax = Vector2.zero;
+
+        Image image = obj.GetComponent<Image>();
+        image.color = new Color(0, 0, 0, 0);
+        image.raycastTarget = true;
+
+        Button button = obj.GetComponent<Button>();
+        button.transition = Selectable.Transition.None;
+
+        StoryPanel panel = obj.GetComponent<StoryPanel>();
+        panel.pendingPreviewStory = document.ToScript();
+        panel.pendingPreviewStartNodeId = startNodeId;
+        panel.previewClosedCallback = onClosed;
+        panel.isPreviewMode = true;
+        return panel;
+    }
+
     public override void Init()
     {
         base.Init();
         BuildUI();
         isBuilt = true;
 
-        if (!string.IsNullOrEmpty(pendingStoryId))
+        if (pendingPreviewStory != null)
+            LoadRuntimeStory(pendingPreviewStory, pendingPreviewStartNodeId);
+        else if (!string.IsNullOrEmpty(pendingStoryId))
             LoadStory(pendingStoryId, fallbackMapId);
     }
 
     public override void ClosePanel()
     {
+        Action onPreviewClosed = previewClosedCallback;
+        previewClosedCallback = null;
         ClearDialogHandlers();
         actorStage?.Clear();
         DialogManager.instance?.CloseDialog();
@@ -79,10 +125,12 @@ public class StoryPanel : Panel
             Destroy(exitButton);
 
         base.ClosePanel();
+        onPreviewClosed?.Invoke();
     }
 
     public void OpenStory(string storyId, int fallbackMapId = 0)
     {
+        isPreviewMode = false;
         pendingStoryId = storyId;
         this.fallbackMapId = fallbackMapId;
 
@@ -120,7 +168,19 @@ public class StoryPanel : Panel
             return;
         }
 
-        commandIndex = 0;
+        LoadRuntimeStory(story, null);
+    }
+
+    private void LoadRuntimeStory(StoryScript runtimeStory, string startNodeId)
+    {
+        story = runtimeStory;
+        if (story == null)
+            return;
+
+        int startIndex = !string.IsNullOrWhiteSpace(startNodeId)
+            ? story.GetLabelIndex(startNodeId)
+            : 0;
+        commandIndex = Mathf.Max(0, startIndex);
         isClosing = false;
         waitingForChoice = false;
         actorStage.Reset(story.layout);
@@ -181,6 +241,8 @@ public class StoryPanel : Panel
                     ExecuteMission(command.args);
                     continue;
                 case StoryCommandType.Teleport:
+                    if (isPreviewMode)
+                        continue;
                     Teleport(command.args);
                     return;
                 case StoryCommandType.End:
@@ -194,8 +256,10 @@ public class StoryPanel : Panel
 
     private void ApplyScene(StoryCommand command)
     {
-        SetScene(StoryCommandArguments.GetValue(command.args, "bg", command.args));
+        SetScene(StoryCommandArguments.GetValue(command.args, "bg", command.args), command.mapId);
         actorStage.ApplyScene(command.actorLayouts, command.layout);
+        foreach (StoryActorDocument actor in command.sceneActors ?? Array.Empty<StoryActorDocument>())
+            actorStage.Show(actor);
         PlaySceneMusic(command.mapId, command.bgmResourcePath, ++sceneMusicRequestVersion);
     }
 
@@ -206,7 +270,7 @@ public class StoryPanel : Panel
 
         if (string.IsNullOrWhiteSpace(resourcePath))
         {
-            if (mapId <= 0)
+            if (mapId == 0)
                 return;
 
             Map.GetMap(mapId, map =>
@@ -240,18 +304,46 @@ public class StoryPanel : Panel
                 : null);
     }
 
-    private void SetScene(string path)
+    private void SetScene(string path, int mapId = 0)
     {
+        int requestVersion = ++sceneVisualRequestVersion;
         Sprite sprite = StorySpriteResolver.Load(path, story?.GetResourceSource(path));
-        if (sprite == null && path.TryTrimStart("Maps/bg/", out string mapIdText) && int.TryParse(mapIdText, out int mapId))
+        if (sprite != null)
         {
-            Map map = Map.GetMap(mapId);
-            if (map != null && map.resId != 0 && map.resId != mapId)
-            {
-                string fallbackPath = "Maps/bg/" + map.resId;
-                sprite = StorySpriteResolver.Load(fallbackPath, story?.GetResourceSource(fallbackPath));
-            }
+            ApplySceneSprite(sprite);
+            return;
         }
+
+        if (mapId == 0 && path.TryTrimStart("Maps/bg/", out string mapIdText))
+            int.TryParse(mapIdText, out mapId);
+
+        if (mapId == 0)
+        {
+            ApplySceneSprite(null);
+            return;
+        }
+
+        ApplySceneSprite(null);
+        Map.GetMap(mapId, map =>
+        {
+            if (requestVersion != sceneVisualRequestVersion)
+                return;
+
+            Sprite mapSprite = map?.resources?.bg;
+            if (mapSprite == null)
+            {
+                int resourceId = map?.resId != 0 ? map.resId : mapId;
+                string fallbackPath = "Maps/bg/" + resourceId;
+                mapSprite = StorySpriteResolver.Load(fallbackPath, story?.GetResourceSource(fallbackPath));
+            }
+            ApplySceneSprite(mapSprite);
+        }, _ => { });
+    }
+
+    private void ApplySceneSprite(Sprite sprite)
+    {
+        if (sceneImage == null)
+            return;
 
         sceneImage.sprite = sprite;
         sceneImage.color = sprite == null ? new Color32(8, 11, 18, 255) : Color.white;
@@ -391,6 +483,9 @@ public class StoryPanel : Panel
 
     private void ExecuteMission(string args)
     {
+        if (isPreviewMode)
+            return;
+
         string[] tokens = StoryCommandArguments.Split(args);
         if (tokens.Length < 2 || !int.TryParse(tokens[0], out int missionId))
             return;
@@ -525,8 +620,14 @@ public class StoryPanel : Panel
         textRect.offsetMax = Vector2.zero;
 
         TextMeshProUGUI text = textObj.GetComponent<TextMeshProUGUI>();
+        TMP_FontAsset storyFont = StoryTextFontProvider.GetDefaultFont();
         TMP_Text textSample = FindTextSample();
-        if (textSample != null && textSample.font != null)
+        if (storyFont != null)
+        {
+            text.font = storyFont;
+            text.fontSharedMaterial = storyFont.material;
+        }
+        else if (textSample != null && textSample.font != null)
         {
             text.font = textSample.font;
             text.fontSharedMaterial = textSample.fontSharedMaterial;

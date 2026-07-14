@@ -4,6 +4,7 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
+using UnityEngine.TextCore.LowLevel;
 using TMPro;
 
 public class DialogView : Module
@@ -156,6 +157,9 @@ public class DialogView : Module
         if (!string.IsNullOrEmpty(style?.font))
             font = Resources.Load<TMP_FontAsset>(style.font);
 
+        if (font == null)
+            font = StoryTextFontProvider.GetDefaultFont();
+
         if (font != null)
         {
             content.text.font = font;
@@ -178,6 +182,16 @@ public class DialogView : Module
         content.text.outlineWidth = style == null
             ? 0f
             : Mathf.Clamp(style.outlineWidth, 0f, 0.1f);
+
+        if (storySpeakerText != null)
+        {
+            storySpeakerText.font = content.text.font;
+            storySpeakerText.fontSharedMaterial = content.text.fontSharedMaterial;
+            storySpeakerText.fontSize = content.text.fontSize;
+            storySpeakerText.fontStyle = content.text.fontStyle;
+        }
+
+        DialogManager.instance?.SetStoryChoiceFont(content.text.font, content.text.fontSharedMaterial);
     }
 
     private static Color ParseStoryColor(string value, Color fallback)
@@ -226,7 +240,6 @@ public class DialogView : Module
 
         storySpeakerText.gameObject.SetActive(hasSpeaker);
         storySpeakerText.text = speakerText;
-        storySpeakerText.fontStyle = FontStyles.Bold;
         storySpeakerText.color = isActiveSpeaker ? new Color32(255, 230, 92, 255) : new Color32(185, 190, 196, 255);
 
         contentRect.anchorMin = defaultContentAnchorMin;
@@ -538,4 +551,40 @@ public class DialogView : Module
         }
     }
 
+}
+
+/// <summary>
+/// Creates the story default TMP font from the same dynamic Zongyi font used by the project's UI.
+/// The checked-in Zongyi SDF atlas is a fixed 17-point atlas and becomes visibly soft at story body sizes.
+/// </summary>
+public static class StoryTextFontProvider
+{
+    private const string LegacyZongyiFontPath = "Fonts/Zongyi";
+    private const string FallbackFontPath = "Fonts/MSJH SDF";
+    private static TMP_FontAsset defaultFont;
+    private static bool hasAttemptedCreation;
+
+    public static TMP_FontAsset GetDefaultFont()
+    {
+        if (defaultFont != null)
+            return defaultFont;
+        if (hasAttemptedCreation)
+            return Resources.Load<TMP_FontAsset>(FallbackFontPath);
+
+        hasAttemptedCreation = true;
+        Font sourceFont = Resources.Load<Font>(LegacyZongyiFontPath);
+        if (sourceFont != null)
+        {
+            defaultFont = TMP_FontAsset.CreateFontAsset(sourceFont, 90, 8, GlyphRenderMode.SDFAA,
+                2048, 2048, AtlasPopulationMode.Dynamic, true);
+            if (defaultFont != null)
+            {
+                defaultFont.name = "Zongyi Story Runtime SDF";
+                if (defaultFont.material != null)
+                    defaultFont.material.name = "Zongyi Story Runtime Material";
+            }
+        }
+
+        return defaultFont ?? Resources.Load<TMP_FontAsset>(FallbackFontPath);
+    }
 }

@@ -174,12 +174,44 @@ public sealed class StoryActorStage
         Image image = obj.GetComponent<Image>();
         image.raycastTarget = false;
         image.preserveAspect = true;
-        image.sprite = StorySpriteResolver.Load(actor.displaySprite, getResourceSource?.Invoke(actor.displaySprite));
+        image.sprite = ResolveActorSprite(actor);
         image.gameObject.SetActive(image.sprite != null);
 
         CanvasGroup canvasGroup = image.gameObject.AddComponent<CanvasGroup>();
         canvasGroup.alpha = 0f;
         return image;
+    }
+
+    private Sprite ResolveActorSprite(StoryActorDocument actor)
+    {
+        Sprite sprite = StorySpriteResolver.Load(actor.displaySprite, getResourceSource?.Invoke(actor.displaySprite));
+        if (sprite != null && sprite != SpriteSet.Empty)
+            return sprite;
+
+        // 精灵立绘不能只依赖故事文本中的路径。宠物数据本身已经封装了
+        // 本体 / Mod 与默认皮肤的取图规则；路径资源尚未同步可用时，以它为准。
+        if (string.Equals(actor.actorType, "pet", StringComparison.OrdinalIgnoreCase))
+        {
+            int petId = GetPetSkinId(actor);
+            sprite = petId == 0 ? null : PetUISystem.GetPetIdleImage(petId);
+            if (sprite != null && sprite != SpriteSet.Empty)
+                return sprite;
+        }
+
+        // 舞台只能显示立绘；头像是对话栏专用资源，不能作为立绘回退，
+        // 否则会出现“部分角色是头像、部分角色是立绘”的混杂效果。
+        return null;
+    }
+
+    private static int GetPetSkinId(StoryActorDocument actor)
+    {
+        string path = StorySpriteResolver.Normalize(actor?.displaySprite);
+        const string prefix = "Pets/pet/";
+        if (!string.IsNullOrWhiteSpace(path) && path.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)
+            && int.TryParse(path.Substring(prefix.Length), out int skinId))
+            return skinId;
+
+        return int.TryParse(actor?.petId, out int petId) ? petId : 0;
     }
 
     private void PlayActorFade(StoryActorRuntime runtime)

@@ -34,6 +34,7 @@ public class StoryCommand
     public string speaker;
     public string text;
     public StoryActorDocument actorInfo;
+    public StoryActorDocument[] sceneActors;
     public StoryLayoutDocument layout;
     public StorySceneActorLayoutDocument[] actorLayouts;
     public int mapId;

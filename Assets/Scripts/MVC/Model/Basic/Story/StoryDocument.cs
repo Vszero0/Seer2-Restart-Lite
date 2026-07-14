@@ -18,6 +18,12 @@ public class StoryActorReferenceDocument
 }
 
 [Serializable]
+public class StoryMapReferenceDocument
+{
+    public int mapId;
+}
+
+[Serializable]
 public class StorySceneDocument
 {
     public string id;
@@ -250,6 +256,7 @@ public class StoryNodeDocument
 {
     public string id;
     public string displayName;
+    public StoryMapReferenceDocument[] mapReferences;
     public StoryActorReferenceDocument[] actorReferences;
     public StorySceneDocument[] scenes;
     public StoryTextStyleDocument style;
@@ -301,15 +308,20 @@ public class StoryCommandDocument
             case "scene":
                 command.type = StoryCommandType.Scene;
                 StorySceneDocument scene = node?.GetScene(sceneId);
-                command.mapId = scene?.mapId > 0 ? scene.mapId : mapId;
+                command.mapId = scene != null && scene.mapId != 0 ? scene.mapId : mapId;
                 command.bgmResourcePath = string.IsNullOrEmpty(scene?.bgmResourcePath)
                     ? bgmResourcePath
                     : scene.bgmResourcePath;
                 command.args = string.IsNullOrEmpty(bg)
-                    ? (command.mapId > 0 ? "Maps/bg/" + command.mapId : args)
+                    ? (command.mapId != 0 ? "Maps/bg/" + command.mapId : args)
                     : bg;
                 command.layout = scene?.layout ?? GetSceneLayout();
                 command.actorLayouts = scene?.actors;
+                command.sceneActors = (scene?.actors ?? Array.Empty<StorySceneActorLayoutDocument>())
+                    .Where(layout => layout != null && !string.IsNullOrWhiteSpace(layout.actorId))
+                    .Select(layout => document?.GetActor(layout.actorId))
+                    .Where(actorDocument => actorDocument != null)
+                    .ToArray();
                 return command;
             case "show":
                 command.type = StoryCommandType.Show;

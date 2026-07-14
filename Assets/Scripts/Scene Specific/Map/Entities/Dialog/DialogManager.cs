@@ -31,6 +31,8 @@ public class DialogManager : Manager<DialogManager>
     private RectTransform storyTextBar;
     private RectTransform storyChoiceRoot;
     private TMP_Text storyDialogTextSample;
+    private TMP_FontAsset storyChoiceFont;
+    private Material storyChoiceFontMaterial;
 
     protected override void Awake()
     {
@@ -40,6 +42,8 @@ public class DialogManager : Manager<DialogManager>
         storyDialogBackground = FindStoryDialogBackground();
         storyTextBar = FindChildRect(dialogStoryLayer, "Text Bar");
         storyDialogTextSample = FindStoryDialogTextSample();
+        storyChoiceFont = storyDialogTextSample?.font;
+        storyChoiceFontMaterial = storyDialogTextSample?.fontSharedMaterial;
         EnsureStoryDialogTextBackground();
         if (storyDialogBackground != null)
         {
@@ -188,6 +192,23 @@ public class DialogManager : Manager<DialogManager>
         }
 
         RefreshStoryOverlayLayering();
+    }
+
+    public void SetStoryChoiceFont(TMP_FontAsset font, Material material)
+    {
+        if (font == null)
+            return;
+
+        storyChoiceFont = font;
+        storyChoiceFontMaterial = material ?? font.material;
+        if (storyChoiceRoot == null)
+            return;
+
+        foreach (TextMeshProUGUI text in storyChoiceRoot.GetComponentsInChildren<TextMeshProUGUI>(true))
+        {
+            text.font = storyChoiceFont;
+            text.fontSharedMaterial = storyChoiceFontMaterial;
+        }
     }
 
     public void ClearStoryChoices() {
@@ -492,7 +513,12 @@ public class DialogManager : Manager<DialogManager>
         textRect.anchoredPosition = new Vector2(18f, 0f);
 
         TextMeshProUGUI text = textObj.GetComponent<TextMeshProUGUI>();
-        if (storyDialogTextSample != null && storyDialogTextSample.font != null)
+        if (storyChoiceFont != null)
+        {
+            text.font = storyChoiceFont;
+            text.fontSharedMaterial = storyChoiceFontMaterial ?? storyChoiceFont.material;
+        }
+        else if (storyDialogTextSample != null && storyDialogTextSample.font != null)
         {
             text.font = storyDialogTextSample.font;
             text.fontSharedMaterial = storyDialogTextSample.fontSharedMaterial;

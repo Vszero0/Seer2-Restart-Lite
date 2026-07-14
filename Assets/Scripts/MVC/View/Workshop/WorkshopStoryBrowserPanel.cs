@@ -19,10 +19,14 @@ public class WorkshopStoryBrowserPanel : Panel
 
     private RectTransform storyContent;
     private RectTransform nodeContent;
-    private Text storyInfoText;
+    private Text storyStatusText;
     private Font font;
     private GameObject listButtonPrefab;
     private GameObject actionButtonPrefab;
+    private GameObject petNameInputFieldPrefab;
+    private GameObject petDescriptionInputFieldPrefab;
+    private IInputField storyTitleInput;
+    private IInputField storySummaryInput;
     private Image projectFrameImage;
     private Outline projectFrameOutline;
     private bool hasBuilt;
@@ -37,6 +41,7 @@ public class WorkshopStoryBrowserPanel : Panel
         font = ResourceManager.instance.GetFont("Zongyi");
         listButtonPrefab = Resources.Load<GameObject>("Prefabs/Scroll List Button");
         actionButtonPrefab = FindWorkshopActionButtonPrefab();
+        FindWorkshopPetInputFieldPrefabs();
         background = GetComponent<Image>();
         BuildLayout();
         Reload();
@@ -64,15 +69,22 @@ public class WorkshopStoryBrowserPanel : Panel
         CreateActionButton(storySection, "删除", new Vector2(124f, -50f), new Vector2(96f, 28f), DeleteStory);
         storyContent = CreateScrollContent(storySection, new Vector2(14f, 14f), new Vector2(-14f, -86f));
 
-        CreateActionButton(infoSection, "保存", new Vector2(-16f, -50f), new Vector2(96f, 28f), SaveStory, TextAnchor.UpperRight);
-        storyInfoText = CreateText("Story Info", infoSection, string.Empty, 16, TextAnchor.UpperLeft, HintColor,
-            new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(18f, -50f), new Vector2(480f, 52f));
-        storyInfoText.horizontalOverflow = HorizontalWrapMode.Wrap;
-        storyInfoText.verticalOverflow = VerticalWrapMode.Overflow;
+        CreateText("Title Label", infoSection, "标题：", 15, TextAnchor.MiddleLeft, Cyan,
+            new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(18f, -50f), new Vector2(52f, 26f));
+        storyTitleInput = CreateInputField(petNameInputFieldPrefab, infoSection, "Story Title Input", "剧本标题", "未命名剧本",
+            new Vector2(70f, -50f), new Vector2(230f, 26f), OnStoryTitleEdited);
+        storyStatusText = CreateText("Story Status", infoSection, string.Empty, 13, TextAnchor.MiddleCenter, HintColor,
+            new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(312f, -50f), new Vector2(118f, 26f));
+        CreateText("Summary Label", infoSection, "简介：", 15, TextAnchor.MiddleLeft, Cyan,
+            new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(18f, -84f), new Vector2(52f, 26f));
+        storySummaryInput = CreateInputField(petDescriptionInputFieldPrefab, infoSection, "Story Summary Input", "剧本简介", "暂无简介",
+            new Vector2(70f, -84f), new Vector2(360f, 26f), OnStorySummaryEdited);
+        CreateActionButton(infoSection, "保存", new Vector2(-16f, -84f), new Vector2(96f, 26f), SaveStory, TextAnchor.UpperRight);
 
         CreateActionButton(nodeSection, "新建", new Vector2(16f, -50f), new Vector2(94f, 28f), CreateNode);
         CreateActionButton(nodeSection, "删除", new Vector2(120f, -50f), new Vector2(94f, 28f), DeleteNode);
         CreateActionButton(nodeSection, "设为入口", new Vector2(224f, -50f), new Vector2(116f, 28f), SetEntryNode);
+        CreateActionButton(nodeSection, "编辑剧情点", new Vector2(352f, -50f), new Vector2(132f, 28f), OpenNodeEditor);
         nodeContent = CreateScrollContent(nodeSection, new Vector2(14f, 14f), new Vector2(-14f, -86f));
     }
 
@@ -205,11 +217,11 @@ public class WorkshopStoryBrowserPanel : Panel
         return content;
     }
 
-    private void CreateActionButton(RectTransform parent, string label, Vector2 position, Vector2 dimensions, Action callback,
+    private IButton CreateActionButton(RectTransform parent, string label, Vector2 position, Vector2 dimensions, Action callback,
         TextAnchor horizontalAnchor = TextAnchor.UpperLeft)
     {
         if (actionButtonPrefab == null)
-            return;
+            return null;
 
         GameObject item = Instantiate(actionButtonPrefab, parent);
         item.name = label + " Button";
@@ -236,6 +248,34 @@ public class WorkshopStoryBrowserPanel : Panel
         Text text = item.GetComponentInChildren<Text>();
         text.raycastTarget = false;
         text.text = label;
+        return button;
+    }
+
+    private IInputField CreateInputField(GameObject sourcePrefab, RectTransform parent, string name, string placeholder, string initialValue,
+        Vector2 position, Vector2 dimensions, Action<string> onEndEdit)
+    {
+        if (sourcePrefab == null)
+            return null;
+
+        GameObject item = Instantiate(sourcePrefab, parent);
+        item.name = name;
+        RectTransform rect = item.GetComponent<RectTransform>();
+        rect.anchorMin = new Vector2(0f, 1f);
+        rect.anchorMax = new Vector2(0f, 1f);
+        rect.pivot = new Vector2(0f, 1f);
+        rect.anchoredPosition = position;
+        rect.sizeDelta = dimensions;
+
+        IInputField input = item.GetComponent<IInputField>();
+        InputField nativeInput = item.GetComponent<InputField>();
+        if (nativeInput == null)
+            return input;
+
+        nativeInput.onEndEdit = new InputField.EndEditEvent();
+        nativeInput.onEndEdit.AddListener(onEndEdit.Invoke);
+        input?.SetPlaceHolderText(placeholder);
+        input?.SetInputString(initialValue);
+        return input;
     }
 
     private void Reload()
@@ -294,10 +334,53 @@ public class WorkshopStoryBrowserPanel : Panel
         RefreshView();
     }
 
+    private void OpenNodeEditor()
+    {
+        if (controller.SelectedStory == null || controller.SelectedNode == null)
+        {
+            Hintbox.OpenHintboxWithContent("请先选择要编辑的剧情点。", 16);
+            return;
+        }
+
+        WorkshopStoryNodeEditorPanel.Open(controller.SelectedStory.path, controller.SelectedNode.id);
+    }
+
     private void SelectNode(string nodeId)
     {
         controller.SelectNode(nodeId);
         RefreshNodes();
+    }
+
+    private void OnStoryTitleEdited(string title)
+    {
+        StoryDocument document = controller.SelectedDocument;
+        if (document == null)
+            return;
+
+        if (!controller.UpdateSelectedStoryMetadata(title, document.summary, document.replayable, out string error)
+            && !string.IsNullOrEmpty(error))
+        {
+            Hintbox.OpenHintboxWithContent(error, 16);
+            return;
+        }
+
+        RefreshStoryInfo();
+    }
+
+    private void OnStorySummaryEdited(string summary)
+    {
+        StoryDocument document = controller.SelectedDocument;
+        if (document == null)
+            return;
+
+        if (!controller.UpdateSelectedStoryMetadata(document.title, summary, document.replayable, out string error)
+            && !string.IsNullOrEmpty(error))
+        {
+            Hintbox.OpenHintboxWithContent(error, 16);
+            return;
+        }
+
+        RefreshStoryInfo();
     }
 
     private void RefreshView()
@@ -326,22 +409,24 @@ public class WorkshopStoryBrowserPanel : Panel
 
     private void RefreshStoryInfo()
     {
-        if (storyInfoText == null)
+        if (storyStatusText == null)
             return;
 
         StoryDocument document = controller.SelectedDocument;
         if (document == null)
         {
-            storyInfoText.text = "请选择左侧剧本查看信息。";
+            SetInputFieldValue(storyTitleInput, string.Empty, false);
+            SetInputFieldValue(storySummaryInput, string.Empty, false);
+            storyStatusText.text = string.Empty;
             return;
         }
 
         string status = document.isDraft ? "草稿" : "已发布";
-        string description = string.IsNullOrWhiteSpace(document.summary) ? "暂无简介" : document.summary;
         int nodeCount = (document.nodes ?? Array.Empty<StoryNodeDocument>()).Count(node => node != null);
-        storyInfoText.text = "标题：" + document.title + "    状态：" + status + "    剧情点：" + nodeCount
-            + "\n简介：" + description;
-        storyInfoText.color = document.isDraft ? HintColor : WarningColor;
+        SetInputFieldValue(storyTitleInput, document.title, true);
+        SetInputFieldValue(storySummaryInput, document.summary, true);
+        storyStatusText.text = "状态：" + status + "\n剧情点：" + nodeCount;
+        storyStatusText.color = document.isDraft ? HintColor : WarningColor;
     }
 
     private void RefreshNodes()
@@ -354,8 +439,11 @@ public class WorkshopStoryBrowserPanel : Panel
             if (node == null)
                 continue;
 
+            string displayName = string.IsNullOrWhiteSpace(node.displayName) ? node.id : node.displayName;
+            int sceneCount = (node.scenes ?? Array.Empty<StorySceneDocument>()).Count(scene => scene != null);
+            int commandCount = (node.commands ?? Array.Empty<StoryCommandDocument>()).Count(command => command != null);
             string label = (node.id == controller.SelectedDocument.entry ? "入口 · " : string.Empty)
-                + (string.IsNullOrWhiteSpace(node.displayName) ? node.id : node.displayName);
+                + displayName + "    场景 " + sceneCount + " / 命令 " + commandCount;
             string nodeId = node.id;
             CreateListButton(nodeContent, label, node == controller.SelectedNode, index++, () => SelectNode(nodeId));
         }
@@ -364,6 +452,20 @@ public class WorkshopStoryBrowserPanel : Panel
             CreateHint(nodeContent, controller.SelectedDocument == null ? "请选择剧本。" : "当前剧本没有剧情点。");
         else
             nodeContent.sizeDelta = new Vector2(0f, 12f + index * 42f);
+    }
+
+    private void SetInputFieldValue(IInputField input, string value, bool interactable)
+    {
+        if (input == null)
+            return;
+
+        input.gameObject.SetActive(interactable);
+        InputField nativeInput = input.GetComponent<InputField>();
+        if (nativeInput != null)
+        {
+            nativeInput.interactable = interactable;
+            input.SetInputString(value ?? string.Empty);
+        }
     }
 
     private void CreateListButton(RectTransform parent, string label, bool selected, int index, Action callback)
@@ -381,8 +483,16 @@ public class WorkshopStoryBrowserPanel : Panel
         rect.sizeDelta = new Vector2(0f, 36f);
 
         IButton button = item.GetComponent<IButton>();
-        button.onPointerClickEvent.SetListener(callback.Invoke);
+        button.onPointerClickEvent = new UnityEngine.Events.UnityEvent();
+        button.onPointerEnterEvent = new UnityEngine.Events.UnityEvent();
+        button.onPointerExitEvent = new UnityEngine.Events.UnityEvent();
+        button.onPointerClickEvent.AddListener(callback.Invoke);
         ConfigureListButtonVisual(button, selected);
+
+        GameObject focusFrame = CreateListFocusFrame(item.transform);
+        focusFrame.SetActive(selected);
+        button.onPointerEnterEvent.AddListener(() => focusFrame.SetActive(true));
+        button.onPointerExitEvent.AddListener(() => focusFrame.SetActive(selected));
 
         Text text = item.GetComponentInChildren<Text>();
         text.font = font;
@@ -400,12 +510,51 @@ public class WorkshopStoryBrowserPanel : Panel
         button.button.transition = Selectable.Transition.ColorTint;
 
         ColorBlock colors = button.button.colors;
-        colors.normalColor = selected ? Color.white : new Color(.86f, .93f, .96f, 1f);
+        colors.normalColor = Color.white;
         colors.highlightedColor = Color.white;
         colors.pressedColor = new Color(.72f, .82f, .88f, 1f);
         colors.selectedColor = Color.white;
         colors.fadeDuration = .08f;
         button.button.colors = colors;
+    }
+
+    private static GameObject CreateListFocusFrame(Transform parent)
+    {
+        GameObject frame = new GameObject("Focus Frame", typeof(RectTransform));
+        frame.transform.SetParent(parent, false);
+        RectTransform rect = frame.GetComponent<RectTransform>();
+        rect.anchorMin = Vector2.zero;
+        rect.anchorMax = Vector2.one;
+        rect.offsetMin = new Vector2(2f, 2f);
+        rect.offsetMax = new Vector2(-2f, -2f);
+
+        Color glowColor = new Color(Cyan.r, Cyan.g, Cyan.b, .28f);
+        CreateFocusEdge(frame.transform, "Glow Top", new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(0f, -3f), Vector2.zero, glowColor);
+        CreateFocusEdge(frame.transform, "Glow Bottom", Vector2.zero, new Vector2(1f, 0f), Vector2.zero, new Vector2(0f, 3f), glowColor);
+        CreateFocusEdge(frame.transform, "Glow Left", Vector2.zero, new Vector2(0f, 1f), Vector2.zero, new Vector2(3f, 0f), glowColor);
+        CreateFocusEdge(frame.transform, "Glow Right", new Vector2(1f, 0f), Vector2.one, new Vector2(-3f, 0f), Vector2.zero, glowColor);
+
+        CreateFocusEdge(frame.transform, "Top", new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(0f, -1f), Vector2.zero, Cyan);
+        CreateFocusEdge(frame.transform, "Bottom", Vector2.zero, new Vector2(1f, 0f), Vector2.zero, new Vector2(0f, 1f), Cyan);
+        CreateFocusEdge(frame.transform, "Left", Vector2.zero, new Vector2(0f, 1f), Vector2.zero, new Vector2(1f, 0f), Cyan);
+        CreateFocusEdge(frame.transform, "Right", new Vector2(1f, 0f), Vector2.one, new Vector2(-1f, 0f), Vector2.zero, Cyan);
+        return frame;
+    }
+
+    private static void CreateFocusEdge(Transform parent, string name, Vector2 anchorMin, Vector2 anchorMax,
+        Vector2 offsetMin, Vector2 offsetMax, Color color)
+    {
+        GameObject edge = new GameObject(name, typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));
+        edge.transform.SetParent(parent, false);
+        RectTransform rect = edge.GetComponent<RectTransform>();
+        rect.anchorMin = anchorMin;
+        rect.anchorMax = anchorMax;
+        rect.offsetMin = offsetMin;
+        rect.offsetMax = offsetMax;
+
+        Image image = edge.GetComponent<Image>();
+        image.color = color;
+        image.raycastTarget = false;
     }
 
     private void CreateHint(RectTransform parent, string value)
@@ -454,6 +603,21 @@ public class WorkshopStoryBrowserPanel : Panel
         IButton button = workshopPanel.GetComponentsInChildren<IButton>(true)
             .FirstOrDefault(value => value.GetComponentInChildren<Text>(true)?.text == "导出 mod");
         return button?.gameObject;
+    }
+
+    private void FindWorkshopPetInputFieldPrefabs()
+    {
+        GameObject workshopPanel = ResourceManager.instance.GetPanel("Workshop");
+        if (workshopPanel == null)
+            return;
+
+        IInputField[] inputs = workshopPanel.GetComponentsInChildren<IInputField>(true);
+        petNameInputFieldPrefab = inputs
+            .FirstOrDefault(value => value.placeHolderText != null && value.placeHolderText.text == "输入名字")
+            ?.gameObject;
+        petDescriptionInputFieldPrefab = inputs
+            .FirstOrDefault(value => value.placeHolderText != null && value.placeHolderText.text == "输入叙述")
+            ?.gameObject;
     }
 
     private void ApplyProjectFrame(Image target)
