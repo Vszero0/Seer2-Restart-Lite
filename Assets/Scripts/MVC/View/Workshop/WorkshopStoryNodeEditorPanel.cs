@@ -48,6 +48,7 @@ public class WorkshopStoryNodeEditorPanel : Panel
     private Text sceneDropdownValueText;
     private Text sceneActorDropdownValueText;
     private Text sceneContentDropdownValueText;
+    private Text layoutModeButtonText;
     private string activeSceneActorId;
     private bool isUpdatingSceneSelectors;
     private TextMeshProUGUI sourceDialogueText;
@@ -202,13 +203,15 @@ public class WorkshopStoryNodeEditorPanel : Panel
 
         CreateText("Actor Group", editorActions, "角色", 13, TextAnchor.MiddleLeft, Cyan,
             new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(10f, -33f), new Vector2(34f, 20f));
-        sceneActorDropdown = CreateDropdown(editorActions, new Vector2(46f, -31f), new Vector2(118f, 25f), OnSceneActorDropdownChanged);
+        sceneActorDropdown = CreateDropdown(editorActions, new Vector2(46f, -31f), new Vector2(90f, 25f), OnSceneActorDropdownChanged);
         sceneActorDropdownValueText = CreateSelectorValueText(sceneActorDropdown);
-        CreateToolbarButton(editorActions, "添加精灵", new Vector2(172f, -31f), new Vector2(76f, 25f), OpenPetPicker, false);
-        CreateToolbarButton(editorActions, "移除", new Vector2(256f, -31f), new Vector2(58f, 25f), RemoveActiveSceneActor, false);
-        CreateToolbarButton(editorActions, "左侧", new Vector2(322f, -31f), new Vector2(54f, 25f), () => SetActiveActorSide("left"), false);
-        CreateToolbarButton(editorActions, "右侧", new Vector2(384f, -31f), new Vector2(54f, 25f), () => SetActiveActorSide("right"), false);
-        CreateToolbarButton(editorActions, "自动布局", new Vector2(446f, -31f), new Vector2(76f, 25f), ResetActiveSceneActorLayout, false);
+        CreateToolbarButton(editorActions, "添加精灵", new Vector2(144f, -31f), new Vector2(65f, 25f), OpenPetPicker, false);
+        CreateToolbarButton(editorActions, "移除", new Vector2(217f, -31f), new Vector2(50f, 25f), RemoveActiveSceneActor, false);
+        CreateToolbarButton(editorActions, "放左", new Vector2(275f, -31f), new Vector2(48f, 25f), () => SetActiveActorSide("left"), false);
+        CreateToolbarButton(editorActions, "放右", new Vector2(331f, -31f), new Vector2(48f, 25f), () => SetActiveActorSide("right"), false);
+        CreateToolbarButton(editorActions, "靠内", new Vector2(387f, -31f), new Vector2(48f, 25f), () => MoveActiveActorDepth(false), false);
+        CreateToolbarButton(editorActions, "靠外", new Vector2(443f, -31f), new Vector2(48f, 25f), () => MoveActiveActorDepth(true), false);
+        layoutModeButtonText = CreateToolbarButton(editorActions, "布局", new Vector2(499f, -31f), new Vector2(95f, 25f), ToggleAutoLayoutMode, false);
 
         CreateText("Content Group", editorActions, "内容", 13, TextAnchor.MiddleLeft, Cyan,
             new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(10f, -61f), new Vector2(34f, 20f));
@@ -260,6 +263,7 @@ public class WorkshopStoryNodeEditorPanel : Panel
             sceneStateText.text = activeScene == null ? "请先通过“地图资源”添加地图" : "当前地图：" + activeScene.mapId;
         RefreshSceneSelectors(node, activeScene);
         RefreshSceneActorSelector(activeScene);
+        RefreshLayoutModeLabel(activeScene);
 
         StoryCommandDocument[] textCommands = controller.GetSceneCommands(activeSceneId)
             .Where(command => command != null
@@ -377,7 +381,11 @@ public class WorkshopStoryNodeEditorPanel : Panel
         if (scene == null)
             return string.Empty;
 
-        return scene.id + "|" + string.Join(";", (scene.actors ?? Array.Empty<StorySceneActorLayoutDocument>())
+        StoryLayoutDocument layout = scene.layout;
+        string layoutSignature = string.Join(",", layout?.autoLayoutMode ?? string.Empty,
+            layout?.actorSpacing ?? 0f, layout?.actorHeight ?? 0f, layout?.actorBottom ?? 0f,
+            layout?.centerGap ?? 0f, layout?.stackOffset ?? 0f);
+        return scene.id + "|" + layoutSignature + "|" + string.Join(";", (scene.actors ?? Array.Empty<StorySceneActorLayoutDocument>())
             .Where(layout => layout != null)
             .Select(layout => string.Join(",", layout.actorId, layout.placementMode, layout.side,
                 layout.order, layout.x, layout.y, layout.scale, layout.faceLeft, layout.flipIcon)));
@@ -867,6 +875,41 @@ public class WorkshopStoryNodeEditorPanel : Panel
         RefreshCanvas();
     }
 
+    private void MoveActiveActorDepth(bool outward)
+    {
+        if (string.IsNullOrWhiteSpace(activeSceneActorId))
+        {
+            Hintbox.OpenHintboxWithContent("请先选择一个场景角色。", 16);
+            return;
+        }
+
+        if (!controller.MoveSceneActorDepth(activeSceneId, activeSceneActorId, outward, out string error))
+        {
+            Hintbox.OpenHintboxWithContent(error, 16);
+            return;
+        }
+        RefreshCanvas();
+    }
+
+    private void ToggleAutoLayoutMode()
+    {
+        if (!controller.ToggleSceneAutoLayoutMode(activeSceneId, out string error))
+        {
+            Hintbox.OpenHintboxWithContent(error, 16);
+            return;
+        }
+        RefreshCanvas();
+    }
+
+    private void RefreshLayoutModeLabel(StorySceneDocument scene)
+    {
+        if (layoutModeButtonText == null)
+            return;
+
+        bool isBottomAligned = string.Equals(scene?.layout?.autoLayoutMode, "bottomAligned", StringComparison.OrdinalIgnoreCase);
+        layoutModeButtonText.text = isBottomAligned ? "底边对齐" : "倒V布局";
+    }
+
     private void ResetActiveSceneActorLayout()
     {
         if (string.IsNullOrWhiteSpace(activeSceneId))
@@ -931,11 +974,11 @@ public class WorkshopStoryNodeEditorPanel : Panel
         editorActions?.SetAsLastSibling();
     }
 
-    private void CreateToolbarButton(Transform parent, string label, Vector2 position, Vector2 dimensions, Action callback,
+    private Text CreateToolbarButton(Transform parent, string label, Vector2 position, Vector2 dimensions, Action callback,
         bool anchorRight)
     {
         if (actionButtonPrefab == null)
-            return;
+            return null;
 
         GameObject item = Instantiate(actionButtonPrefab, parent);
         item.name = label + " Button";
@@ -960,6 +1003,7 @@ public class WorkshopStoryNodeEditorPanel : Panel
             text.text = label;
             text.raycastTarget = false;
         }
+        return text;
     }
 
     private Dropdown CreateDropdown(Transform parent, Vector2 position, Vector2 dimensions, UnityAction<int> onChanged)

@@ -137,6 +137,16 @@ public sealed class WorkshopStoryNodeEditorController
         return model.ResetSceneActorLayout(sceneId, out error);
     }
 
+    public bool MoveSceneActorDepth(string sceneId, string actorId, bool outward, out string error)
+    {
+        return model.MoveSceneActorDepth(sceneId, actorId, outward, out error);
+    }
+
+    public bool ToggleSceneAutoLayoutMode(string sceneId, out string error)
+    {
+        return model.ToggleSceneAutoLayoutMode(sceneId, out error);
+    }
+
     public List<WorkshopStoryPointActorOption> GetCurrentActorOptions()
     {
         return model.GetCurrentActorOptions();

@@ -540,10 +540,10 @@ public sealed class WorkshopStoryNodeEditorModel
         if (placement == null)
         {
             StorySceneActorLayoutDocument[] layouts = scene.actors ?? Array.Empty<StorySceneActorLayoutDocument>();
-            int leftCount = layouts.Count(value => value != null && value.normalizedSide == "left");
-            int rightCount = layouts.Count(value => value != null && value.normalizedSide == "right");
+            int leftCount = layouts.Count(value => value != null && value.normalizedPlacementMode == "auto" && value.normalizedSide == "left");
+            int rightCount = layouts.Count(value => value != null && value.normalizedPlacementMode == "auto" && value.normalizedSide == "right");
             string side = leftCount <= rightCount ? "left" : "right";
-            int order = layouts.Count(value => value != null && value.normalizedSide == side);
+            int order = layouts.Count(value => value != null && value.normalizedPlacementMode == "auto" && value.normalizedSide == side);
             bool faceLeft = side == "right";
             placement = new StorySceneActorLayoutDocument
             {
@@ -556,9 +556,9 @@ public sealed class WorkshopStoryNodeEditorModel
                 flipIcon = side == "right",
             };
             scene.actors = layouts.Append(placement).ToArray();
+            NormalizeAutoLayoutOrders(scene);
         }
 
-        EnsureOpeningShowCommand(scene.id, selectedActorId);
         HasUnsavedChanges = true;
         error = string.Empty;
         return true;
@@ -700,15 +700,21 @@ public sealed class WorkshopStoryNodeEditorModel
         }
 
         string normalizedSide = string.Equals(side, "right", StringComparison.OrdinalIgnoreCase) ? "right" : "left";
+        if (layout.normalizedSide == normalizedSide && layout.normalizedPlacementMode == "auto")
+        {
+            error = string.Empty;
+            return true;
+        }
+
         int order = (scene.actors ?? Array.Empty<StorySceneActorLayoutDocument>())
-            .Where(value => value != null && !string.Equals(value.actorId, actorId, StringComparison.OrdinalIgnoreCase)
-                && value.normalizedPlacementMode == "auto" && value.normalizedSide == normalizedSide)
-            .Count();
+            .Count(value => value != null && !string.Equals(value.actorId, actorId, StringComparison.OrdinalIgnoreCase)
+                && value.normalizedPlacementMode == "auto" && value.normalizedSide == normalizedSide);
         layout.placementMode = "auto";
         layout.side = normalizedSide;
         layout.order = order;
         layout.faceLeft = normalizedSide == "right";
         layout.flipIcon = normalizedSide == "right";
+        NormalizeAutoLayoutOrders(scene);
         HasUnsavedChanges = true;
         error = string.Empty;
         return true;
@@ -738,6 +744,60 @@ public sealed class WorkshopStoryNodeEditorModel
             layout.flipIcon = !useLeft;
         }
 
+        HasUnsavedChanges = true;
+        error = string.Empty;
+        return true;
+    }
+
+    public bool MoveSceneActorDepth(string sceneId, string actorId, bool outward, out string error)
+    {
+        StorySceneDocument scene = DraftNode?.GetScene(sceneId);
+        StorySceneActorLayoutDocument layout = scene?.GetActorLayout(actorId);
+        if (scene == null || layout == null || layout.normalizedPlacementMode != "auto")
+        {
+            error = "请先将该角色加入当前场景的自动布局。";
+            return false;
+        }
+
+        List<StorySceneActorLayoutDocument> sideLayouts = (scene.actors ?? Array.Empty<StorySceneActorLayoutDocument>())
+            .Where(value => value != null && value.normalizedPlacementMode == "auto"
+                && value.normalizedSide == layout.normalizedSide)
+            .OrderBy(value => value.order)
+            .ThenBy(value => value.actorId, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        int currentIndex = sideLayouts.IndexOf(layout);
+        int targetIndex = currentIndex + (outward ? 1 : -1);
+        if (targetIndex < 0 || targetIndex >= sideLayouts.Count)
+        {
+            error = outward ? "该角色已经位于本侧最外层。" : "该角色已经位于本侧最内层。";
+            return false;
+        }
+
+        StorySceneActorLayoutDocument other = sideLayouts[targetIndex];
+        sideLayouts[targetIndex] = layout;
+        sideLayouts[currentIndex] = other;
+        for (int index = 0; index < sideLayouts.Count; index++)
+            sideLayouts[index].order = index;
+
+        HasUnsavedChanges = true;
+        error = string.Empty;
+        return true;
+    }
+
+    public bool ToggleSceneAutoLayoutMode(string sceneId, out string error)
+    {
+        StorySceneDocument scene = DraftNode?.GetScene(sceneId);
+        if (scene == null)
+        {
+            error = "当前场景无效。";
+            return false;
+        }
+
+        if (scene.layout == null)
+            scene.layout = new StoryLayoutDocument();
+        scene.layout.autoLayoutMode = string.Equals(scene.layout.autoLayoutMode, "bottomAligned", StringComparison.OrdinalIgnoreCase)
+            ? "invertedV"
+            : "bottomAligned";
         HasUnsavedChanges = true;
         error = string.Empty;
         return true;
@@ -923,8 +983,8 @@ public sealed class WorkshopStoryNodeEditorModel
     private static StorySceneActorLayoutDocument CreateDefaultActorLayout(StorySceneDocument scene, string actorId)
     {
         StorySceneActorLayoutDocument[] layouts = scene.actors ?? Array.Empty<StorySceneActorLayoutDocument>();
-        int leftCount = layouts.Count(value => value != null && value.normalizedSide == "left");
-        int rightCount = layouts.Count(value => value != null && value.normalizedSide == "right");
+        int leftCount = layouts.Count(value => value != null && value.normalizedPlacementMode == "auto" && value.normalizedSide == "left");
+        int rightCount = layouts.Count(value => value != null && value.normalizedPlacementMode == "auto" && value.normalizedSide == "right");
         string side = leftCount <= rightCount ? "left" : "right";
         return new StorySceneActorLayoutDocument
         {
@@ -936,6 +996,23 @@ public sealed class WorkshopStoryNodeEditorModel
             faceLeft = side == "right",
             flipIcon = side == "right",
         };
+    }
+
+    private static void NormalizeAutoLayoutOrders(StorySceneDocument scene)
+    {
+        if (scene?.actors == null)
+            return;
+
+        foreach (string side in new[] { "left", "right" })
+        {
+            List<StorySceneActorLayoutDocument> layouts = scene.actors
+                .Where(value => value != null && value.normalizedPlacementMode == "auto" && value.normalizedSide == side)
+                .OrderBy(value => value.order)
+                .ThenBy(value => value.actorId, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+            for (int index = 0; index < layouts.Count; index++)
+                layouts[index].order = index;
+        }
     }
 
     private static void EnsurePointResources(StoryDocument document)
@@ -1042,30 +1119,4 @@ public sealed class WorkshopStoryNodeEditorModel
         DraftNode.commands = commands.ToArray();
     }
 
-    private void EnsureOpeningShowCommand(string sceneId, string actorId)
-    {
-        List<StoryCommandDocument> commands = (DraftNode.commands ?? Array.Empty<StoryCommandDocument>()).ToList();
-        int sceneIndex = commands.FindIndex(command => command != null
-            && string.Equals(command.type, "scene", StringComparison.OrdinalIgnoreCase)
-            && string.Equals(command.sceneId, sceneId, StringComparison.OrdinalIgnoreCase));
-        if (sceneIndex < 0)
-        {
-            return;
-        }
-
-        int insertIndex = sceneIndex + 1;
-        while (insertIndex < commands.Count && string.Equals(commands[insertIndex]?.type, "show", StringComparison.OrdinalIgnoreCase))
-        {
-            if (string.Equals(commands[insertIndex].actor, actorId, StringComparison.OrdinalIgnoreCase))
-                return;
-            insertIndex++;
-        }
-        commands.Insert(insertIndex, new StoryCommandDocument
-        {
-            commandId = CreateCommandId(),
-            type = "show",
-            actor = actorId,
-        });
-        DraftNode.commands = commands.ToArray();
-    }
 }

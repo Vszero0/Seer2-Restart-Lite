@@ -262,16 +262,18 @@ public sealed class StoryActorStage
             .ThenBy(x => x.order)
             .ToList();
 
-        int maxOrder = sideActors.Count == 0 ? 0 : sideActors.Max(x => x.placement.order);
+        int actorCount = sideActors.Count;
         foreach (StoryActorRuntime runtime in sideActors)
         {
             RectTransform rect = runtime.image.rectTransform;
             bool isRight = side == "right";
             int visualIndex = Mathf.Max(0, runtime.placement.order);
-            float yOffset = activeLayout.isBottomAligned ? 0f : (maxOrder - visualIndex) * activeLayout.stackOffset;
+            float yOffset = activeLayout.isBottomAligned ? 0f : (actorCount - 1 - visualIndex) * activeLayout.stackOffset;
             float scale = Mathf.Max(.1f, runtime.placement.scale);
             Vector2 originalSize = StoryActorPlacementCalculator.GetSpriteSize(runtime.image.sprite, activeLayout.actorHeight);
-            float sideOffset = activeLayout.centerGap + visualIndex * activeLayout.actorSpacing;
+            float regionCenter = activeLayout.centerGap + activeLayout.actorSpacing;
+            float centeredOffset = (visualIndex - (actorCount - 1) * .5f) * activeLayout.actorSpacing;
+            float sideOffset = regionCenter + centeredOffset;
 
             rect.anchorMin = new Vector2(.5f, 0f);
             rect.anchorMax = rect.anchorMin;

@@ -168,11 +168,26 @@ public class StoryDocument
             if (node.commands == null)
                 continue;
 
+            bool isSceneOpening = false;
             for (int commandIndex = 0; commandIndex < node.commands.Length; commandIndex++)
             {
                 StoryCommand parsed = node.commands[commandIndex]?.ToCommand(this, node);
                 if (parsed != null)
                 {
+                    if (parsed.type == StoryCommandType.Scene)
+                    {
+                        isSceneOpening = true;
+                    }
+                    else if (parsed.type == StoryCommandType.Show && isSceneOpening)
+                    {
+                        // 场景命令已按场景角色表完成首次显示；跳过旧草稿自动生成的冗余 show。
+                        continue;
+                    }
+                    else
+                    {
+                        isSceneOpening = false;
+                    }
+
                     if (string.IsNullOrEmpty(parsed.commandId))
                         parsed.commandId = node.id + ":" + commandIndex;
                     script.commands.Add(parsed);
