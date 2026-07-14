@@ -212,13 +212,14 @@ public class WorkshopStoryNodeEditorPanel : Panel
 
         CreateText("Content Group", editorActions, "内容", 13, TextAnchor.MiddleLeft, Cyan,
             new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(10f, -61f), new Vector2(34f, 20f));
-        sceneContentDropdown = CreateDropdown(editorActions, new Vector2(46f, -59f), new Vector2(248f, 25f), OnSceneContentDropdownChanged);
+        sceneContentDropdown = CreateDropdown(editorActions, new Vector2(46f, -59f), new Vector2(190f, 25f), OnSceneContentDropdownChanged);
         sceneContentDropdownValueText = CreateSelectorValueText(sceneContentDropdown);
-        CreateToolbarButton(editorActions, "+旁白", new Vector2(302f, -59f), new Vector2(62f, 25f), CreateNarration, false);
-        CreateToolbarButton(editorActions, "+对白", new Vector2(372f, -59f), new Vector2(62f, 25f), OpenSayActorPicker, false);
+        CreateToolbarButton(editorActions, "+旁白", new Vector2(244f, -59f), new Vector2(58f, 25f), CreateNarration, false);
+        CreateToolbarButton(editorActions, "+对白", new Vector2(310f, -59f), new Vector2(58f, 25f), OpenSayActorPicker, false);
+        CreateToolbarButton(editorActions, "删除内容", new Vector2(376f, -59f), new Vector2(70f, 25f), RemoveActiveSceneContent, false);
         dirtyStateText = CreateText("Dirty State", editorActions, string.Empty, 12, TextAnchor.MiddleRight,
             new Color32(255, 230, 92, 255), new Vector2(0f, 1f), new Vector2(0f, 1f),
-            new Vector2(442f, -61f), new Vector2(150f, 20f));
+            new Vector2(454f, -61f), new Vector2(138f, 20f));
         toolbar.SetAsLastSibling();
         editorActions.SetAsLastSibling();
     }
@@ -635,6 +636,39 @@ public class WorkshopStoryNodeEditorPanel : Panel
 
         RefreshCanvas();
         FocusDialogueInput();
+    }
+
+    private void RemoveActiveSceneContent()
+    {
+        if (activeDialogueCommand == null || string.IsNullOrWhiteSpace(activeDialogueCommand.commandId))
+        {
+            Hintbox.OpenHintboxWithContent("请先在“内容”中选择要删除的旁白或对白。", 16);
+            return;
+        }
+
+        List<StoryCommandDocument> commands = GetTextCommandsForActiveScene();
+        int removedIndex = commands.FindIndex(command => string.Equals(command.commandId,
+            activeDialogueCommand.commandId, StringComparison.OrdinalIgnoreCase));
+        string commandId = activeDialogueCommand.commandId;
+        if (!controller.RemoveSceneTextCommand(activeSceneId, commandId, out string error))
+        {
+            Hintbox.OpenHintboxWithContent(error, 16);
+            return;
+        }
+
+        List<StoryCommandDocument> remaining = GetTextCommandsForActiveScene();
+        activeDialogueCommand = remaining.Count == 0
+            ? null
+            : remaining[Mathf.Clamp(removedIndex - 1, 0, remaining.Count - 1)];
+        RefreshCanvas();
+    }
+
+    private List<StoryCommandDocument> GetTextCommandsForActiveScene()
+    {
+        return controller.GetSceneCommands(activeSceneId)
+            .Where(command => command != null && (string.Equals(command.type, "say", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(command.type, "narrate", StringComparison.OrdinalIgnoreCase)))
+            .ToList();
     }
 
     private void OpenSayActorPicker()

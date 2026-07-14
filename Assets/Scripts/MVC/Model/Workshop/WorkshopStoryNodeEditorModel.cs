@@ -336,6 +336,55 @@ public sealed class WorkshopStoryNodeEditorModel
             .ToList();
     }
 
+    public bool RemoveSceneTextCommand(string sceneId, string commandId, out string error)
+    {
+        if (DraftNode?.commands == null || string.IsNullOrWhiteSpace(sceneId) || string.IsNullOrWhiteSpace(commandId))
+        {
+            error = "没有可删除的剧情内容。";
+            return false;
+        }
+
+        WorkshopStorySceneSection section = GetSceneSections()
+            .FirstOrDefault(value => value?.scene != null && string.Equals(value.scene.id, sceneId, StringComparison.OrdinalIgnoreCase));
+        if (section == null)
+        {
+            error = "当前场景无效。";
+            return false;
+        }
+
+        int commandIndex = -1;
+        for (int index = section.commandStartIndex + 1; index < section.commandEndIndex; index++)
+        {
+            StoryCommandDocument command = DraftNode.commands[index];
+            if (command != null && string.Equals(command.commandId, commandId, StringComparison.OrdinalIgnoreCase))
+            {
+                commandIndex = index;
+                break;
+            }
+        }
+
+        if (commandIndex < 0)
+        {
+            error = "找不到要删除的剧情内容。";
+            return false;
+        }
+
+        StoryCommandDocument target = DraftNode.commands[commandIndex];
+        if (!string.Equals(target.type, "say", StringComparison.OrdinalIgnoreCase)
+            && !string.Equals(target.type, "narrate", StringComparison.OrdinalIgnoreCase))
+        {
+            error = "这里只能删除对白或旁白。";
+            return false;
+        }
+
+        List<StoryCommandDocument> commands = DraftNode.commands.ToList();
+        commands.RemoveAt(commandIndex);
+        DraftNode.commands = commands.ToArray();
+        HasUnsavedChanges = true;
+        error = string.Empty;
+        return true;
+    }
+
     public bool RemoveScene(string sceneId, bool removeSectionContent, out string error)
     {
         StorySceneDocument scene = DraftNode?.GetScene(sceneId);
