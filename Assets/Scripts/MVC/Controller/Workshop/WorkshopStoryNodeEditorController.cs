@@ -102,6 +102,36 @@ public sealed class WorkshopStoryNodeEditorController
         return model.MoveSceneTextCommand(sceneId, commandId, moveDown, out error);
     }
 
+    public bool ConvertSceneContentToChoice(string sceneId, string commandId, out StoryCommandDocument command, out string error)
+    {
+        return model.ConvertSceneContentToChoice(sceneId, commandId, out command, out error);
+    }
+
+    public bool AddChoiceOption(string sceneId, string commandId, out StoryChoiceDocument option, out string error)
+    {
+        return model.AddChoiceOption(sceneId, commandId, out option, out error);
+    }
+
+    public bool RestoreChoiceToSceneContent(string sceneId, string commandId, out StoryCommandDocument command, out string error)
+    {
+        return model.RestoreChoiceToSceneContent(sceneId, commandId, out command, out error);
+    }
+
+    public bool UpdateChoiceOptionText(string sceneId, string commandId, string optionId, string text, out string error)
+    {
+        return model.UpdateChoiceOptionText(sceneId, commandId, optionId, text, out error);
+    }
+
+    public bool MoveChoiceOption(string sceneId, string commandId, string optionId, bool moveDown, out string error)
+    {
+        return model.MoveChoiceOption(sceneId, commandId, optionId, moveDown, out error);
+    }
+
+    public bool RemoveChoiceOption(string sceneId, string commandId, string optionId, out string error)
+    {
+        return model.RemoveChoiceOption(sceneId, commandId, optionId, out error);
+    }
+
     public bool SetSceneMap(string sceneId, int mapId, out string error)
     {
         return model.SetSceneMap(sceneId, mapId, out error);

@@ -33,12 +33,14 @@ public class WorkshopStoryNodeEditorPanel : Panel
     private GameObject dialogueInputPrefab;
     private GameObject dropdownPrefab;
     private RectTransform storyLayer;
+    private RectTransform dialogueTextBar;
     private Image sceneImage;
     private DialogController dialogController;
     private StoryActorStage actorStage;
     private RectTransform actorLayer;
     private RectTransform toolbar;
     private RectTransform editorActions;
+    private RectTransform choiceEditor;
     private Text nodeTitleText;
     private Text dirtyStateText;
     private Text sceneStateText;
@@ -49,6 +51,7 @@ public class WorkshopStoryNodeEditorPanel : Panel
     private Text sceneActorDropdownValueText;
     private Text sceneContentDropdownValueText;
     private Text layoutModeButtonText;
+    private Text restoreChoiceButtonText;
     private string activeSceneActorId;
     private bool isUpdatingSceneSelectors;
     private TextMeshProUGUI sourceDialogueText;
@@ -154,6 +157,7 @@ public class WorkshopStoryNodeEditorPanel : Panel
 
         RectTransform textBar = layer.GetComponentsInChildren<RectTransform>(true)
             .FirstOrDefault(rect => rect.gameObject.name == "Text Bar");
+        dialogueTextBar = textBar;
         if (textBar != null)
         {
             Image textBarBackground = textBar.GetComponent<Image>() ?? textBar.gameObject.AddComponent<Image>();
@@ -185,7 +189,7 @@ public class WorkshopStoryNodeEditorPanel : Panel
             new Vector2(.5f, 1f), new Vector2(.5f, 1f), new Vector2(0f, -8f), new Vector2(420f, 28f));
 
         editorActions = CreateRect("Story Editor Console", transform, new Vector2(0f, 1f), new Vector2(0f, 1f),
-            new Vector2(14f, -58f), new Vector2(604f, 100f));
+            new Vector2(14f, -58f), new Vector2(604f, 128f));
         editorActions.pivot = new Vector2(0f, 1f);
         Image consoleBackground = editorActions.gameObject.AddComponent<Image>();
         consoleBackground.color = new Color(0f, 0f, 0f, .76f);
@@ -225,6 +229,10 @@ public class WorkshopStoryNodeEditorPanel : Panel
         dirtyStateText = CreateText("Dirty State", editorActions, string.Empty, 12, TextAnchor.MiddleCenter,
             new Color32(255, 230, 92, 255), new Vector2(0f, 1f), new Vector2(0f, 1f),
             new Vector2(546f, -61f), new Vector2(78f, 20f));
+        CreateToolbarButton(editorActions, "+选项", new Vector2(46f, -87f), new Vector2(60f, 25f), ConvertActiveContentToChoice, false);
+        restoreChoiceButtonText = CreateToolbarButton(editorActions, "还原内容", new Vector2(114f, -87f), new Vector2(76f, 25f),
+            RestoreActiveChoiceToContent, false);
+        BuildChoiceEditor();
         toolbar.SetAsLastSibling();
         editorActions.SetAsLastSibling();
     }
@@ -244,6 +252,188 @@ public class WorkshopStoryNodeEditorPanel : Panel
         renderedActorSignature = null;
         renderedMusicSignature = null;
         RefreshCanvas();
+    }
+
+    private void BuildChoiceEditor()
+    {
+        choiceEditor = CreateRect("Story Choice Editor", storyLayer, new Vector2(1f, 0f), new Vector2(1f, 0f),
+            new Vector2(-90f, 160f), new Vector2(420f, 0f));
+        choiceEditor.pivot = new Vector2(1f, 0f);
+        Image background = choiceEditor.gameObject.AddComponent<Image>();
+        background.color = new Color32(0, 0, 0, 166);
+        background.raycastTarget = false;
+        choiceEditor.gameObject.SetActive(false);
+    }
+
+    private void PlaceChoiceEditor()
+    {
+        if (choiceEditor == null)
+            return;
+
+        StorySceneDocument scene = controller.DraftNode?.GetScene(activeSceneId);
+        StorySceneActorLayoutDocument placement = scene?.GetActorLayout(activeDialogueCommand?.actor);
+        bool placeOnLeft = placement != null && string.Equals(placement.normalizedSide, "right", StringComparison.OrdinalIgnoreCase);
+        float anchorX = placeOnLeft ? 0f : 1f;
+
+        choiceEditor.anchorMin = new Vector2(anchorX, 0f);
+        choiceEditor.anchorMax = new Vector2(anchorX, 0f);
+        choiceEditor.pivot = new Vector2(anchorX, 0f);
+        choiceEditor.anchoredPosition = new Vector2(placeOnLeft ? 90f : -90f, GetChoiceEditorBottomOffset());
+    }
+
+    private float GetChoiceEditorBottomOffset()
+    {
+        const float fallbackOffset = 160f;
+        const float margin = 16f;
+        if (dialogueTextBar == null || storyLayer == null)
+            return fallbackOffset;
+
+        Vector3[] corners = new Vector3[4];
+        dialogueTextBar.GetWorldCorners(corners);
+        float dialogueTop = storyLayer.InverseTransformPoint(corners[1]).y;
+        return Mathf.Max(fallbackOffset, dialogueTop - storyLayer.rect.yMin + margin);
+    }
+
+    private void RefreshChoiceEditor()
+    {
+        if (choiceEditor == null)
+            return;
+
+        foreach (Transform child in choiceEditor)
+            Destroy(child.gameObject);
+
+        bool isChoice = activeDialogueCommand != null
+            && string.Equals(activeDialogueCommand.type, "choice", StringComparison.OrdinalIgnoreCase);
+        if (restoreChoiceButtonText != null)
+            restoreChoiceButtonText.transform.parent.gameObject.SetActive(isChoice);
+        choiceEditor.gameObject.SetActive(isChoice);
+        if (!isChoice)
+            return;
+
+        List<StoryChoiceDocument> options = (activeDialogueCommand.choices ?? Array.Empty<StoryChoiceDocument>())
+            .Where(option => option != null).ToList();
+        PlaceChoiceEditor();
+        choiceEditor.sizeDelta = new Vector2(380f, 43f + options.Count * 50f);
+        CreateText("Choice Editor Title", choiceEditor, "选项 · 编辑", 14, TextAnchor.MiddleLeft, Cyan,
+            new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(72f, -4f), new Vector2(116f, 30f));
+        CreateToolbarButton(choiceEditor, "添加选项", new Vector2(-8f, -4f), new Vector2(82f, 28f), AddChoiceOption, true);
+
+        for (int index = 0; index < options.Count; index++)
+            CreateChoiceOptionRow(options[index], index);
+    }
+
+    private void CreateChoiceOptionRow(StoryChoiceDocument option, int index)
+    {
+        if (option == null || dialogueInputPrefab == null)
+            return;
+
+        // Keep the 380-wide option bar at the exact player position while the 460-wide editor shade extends 80px left.
+        const float optionOffsetX = 0f;
+        float y = -43f - index * 50f;
+
+        GameObject frameObject = new GameObject("Story Choice Option Frame", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image), typeof(Outline));
+        frameObject.transform.SetParent(choiceEditor, false);
+        RectTransform frameRect = frameObject.GetComponent<RectTransform>();
+        frameRect.anchorMin = new Vector2(0f, 1f);
+        frameRect.anchorMax = new Vector2(0f, 1f);
+        frameRect.pivot = new Vector2(0f, 1f);
+        frameRect.anchoredPosition = new Vector2(optionOffsetX, y);
+        frameRect.sizeDelta = new Vector2(380f, 42f);
+        Image frameImage = frameObject.GetComponent<Image>();
+        frameImage.color = new Color32(0, 18, 24, 176);
+        frameImage.raycastTarget = false;
+        Outline frameOutline = frameObject.GetComponent<Outline>();
+        frameOutline.effectColor = new Color32(44, 227, 255, 96);
+        frameOutline.effectDistance = new Vector2(1.5f, -1.5f);
+
+        GameObject inputObject = Instantiate(dialogueInputPrefab, frameObject.transform);
+        inputObject.name = "Choice Option Input";
+        RectTransform inputRect = inputObject.GetComponent<RectTransform>();
+        inputRect.anchorMin = Vector2.zero;
+        inputRect.anchorMax = Vector2.one;
+        inputRect.offsetMin = new Vector2(0f, 0f);
+        inputRect.offsetMax = Vector2.zero;
+        inputRect.pivot = new Vector2(.5f, .5f);
+        inputRect.anchoredPosition = Vector2.zero;
+
+        IInputField input = inputObject.GetComponent<IInputField>();
+        InputField nativeInput = inputObject.GetComponent<InputField>();
+        if (input == null || nativeInput == null)
+        {
+            Destroy(inputObject);
+            return;
+        }
+
+        nativeInput.onValueChanged = new InputField.OnChangeEvent();
+        nativeInput.onEndEdit = new InputField.EndEditEvent();
+        nativeInput.interactable = true;
+        nativeInput.readOnly = false;
+        nativeInput.characterLimit = 0;
+        if (nativeInput.targetGraphic != null)
+            nativeInput.targetGraphic.raycastTarget = true;
+        nativeInput.lineType = InputField.LineType.SingleLine;
+        nativeInput.SetTextWithoutNotify(option.text ?? string.Empty);
+        nativeInput.onEndEdit.AddListener(value => UpdateChoiceOptionText(option.optionId, value));
+        input.SetPlaceHolderText("选项内容");
+
+        Text inputText = nativeInput.textComponent;
+        if (inputText != null)
+        {
+            inputText.transform.SetParent(inputObject.transform, false);
+            inputText.font = font;
+            inputText.fontSize = 18;
+            inputText.alignment = TextAnchor.MiddleLeft;
+            inputText.color = new Color32(178, 184, 172, 235);
+            inputText.raycastTarget = false;
+            RectTransform textRect = inputText.rectTransform;
+            textRect.anchorMin = new Vector2(0f, .5f);
+            textRect.anchorMax = new Vector2(0f, .5f);
+            textRect.pivot = new Vector2(0f, .5f);
+            textRect.anchoredPosition = new Vector2(18f, 0f);
+            textRect.sizeDelta = new Vector2(342f, 30f);
+        }
+
+        Text placeholder = nativeInput.placeholder as Text;
+        if (placeholder != null)
+        {
+            placeholder.transform.SetParent(inputObject.transform, false);
+            placeholder.font = font;
+            placeholder.fontSize = 18;
+            placeholder.alignment = TextAnchor.MiddleLeft;
+            placeholder.raycastTarget = false;
+            RectTransform placeholderRect = placeholder.rectTransform;
+            placeholderRect.anchorMin = new Vector2(0f, .5f);
+            placeholderRect.anchorMax = new Vector2(0f, .5f);
+            placeholderRect.pivot = new Vector2(0f, .5f);
+            placeholderRect.anchoredPosition = new Vector2(18f, 0f);
+            placeholderRect.sizeDelta = new Vector2(342f, 30f);
+        }
+
+        foreach (Text text in inputObject.GetComponentsInChildren<Text>(true))
+        {
+            text.font = font;
+            text.fontSize = 18;
+            text.alignment = TextAnchor.MiddleLeft;
+            text.raycastTarget = false;
+        }
+
+        Image inputImage = inputObject.GetComponent<Image>();
+        if (inputImage != null)
+        {
+            inputImage.color = Color.clear;
+            inputImage.raycastTarget = true;
+        }
+
+        Outline inputOutline = inputObject.GetComponent<Outline>();
+        if (inputOutline != null)
+            inputOutline.enabled = false;
+
+        CreateToolbarButton(choiceEditor, "↑", new Vector2(optionOffsetX + 282f, y - 8f), new Vector2(28f, 26f),
+            () => MoveChoiceOption(option.optionId, false), false);
+        CreateToolbarButton(choiceEditor, "↓", new Vector2(optionOffsetX + 318f, y - 8f), new Vector2(28f, 26f),
+            () => MoveChoiceOption(option.optionId, true), false);
+        CreateToolbarButton(choiceEditor, "删", new Vector2(optionOffsetX + 354f, y - 8f), new Vector2(26f, 26f),
+            () => RemoveChoiceOption(option.optionId), false);
     }
 
     private void RefreshCanvas()
@@ -269,8 +459,7 @@ public class WorkshopStoryNodeEditorPanel : Panel
 
         StoryCommandDocument[] textCommands = controller.GetSceneCommands(activeSceneId)
             .Where(command => command != null
-                && (string.Equals(command.type, "say", StringComparison.OrdinalIgnoreCase)
-                    || string.Equals(command.type, "narrate", StringComparison.OrdinalIgnoreCase)))
+                && IsSceneContentCommand(command))
             .ToArray();
         if (activeDialogueCommand == null || !textCommands.Any(command => string.Equals(command.commandId,
                 activeDialogueCommand.commandId, StringComparison.OrdinalIgnoreCase)))
@@ -284,6 +473,7 @@ public class WorkshopStoryNodeEditorPanel : Panel
         SetSceneBackground(activeScene);
         PlaySceneMusic(activeScene);
         SetRuntimeDialogue(document, node, activeScene, activeDialogueCommand);
+        RefreshChoiceEditor();
         RefreshOverlayLayering();
     }
 
@@ -648,6 +838,110 @@ public class WorkshopStoryNodeEditorPanel : Panel
         FocusDialogueInput();
     }
 
+    private void ConvertActiveContentToChoice()
+    {
+        if (activeDialogueCommand == null || string.IsNullOrWhiteSpace(activeDialogueCommand.commandId))
+        {
+            Hintbox.OpenHintboxWithContent("请先选择要提出问题的旁白或对白。", 16);
+            return;
+        }
+
+        if (!controller.ConvertSceneContentToChoice(activeSceneId, activeDialogueCommand.commandId,
+                out activeDialogueCommand, out string error))
+        {
+            Hintbox.OpenHintboxWithContent(error, 16);
+            return;
+        }
+
+        RefreshCanvas();
+    }
+
+    private void RestoreActiveChoiceToContent()
+    {
+        if (activeDialogueCommand == null || string.IsNullOrWhiteSpace(activeDialogueCommand.commandId))
+        {
+            Hintbox.OpenHintboxWithContent("请先选择要还原的选项问题。", 16);
+            return;
+        }
+
+        if (!controller.RestoreChoiceToSceneContent(activeSceneId, activeDialogueCommand.commandId,
+                out activeDialogueCommand, out string error))
+        {
+            Hintbox.OpenHintboxWithContent(error, 16);
+            return;
+        }
+
+        RefreshCanvas();
+    }
+
+    private void AddChoiceOption()
+    {
+        if (activeDialogueCommand == null)
+        {
+            Hintbox.OpenHintboxWithContent("请先选择一个选项问题。", 16);
+            return;
+        }
+
+        if (!controller.AddChoiceOption(activeSceneId, activeDialogueCommand.commandId, out _, out string error))
+        {
+            Hintbox.OpenHintboxWithContent(error, 16);
+            return;
+        }
+
+        RefreshCanvas();
+    }
+
+    private void UpdateChoiceOptionText(string optionId, string value)
+    {
+        if (activeDialogueCommand == null)
+        {
+            Hintbox.OpenHintboxWithContent("请先选择一个选项问题。", 16);
+            return;
+        }
+
+        if (!controller.UpdateChoiceOptionText(activeSceneId, activeDialogueCommand.commandId, optionId, value, out string error))
+        {
+            Hintbox.OpenHintboxWithContent(error, 16);
+            return;
+        }
+
+        dirtyStateText.text = "未保存";
+    }
+
+    private void MoveChoiceOption(string optionId, bool moveDown)
+    {
+        if (activeDialogueCommand == null)
+        {
+            Hintbox.OpenHintboxWithContent("请先选择一个选项问题。", 16);
+            return;
+        }
+
+        if (!controller.MoveChoiceOption(activeSceneId, activeDialogueCommand.commandId, optionId, moveDown, out string error))
+        {
+            Hintbox.OpenHintboxWithContent(error, 16);
+            return;
+        }
+
+        RefreshCanvas();
+    }
+
+    private void RemoveChoiceOption(string optionId)
+    {
+        if (activeDialogueCommand == null)
+        {
+            Hintbox.OpenHintboxWithContent("请先选择一个选项问题。", 16);
+            return;
+        }
+
+        if (!controller.RemoveChoiceOption(activeSceneId, activeDialogueCommand.commandId, optionId, out string error))
+        {
+            Hintbox.OpenHintboxWithContent(error, 16);
+            return;
+        }
+
+        RefreshCanvas();
+    }
+
     private void RemoveActiveSceneContent()
     {
         if (activeDialogueCommand == null || string.IsNullOrWhiteSpace(activeDialogueCommand.commandId))
@@ -676,8 +970,7 @@ public class WorkshopStoryNodeEditorPanel : Panel
     private List<StoryCommandDocument> GetTextCommandsForActiveScene()
     {
         return controller.GetSceneCommands(activeSceneId)
-            .Where(command => command != null && (string.Equals(command.type, "say", StringComparison.OrdinalIgnoreCase)
-                || string.Equals(command.type, "narrate", StringComparison.OrdinalIgnoreCase)))
+            .Where(IsSceneContentCommand)
             .ToList();
     }
 
@@ -842,8 +1135,7 @@ public class WorkshopStoryNodeEditorPanel : Panel
             return;
 
         List<StoryCommandDocument> commands = controller.GetSceneCommands(activeSceneId)
-            .Where(command => command != null && (string.Equals(command.type, "say", StringComparison.OrdinalIgnoreCase)
-                || string.Equals(command.type, "narrate", StringComparison.OrdinalIgnoreCase))).ToList();
+            .Where(IsSceneContentCommand).ToList();
         if (index < 0 || index >= commands.Count)
             return;
 
@@ -853,7 +1145,8 @@ public class WorkshopStoryNodeEditorPanel : Panel
 
     private static string FormatSceneContentLabel(int index, StoryCommandDocument command)
     {
-        string type = string.Equals(command?.type, "say", StringComparison.OrdinalIgnoreCase) ? "对白" : "旁白";
+        string type = string.Equals(command?.type, "say", StringComparison.OrdinalIgnoreCase) ? "对白"
+            : string.Equals(command?.type, "choice", StringComparison.OrdinalIgnoreCase) ? "选项" : "旁白";
         string preview = (command?.text ?? string.Empty).Replace('\n', ' ').Trim();
         if (preview.Length > 5)
             preview = preview.Substring(0, 5) + "...";
@@ -1003,6 +1296,15 @@ public class WorkshopStoryNodeEditorPanel : Panel
             actorLayer.SetSiblingIndex(sceneImage == null ? 0 : sceneImage.transform.GetSiblingIndex() + 1);
         toolbar?.SetAsLastSibling();
         editorActions?.SetAsLastSibling();
+        if (choiceEditor != null && choiceEditor.gameObject.activeSelf)
+            choiceEditor.SetAsLastSibling();
+    }
+
+    private static bool IsSceneContentCommand(StoryCommandDocument command)
+    {
+        return command != null && (string.Equals(command.type, "say", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(command.type, "narrate", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(command.type, "choice", StringComparison.OrdinalIgnoreCase));
     }
 
     private Text CreateToolbarButton(Transform parent, string label, Vector2 position, Vector2 dimensions, Action callback,

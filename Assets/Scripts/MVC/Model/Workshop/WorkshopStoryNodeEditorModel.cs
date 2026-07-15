@@ -370,10 +370,9 @@ public sealed class WorkshopStoryNodeEditorModel
         }
 
         StoryCommandDocument target = DraftNode.commands[commandIndex];
-        if (!string.Equals(target.type, "say", StringComparison.OrdinalIgnoreCase)
-            && !string.Equals(target.type, "narrate", StringComparison.OrdinalIgnoreCase))
+        if (!IsSceneContentCommand(target))
         {
-            error = "这里只能删除对白或旁白。";
+            error = "这里只能删除对白、旁白或选项。";
             return false;
         }
 
@@ -412,7 +411,7 @@ public sealed class WorkshopStoryNodeEditorModel
             }
         }
 
-        if (currentIndex < 0 || !IsSceneTextCommand(DraftNode.commands[currentIndex]))
+        if (currentIndex < 0 || !IsSceneContentCommand(DraftNode.commands[currentIndex]))
         {
             error = "找不到要调整的旁白或对白。";
             return false;
@@ -421,7 +420,7 @@ public sealed class WorkshopStoryNodeEditorModel
         int step = moveDown ? 1 : -1;
         int targetIndex = currentIndex + step;
         while (targetIndex > section.commandStartIndex && targetIndex < section.commandEndIndex
-            && !IsSceneTextCommand(DraftNode.commands[targetIndex]))
+            && !IsSceneContentCommand(DraftNode.commands[targetIndex]))
         {
             targetIndex += step;
         }
@@ -435,6 +434,146 @@ public sealed class WorkshopStoryNodeEditorModel
         StoryCommandDocument current = DraftNode.commands[currentIndex];
         DraftNode.commands[currentIndex] = DraftNode.commands[targetIndex];
         DraftNode.commands[targetIndex] = current;
+        HasUnsavedChanges = true;
+        error = string.Empty;
+        return true;
+    }
+
+    public bool ConvertSceneContentToChoice(string sceneId, string commandId, out StoryCommandDocument command, out string error)
+    {
+        command = null;
+        if (!TryGetSceneContentCommand(sceneId, commandId, out StoryCommandDocument target, out error))
+            return false;
+
+        if (string.Equals(target.type, "choice", StringComparison.OrdinalIgnoreCase))
+        {
+            command = target;
+            error = string.Empty;
+            return true;
+        }
+
+        if (!string.Equals(target.type, "say", StringComparison.OrdinalIgnoreCase)
+            && !string.Equals(target.type, "narrate", StringComparison.OrdinalIgnoreCase))
+        {
+            error = "只有旁白或对白可以设为选项问题。";
+            return false;
+        }
+
+        string choiceId = string.IsNullOrWhiteSpace(target.choiceId) ? target.commandId + ":choice" : target.choiceId;
+        target.choiceOriginalType = target.type;
+        target.type = "choice";
+        target.choiceId = choiceId;
+        target.choices = new[]
+        {
+            new StoryChoiceDocument { choiceId = choiceId, optionId = choiceId + ":1", text = "选项 1" },
+            new StoryChoiceDocument { choiceId = choiceId, optionId = choiceId + ":2", text = "选项 2" },
+        };
+        command = target;
+        HasUnsavedChanges = true;
+        error = string.Empty;
+        return true;
+    }
+
+    public bool RestoreChoiceToSceneContent(string sceneId, string commandId, out StoryCommandDocument command, out string error)
+    {
+        command = null;
+        if (!TryGetChoiceCommand(sceneId, commandId, out StoryCommandDocument target, out error))
+            return false;
+
+        string originalType = (target.choiceOriginalType ?? string.Empty).Trim().ToLowerInvariant();
+        if (originalType != "say" && originalType != "narrate")
+            originalType = string.IsNullOrWhiteSpace(target.actor) ? "narrate" : "say";
+
+        target.type = originalType;
+        target.choiceOriginalType = null;
+        target.choiceId = null;
+        target.choices = null;
+        command = target;
+        HasUnsavedChanges = true;
+        error = string.Empty;
+        return true;
+    }
+
+    public bool AddChoiceOption(string sceneId, string commandId, out StoryChoiceDocument option, out string error)
+    {
+        option = null;
+        if (!TryGetChoiceCommand(sceneId, commandId, out StoryCommandDocument command, out error))
+            return false;
+
+        List<StoryChoiceDocument> options = (command.choices ?? Array.Empty<StoryChoiceDocument>())
+            .Where(value => value != null).ToList();
+        string choiceId = string.IsNullOrWhiteSpace(command.choiceId) ? command.commandId + ":choice" : command.choiceId;
+        command.choiceId = choiceId;
+        int index = options.Count + 1;
+        string optionId = choiceId + ":" + index;
+        while (options.Any(value => string.Equals(value.optionId, optionId, StringComparison.OrdinalIgnoreCase)))
+            optionId = choiceId + ":" + (++index);
+
+        option = new StoryChoiceDocument { choiceId = choiceId, optionId = optionId, text = "选项 " + index };
+        options.Add(option);
+        command.choices = options.ToArray();
+        HasUnsavedChanges = true;
+        error = string.Empty;
+        return true;
+    }
+
+    public bool UpdateChoiceOptionText(string sceneId, string commandId, string optionId, string text, out string error)
+    {
+        if (!TryGetChoiceOption(sceneId, commandId, optionId, out StoryChoiceDocument option, out error))
+            return false;
+
+        option.text = text ?? string.Empty;
+        HasUnsavedChanges = true;
+        error = string.Empty;
+        return true;
+    }
+
+    public bool MoveChoiceOption(string sceneId, string commandId, string optionId, bool moveDown, out string error)
+    {
+        if (!TryGetChoiceCommand(sceneId, commandId, out StoryCommandDocument command, out error))
+            return false;
+
+        List<StoryChoiceDocument> options = (command.choices ?? Array.Empty<StoryChoiceDocument>())
+            .Where(value => value != null).ToList();
+        int currentIndex = options.FindIndex(value => string.Equals(value.optionId, optionId, StringComparison.OrdinalIgnoreCase));
+        int targetIndex = currentIndex + (moveDown ? 1 : -1);
+        if (currentIndex < 0 || targetIndex < 0 || targetIndex >= options.Count)
+        {
+            error = moveDown ? "该选项已经位于末尾。" : "该选项已经位于开头。";
+            return false;
+        }
+
+        StoryChoiceDocument current = options[currentIndex];
+        options[currentIndex] = options[targetIndex];
+        options[targetIndex] = current;
+        command.choices = options.ToArray();
+        HasUnsavedChanges = true;
+        error = string.Empty;
+        return true;
+    }
+
+    public bool RemoveChoiceOption(string sceneId, string commandId, string optionId, out string error)
+    {
+        if (!TryGetChoiceCommand(sceneId, commandId, out StoryCommandDocument command, out error))
+            return false;
+
+        List<StoryChoiceDocument> options = (command.choices ?? Array.Empty<StoryChoiceDocument>())
+            .Where(value => value != null).ToList();
+        if (options.Count <= 2)
+        {
+            error = "选项问题至少需要保留两个选项。";
+            return false;
+        }
+
+        int index = options.FindIndex(value => string.Equals(value.optionId, optionId, StringComparison.OrdinalIgnoreCase));
+        if (index < 0)
+        {
+            error = "找不到要删除的选项。";
+            return false;
+        }
+
+        options.RemoveAt(index);
+        command.choices = options.ToArray();
         HasUnsavedChanges = true;
         error = string.Empty;
         return true;
@@ -1070,10 +1209,82 @@ public sealed class WorkshopStoryNodeEditorModel
         }
     }
 
-    private static bool IsSceneTextCommand(StoryCommandDocument command)
+    private bool TryGetSceneContentCommand(string sceneId, string commandId, out StoryCommandDocument command, out string error)
+    {
+        command = null;
+        if (DraftNode?.commands == null || string.IsNullOrWhiteSpace(sceneId) || string.IsNullOrWhiteSpace(commandId))
+        {
+            error = "没有可编辑的剧情内容。";
+            return false;
+        }
+
+        WorkshopStorySceneSection section = GetSceneSections().FirstOrDefault(value => value?.scene != null
+            && string.Equals(value.scene.id, sceneId, StringComparison.OrdinalIgnoreCase));
+        if (section == null)
+        {
+            error = "当前场景无效。";
+            return false;
+        }
+
+        for (int index = section.commandStartIndex + 1; index < section.commandEndIndex; index++)
+        {
+            StoryCommandDocument candidate = DraftNode.commands[index];
+            if (candidate != null && string.Equals(candidate.commandId, commandId, StringComparison.OrdinalIgnoreCase))
+            {
+                if (!IsSceneContentCommand(candidate))
+                {
+                    error = "当前命令不是可编辑的场景内容。";
+                    return false;
+                }
+
+                command = candidate;
+                error = string.Empty;
+                return true;
+            }
+        }
+
+        error = "找不到当前场景中的剧情内容。";
+        return false;
+    }
+
+    private bool TryGetChoiceCommand(string sceneId, string commandId, out StoryCommandDocument command, out string error)
+    {
+        if (!TryGetSceneContentCommand(sceneId, commandId, out command, out error))
+            return false;
+
+        if (!string.Equals(command.type, "choice", StringComparison.OrdinalIgnoreCase))
+        {
+            error = "请先将当前旁白或对白设为选项问题。";
+            return false;
+        }
+
+        return true;
+    }
+
+    private bool TryGetChoiceOption(string sceneId, string commandId, string optionId,
+        out StoryChoiceDocument option, out string error)
+    {
+        option = null;
+        if (!TryGetChoiceCommand(sceneId, commandId, out StoryCommandDocument command, out error))
+            return false;
+
+        option = (command.choices ?? Array.Empty<StoryChoiceDocument>()).FirstOrDefault(value => value != null
+            && string.Equals(value.optionId, optionId, StringComparison.OrdinalIgnoreCase));
+        if (option == null)
+        {
+            error = "找不到该选项。";
+            return false;
+        }
+
+        error = string.Empty;
+        return true;
+    }
+
+    private static bool IsSceneContentCommand(StoryCommandDocument command)
     {
         return command != null && (string.Equals(command.type, "say", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(command.type, "narrate", StringComparison.OrdinalIgnoreCase));
+            || string.Equals(command.type, "narrate", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(command.type, "choice", StringComparison.OrdinalIgnoreCase));
     }
 
     private static void EnsurePointResources(StoryDocument document)

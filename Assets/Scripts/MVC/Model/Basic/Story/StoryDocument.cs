@@ -291,6 +291,7 @@ public class StoryCommandDocument
 {
     public string commandId;
     public string type;
+    public string choiceOriginalType;
     public string choiceId;
     public string sceneId;
     public int mapId;
