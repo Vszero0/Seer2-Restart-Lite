@@ -80,6 +80,18 @@ public class ConditionGroupDocument
     public StoryConditionDocument[] conditions;
 }
 
+/// <summary>
+/// 剧情点完成后的下一跳。条件连接按数组顺序依次判定；默认连接始终作为最后的兜底。
+/// </summary>
+[Serializable]
+public class StoryNodeTransitionDocument
+{
+    public string transitionId;
+    public string targetNodeId;
+    public bool isDefault;
+    public ConditionGroupDocument condition;
+}
+
 [Serializable]
 public class StoryTextStyleDocument
 {
@@ -165,13 +177,11 @@ public class StoryDocument
                 continue;
 
             script.labels[node.id] = script.commands.Count;
-            if (node.commands == null)
-                continue;
-
             bool isSceneOpening = false;
-            for (int commandIndex = 0; commandIndex < node.commands.Length; commandIndex++)
+            StoryCommandDocument[] nodeCommands = node.commands ?? Array.Empty<StoryCommandDocument>();
+            for (int commandIndex = 0; commandIndex < nodeCommands.Length; commandIndex++)
             {
-                StoryCommand parsed = node.commands[commandIndex]?.ToCommand(this, node);
+                StoryCommand parsed = nodeCommands[commandIndex]?.ToCommand(this, node);
                 if (parsed != null)
                 {
                     if (parsed.type == StoryCommandType.Scene)
@@ -193,6 +203,8 @@ public class StoryDocument
                     script.commands.Add(parsed);
                 }
             }
+
+            AppendNodeTransitions(script, node);
         }
 
         return script;
@@ -221,6 +233,30 @@ public class StoryDocument
                 continue;
 
             yield return node;
+        }
+    }
+
+    private static void AppendNodeTransitions(StoryScript script, StoryNodeDocument node)
+    {
+        StoryNodeTransitionDocument[] transitions = node.transitions ?? Array.Empty<StoryNodeTransitionDocument>();
+        foreach (StoryNodeTransitionDocument transition in transitions
+                     .Where(value => value != null && !value.isDefault)
+                     .Concat(transitions.Where(value => value != null && value.isDefault)))
+        {
+            if (string.IsNullOrWhiteSpace(transition.targetNodeId))
+                continue;
+
+            // 条件分支不允许以空条件组退化为无条件跳转。
+            if (!transition.isDefault && (transition.condition?.conditions == null || transition.condition.conditions.Length == 0))
+                continue;
+
+            script.commands.Add(new StoryCommand
+            {
+                commandId = node.id + ":transition:" + (transition.transitionId ?? transition.targetNodeId),
+                type = StoryCommandType.Jump,
+                args = transition.targetNodeId,
+                condition = transition.isDefault ? null : transition.condition,
+            });
         }
     }
 }
@@ -276,6 +312,7 @@ public class StoryNodeDocument
     public StorySceneDocument[] scenes;
     public StoryTextStyleDocument style;
     public StoryCommandDocument[] commands;
+    public StoryNodeTransitionDocument[] transitions;
 
     public StorySceneDocument GetScene(string sceneId)
     {

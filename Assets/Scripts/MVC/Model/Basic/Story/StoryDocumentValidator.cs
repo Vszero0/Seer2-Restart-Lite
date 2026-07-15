@@ -65,6 +65,7 @@ public static class StoryValidator
         {
             ValidateNodeScenes(node, actorDict, errors);
             ValidateNodeCommands(node, actorDict, nodeDict, errors);
+            ValidateNodeTransitions(node, nodeDict, errors);
         }
 
         error = string.Join("\n", errors);
@@ -92,6 +93,9 @@ public static class StoryValidator
         Dictionary<string, StoryNodeDocument> nodeDict = ValidateNodes(document, errors);
         if (!string.IsNullOrWhiteSpace(document.entry) && !nodeDict.ContainsKey(document.entry))
             errors.Add("entry 指向的剧情点不存在：" + document.entry);
+
+        foreach (StoryNodeDocument node in document.nodes ?? Array.Empty<StoryNodeDocument>())
+            ValidateNodeTransitions(node, nodeDict, errors);
 
         error = string.Join("\n", errors);
         return errors.Count == 0;
@@ -264,6 +268,53 @@ public static class StoryValidator
                     break;
             }
         }
+    }
+
+    private static void ValidateNodeTransitions(
+        StoryNodeDocument node,
+        Dictionary<string, StoryNodeDocument> nodeDict,
+        List<string> errors)
+    {
+        if (node == null || node.transitions == null)
+            return;
+
+        HashSet<string> transitionIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        int defaultCount = 0;
+        for (int i = 0; i < node.transitions.Length; i++)
+        {
+            StoryNodeTransitionDocument transition = node.transitions[i];
+            string location = "node[" + node.id + "].transitions[" + i + "]";
+            if (transition == null)
+            {
+                errors.Add(location + " 不能为空");
+                continue;
+            }
+
+            if (string.IsNullOrWhiteSpace(transition.transitionId) || !transitionIds.Add(transition.transitionId))
+                errors.Add(location + ".transitionId 不能为空且不能重复");
+
+            ValidateTarget(transition.targetNodeId, nodeDict, errors, location);
+            if (transition.isDefault)
+            {
+                defaultCount++;
+                if (transition.condition != null)
+                    errors.Add(location + " 默认连接不能配置 condition");
+                if (i != node.transitions.Length - 1)
+                    errors.Add(location + " 默认连接必须位于 transitions 的最后");
+                continue;
+            }
+
+            if (transition.condition == null || transition.condition.conditions == null || transition.condition.conditions.Length == 0)
+            {
+                errors.Add(location + " 条件分支必须至少配置一个条件");
+                continue;
+            }
+
+            ValidateConditionGroup(transition.condition, errors, location + ".condition");
+        }
+
+        if (defaultCount > 1)
+            errors.Add("node[" + node.id + "].transitions 最多只能有一个默认连接");
     }
 
     private static void ValidateConditionGroup(ConditionGroupDocument group, List<string> errors, string location)

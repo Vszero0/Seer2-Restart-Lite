@@ -56,6 +56,41 @@ public sealed class WorkshopStoryBrowserController
         return model.DeleteSelectedNode(out error);
     }
 
+    public bool AddSelectedNodeDefaultTransition(out string transitionId, out string error)
+    {
+        return model.AddSelectedNodeDefaultTransition(out transitionId, out error);
+    }
+
+    public bool AddSelectedNodeChoiceTransition(out string transitionId, out string error)
+    {
+        return model.AddSelectedNodeChoiceTransition(out transitionId, out error);
+    }
+
+    public bool UpdateSelectedNodeTransitionTarget(string transitionId, string targetNodeId, out string error)
+    {
+        return model.UpdateSelectedNodeTransitionTarget(transitionId, targetNodeId, out error);
+    }
+
+    public bool UpdateSelectedNodeTransitionChoice(string transitionId, string commandId, string choiceId, string optionId, out string error)
+    {
+        return model.UpdateSelectedNodeTransitionChoice(transitionId, commandId, choiceId, optionId, out error);
+    }
+
+    public bool MoveSelectedNodeTransition(string transitionId, bool moveDown, out string error)
+    {
+        return model.MoveSelectedNodeTransition(transitionId, moveDown, out error);
+    }
+
+    public bool RemoveSelectedNodeTransition(string transitionId, out string error)
+    {
+        return model.RemoveSelectedNodeTransition(transitionId, out error);
+    }
+
+    public IReadOnlyList<WorkshopStoryChoiceOption> GetSelectedNodeChoiceOptions()
+    {
+        return model.SelectedNodeChoiceOptions;
+    }
+
     public bool CreateDraft(out string error)
     {
         return model.CreateDraft(out error);

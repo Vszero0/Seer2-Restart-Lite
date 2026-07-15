@@ -1,7 +1,9 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using TMPro;
 using UnityEngine;
+using UnityEngine.Events;
 using UnityEngine.UI;
 
 /// <summary>
@@ -19,16 +21,29 @@ public class WorkshopStoryBrowserPanel : Panel
 
     private RectTransform storyContent;
     private RectTransform nodeContent;
+    private RectTransform connectionOverlay;
+    private RectTransform transitionContent;
     private Text storyStatusText;
+    private Text transitionInspectorTitle;
+    private Text transitionTargetValueText;
+    private Text transitionChoiceLabel;
+    private Text transitionChoiceValueText;
     private Font font;
     private GameObject listButtonPrefab;
     private GameObject actionButtonPrefab;
+    private GameObject dropdownPrefab;
     private GameObject petNameInputFieldPrefab;
     private GameObject petDescriptionInputFieldPrefab;
     private IInputField storyTitleInput;
     private IInputField storySummaryInput;
+    private Dropdown transitionTargetDropdown;
+    private Dropdown transitionChoiceDropdown;
     private Image projectFrameImage;
     private Outline projectFrameOutline;
+    private string selectedTransitionId;
+    private bool isUpdatingTransitionControls;
+    private WorkshopStoryChoiceOption[] transitionChoiceOptions = Array.Empty<WorkshopStoryChoiceOption>();
+    private string[] transitionTargetNodeIds = Array.Empty<string>();
     private bool hasBuilt;
 
     public override void Init()
@@ -41,6 +56,7 @@ public class WorkshopStoryBrowserPanel : Panel
         font = ResourceManager.instance.GetFont("Zongyi");
         listButtonPrefab = Resources.Load<GameObject>("Prefabs/Scroll List Button");
         actionButtonPrefab = FindWorkshopActionButtonPrefab();
+        dropdownPrefab = FindWorkshopDropdownPrefab();
         FindWorkshopPetInputFieldPrefabs();
         background = GetComponent<Image>();
         BuildLayout();
@@ -85,7 +101,61 @@ public class WorkshopStoryBrowserPanel : Panel
         CreateActionButton(nodeSection, "删除", new Vector2(120f, -50f), new Vector2(94f, 28f), DeleteNode);
         CreateActionButton(nodeSection, "设为入口", new Vector2(224f, -50f), new Vector2(116f, 28f), SetEntryNode);
         CreateActionButton(nodeSection, "编辑剧情点", new Vector2(352f, -50f), new Vector2(132f, 28f), OpenNodeEditor);
+        CreateActionButton(nodeSection, "编辑连接", new Vector2(496f, -50f), new Vector2(120f, 28f), OpenConnectionEditor);
         nodeContent = CreateScrollContent(nodeSection, new Vector2(14f, 14f), new Vector2(-14f, -86f));
+        BuildConnectionEditor(nodeSection);
+    }
+
+    private void BuildConnectionEditor(RectTransform nodeSection)
+    {
+        GameObject overlayObject = new GameObject("Story Transition Editor", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image), typeof(Outline));
+        overlayObject.transform.SetParent(nodeSection, false);
+        connectionOverlay = overlayObject.GetComponent<RectTransform>();
+        connectionOverlay.anchorMin = Vector2.zero;
+        connectionOverlay.anchorMax = Vector2.one;
+        connectionOverlay.offsetMin = new Vector2(12f, 12f);
+        connectionOverlay.offsetMax = new Vector2(-12f, -86f);
+
+        Image overlay = overlayObject.GetComponent<Image>();
+        overlay.color = new Color32(0, 8, 12, 246);
+        Outline overlayOutline = overlayObject.GetComponent<Outline>();
+        overlayOutline.effectColor = new Color(Cyan.r, Cyan.g, Cyan.b, .62f);
+        overlayOutline.effectDistance = new Vector2(1f, -1f);
+
+        CreateText("Transition Heading", connectionOverlay, "后续连接", 17, TextAnchor.MiddleCenter, Cyan,
+            new Vector2(.5f, 1f), new Vector2(.5f, 1f), new Vector2(0f, -15f), new Vector2(160f, 22f));
+        CreateActionButton(connectionOverlay, "+默认后续", new Vector2(10f, -8f), new Vector2(82f, 24f), AddDefaultTransition);
+        CreateActionButton(connectionOverlay, "+选项分支", new Vector2(100f, -8f), new Vector2(92f, 24f), AddChoiceTransition);
+        CreateActionButton(connectionOverlay, "返回列表", new Vector2(-10f, -8f), new Vector2(82f, 24f), CloseConnectionEditor, TextAnchor.UpperRight);
+
+        transitionContent = CreateScrollContent(connectionOverlay, new Vector2(10f, 10f), new Vector2(-248f, -42f));
+
+        GameObject inspectorObject = new GameObject("Transition Inspector", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));
+        inspectorObject.transform.SetParent(connectionOverlay, false);
+        RectTransform inspector = inspectorObject.GetComponent<RectTransform>();
+        inspector.anchorMin = new Vector2(1f, 1f);
+        inspector.anchorMax = new Vector2(1f, 1f);
+        inspector.pivot = new Vector2(1f, 1f);
+        inspector.anchoredPosition = new Vector2(-10f, -42f);
+        inspector.sizeDelta = new Vector2(226f, 162f);
+        inspectorObject.GetComponent<Image>().color = new Color32(0, 18, 24, 214);
+
+        transitionInspectorTitle = CreateText("Transition Inspector Title", inspector, "选择左侧连接", 14, TextAnchor.MiddleCenter, Cyan,
+            new Vector2(.5f, 1f), new Vector2(.5f, 1f), new Vector2(0f, -10f), new Vector2(210f, 20f));
+        CreateText("Target Label", inspector, "目标剧情点", 12, TextAnchor.MiddleLeft, HintColor,
+            new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(8f, -31f), new Vector2(92f, 18f));
+        transitionTargetDropdown = CreateDropdown(inspector, new Vector2(8f, -49f), new Vector2(210f, 24f), OnTransitionTargetChanged);
+        transitionTargetValueText = CreateSelectorValueText(transitionTargetDropdown);
+
+        transitionChoiceLabel = CreateText("Choice Label", inspector, "触发选项", 12, TextAnchor.MiddleLeft, HintColor,
+            new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(8f, -78f), new Vector2(92f, 18f));
+        transitionChoiceDropdown = CreateDropdown(inspector, new Vector2(8f, -96f), new Vector2(210f, 24f), OnTransitionChoiceChanged);
+        transitionChoiceValueText = CreateSelectorValueText(transitionChoiceDropdown);
+
+        CreateActionButton(inspector, "上移", new Vector2(8f, -128f), new Vector2(48f, 24f), () => MoveSelectedTransition(false));
+        CreateActionButton(inspector, "下移", new Vector2(64f, -128f), new Vector2(48f, 24f), () => MoveSelectedTransition(true));
+        CreateActionButton(inspector, "删除", new Vector2(120f, -128f), new Vector2(72f, 24f), DeleteSelectedTransition);
+        overlayObject.SetActive(false);
     }
 
     private void CreateTitleDecoration()
@@ -345,9 +415,128 @@ public class WorkshopStoryBrowserPanel : Panel
         WorkshopStoryNodeEditorPanel.Open(controller.SelectedStory.path, controller.SelectedNode.id);
     }
 
+    private void OpenConnectionEditor()
+    {
+        if (controller.SelectedNode == null)
+        {
+            Hintbox.OpenHintboxWithContent("请先选择要配置后续连接的剧情点。", 16);
+            return;
+        }
+
+        selectedTransitionId = (controller.SelectedNode.transitions ?? Array.Empty<StoryNodeTransitionDocument>())
+            .FirstOrDefault(transition => transition != null)?.transitionId;
+        connectionOverlay.gameObject.SetActive(true);
+        RefreshConnections();
+    }
+
+    private void CloseConnectionEditor()
+    {
+        if (connectionOverlay != null)
+            connectionOverlay.gameObject.SetActive(false);
+        selectedTransitionId = string.Empty;
+    }
+
+    private void AddDefaultTransition()
+    {
+        if (!controller.AddSelectedNodeDefaultTransition(out string transitionId, out string error))
+        {
+            if (!string.IsNullOrEmpty(error))
+                Hintbox.OpenHintboxWithContent(error, 16);
+            return;
+        }
+
+        selectedTransitionId = transitionId;
+        RefreshConnections();
+    }
+
+    private void AddChoiceTransition()
+    {
+        if (!controller.AddSelectedNodeChoiceTransition(out string transitionId, out string error))
+        {
+            if (!string.IsNullOrEmpty(error))
+                Hintbox.OpenHintboxWithContent(error, 16);
+            return;
+        }
+
+        selectedTransitionId = transitionId;
+        RefreshConnections();
+    }
+
+    private void SelectTransition(string transitionId)
+    {
+        selectedTransitionId = transitionId;
+        RefreshConnections();
+    }
+
+    private void MoveSelectedTransition(bool moveDown)
+    {
+        if (string.IsNullOrWhiteSpace(selectedTransitionId))
+            return;
+
+        if (!controller.MoveSelectedNodeTransition(selectedTransitionId, moveDown, out string error)
+            && !string.IsNullOrEmpty(error))
+        {
+            Hintbox.OpenHintboxWithContent(error, 16);
+            return;
+        }
+
+        RefreshConnections();
+    }
+
+    private void DeleteSelectedTransition()
+    {
+        if (string.IsNullOrWhiteSpace(selectedTransitionId))
+            return;
+
+        if (!controller.RemoveSelectedNodeTransition(selectedTransitionId, out string error))
+        {
+            if (!string.IsNullOrEmpty(error))
+                Hintbox.OpenHintboxWithContent(error, 16);
+            return;
+        }
+
+        selectedTransitionId = (controller.SelectedNode?.transitions ?? Array.Empty<StoryNodeTransitionDocument>())
+            .FirstOrDefault(transition => transition != null)?.transitionId;
+        RefreshConnections();
+    }
+
+    private void OnTransitionTargetChanged(int optionIndex)
+    {
+        if (isUpdatingTransitionControls || string.IsNullOrWhiteSpace(selectedTransitionId)
+            || optionIndex < 0 || optionIndex >= transitionTargetNodeIds.Length)
+            return;
+
+        if (!controller.UpdateSelectedNodeTransitionTarget(selectedTransitionId, transitionTargetNodeIds[optionIndex], out string error)
+            && !string.IsNullOrEmpty(error))
+        {
+            Hintbox.OpenHintboxWithContent(error, 16);
+            return;
+        }
+
+        RefreshConnections();
+    }
+
+    private void OnTransitionChoiceChanged(int optionIndex)
+    {
+        if (isUpdatingTransitionControls || string.IsNullOrWhiteSpace(selectedTransitionId)
+            || optionIndex < 0 || optionIndex >= transitionChoiceOptions.Length)
+            return;
+
+        WorkshopStoryChoiceOption choice = transitionChoiceOptions[optionIndex];
+        if (!controller.UpdateSelectedNodeTransitionChoice(selectedTransitionId, choice.commandId, choice.choiceId, choice.optionId, out string error)
+            && !string.IsNullOrEmpty(error))
+        {
+            Hintbox.OpenHintboxWithContent(error, 16);
+            return;
+        }
+
+        RefreshConnections();
+    }
+
     private void SelectNode(string nodeId)
     {
         controller.SelectNode(nodeId);
+        selectedTransitionId = string.Empty;
         RefreshNodes();
     }
 
@@ -452,6 +641,151 @@ public class WorkshopStoryBrowserPanel : Panel
             CreateHint(nodeContent, controller.SelectedDocument == null ? "请选择剧本。" : "当前剧本没有剧情点。");
         else
             nodeContent.sizeDelta = new Vector2(0f, 12f + index * 42f);
+
+        if (connectionOverlay != null && connectionOverlay.gameObject.activeSelf)
+            RefreshConnections();
+    }
+
+    private void RefreshConnections()
+    {
+        if (transitionContent == null)
+            return;
+
+        ClearChildren(transitionContent);
+        StoryNodeTransitionDocument[] transitions = controller.SelectedNode?.transitions ?? Array.Empty<StoryNodeTransitionDocument>();
+        transitions = transitions.Where(transition => transition != null).ToArray();
+        if (transitions.All(transition => !string.Equals(transition.transitionId, selectedTransitionId, StringComparison.OrdinalIgnoreCase)))
+            selectedTransitionId = transitions.FirstOrDefault()?.transitionId;
+
+        for (int index = 0; index < transitions.Length; index++)
+        {
+            StoryNodeTransitionDocument transition = transitions[index];
+            string transitionId = transition.transitionId;
+            CreateListButton(transitionContent, GetTransitionDisplayName(transition),
+                string.Equals(transitionId, selectedTransitionId, StringComparison.OrdinalIgnoreCase), index,
+                () => SelectTransition(transitionId));
+        }
+
+        if (transitions.Length == 0)
+            CreateHint(transitionContent, "尚未设置后续连接。\n可添加默认后续，或按选项分支。");
+        else
+            transitionContent.sizeDelta = new Vector2(0f, 12f + transitions.Length * 42f);
+
+        RefreshTransitionInspector(transitions.FirstOrDefault(transition =>
+            string.Equals(transition.transitionId, selectedTransitionId, StringComparison.OrdinalIgnoreCase)));
+    }
+
+    private void RefreshTransitionInspector(StoryNodeTransitionDocument transition)
+    {
+        if (transitionInspectorTitle == null)
+            return;
+
+        bool hasTransition = transition != null;
+        bool isDefault = hasTransition && transition.isDefault;
+        transitionInspectorTitle.text = !hasTransition
+            ? "选择左侧连接"
+            : isDefault ? "默认后续" : "选项分支";
+
+        if (transitionChoiceLabel != null)
+            transitionChoiceLabel.gameObject.SetActive(hasTransition && !isDefault);
+        if (transitionChoiceDropdown != null)
+            transitionChoiceDropdown.gameObject.SetActive(hasTransition && !isDefault);
+
+        isUpdatingTransitionControls = true;
+        try
+        {
+            RefreshTransitionTargetSelector(transition, hasTransition);
+            RefreshTransitionChoiceSelector(transition, hasTransition && !isDefault);
+        }
+        finally
+        {
+            isUpdatingTransitionControls = false;
+        }
+    }
+
+    private void RefreshTransitionTargetSelector(StoryNodeTransitionDocument transition, bool interactable)
+    {
+        StoryNodeDocument[] targets = (controller.SelectedDocument?.nodes ?? Array.Empty<StoryNodeDocument>())
+            .Where(node => node != null).ToArray();
+        transitionTargetNodeIds = targets.Select(node => node.id).ToArray();
+
+        if (transitionTargetDropdown == null)
+            return;
+
+        transitionTargetDropdown.ClearOptions();
+        transitionTargetDropdown.AddOptions(targets.Select(GetNodeDisplayName).ToList());
+        int selectedIndex = Array.FindIndex(transitionTargetNodeIds,
+            nodeId => transition != null && string.Equals(nodeId, transition.targetNodeId, StringComparison.OrdinalIgnoreCase));
+        transitionTargetDropdown.SetValueWithoutNotify(Mathf.Max(0, selectedIndex));
+        transitionTargetDropdown.interactable = interactable && targets.Length > 0;
+        SetSelectorValueText(transitionTargetValueText, transitionTargetDropdown, "暂无可选剧情点");
+    }
+
+    private void RefreshTransitionChoiceSelector(StoryNodeTransitionDocument transition, bool interactable)
+    {
+        transitionChoiceOptions = controller.GetSelectedNodeChoiceOptions()?.ToArray() ?? Array.Empty<WorkshopStoryChoiceOption>();
+        if (transitionChoiceDropdown == null)
+            return;
+
+        transitionChoiceDropdown.ClearOptions();
+        transitionChoiceDropdown.AddOptions(transitionChoiceOptions
+            .Select(option => Shorten(option.displayName, 16)).ToList());
+
+        StoryConditionDocument choiceCondition = transition?.condition?.conditions?
+            .FirstOrDefault(condition => condition != null && string.Equals(condition.type, "choiceSelected", StringComparison.OrdinalIgnoreCase));
+        int selectedIndex = Array.FindIndex(transitionChoiceOptions, option => choiceCondition != null
+            && string.Equals(option.commandId, choiceCondition.commandId, StringComparison.OrdinalIgnoreCase)
+            && string.Equals(option.choiceId, choiceCondition.choiceId, StringComparison.OrdinalIgnoreCase)
+            && string.Equals(option.optionId, choiceCondition.optionId, StringComparison.OrdinalIgnoreCase));
+        transitionChoiceDropdown.SetValueWithoutNotify(Mathf.Max(0, selectedIndex));
+        transitionChoiceDropdown.interactable = interactable && transitionChoiceOptions.Length > 0;
+        SetSelectorValueText(transitionChoiceValueText, transitionChoiceDropdown, "暂无可选选项");
+    }
+
+    private string GetTransitionDisplayName(StoryNodeTransitionDocument transition)
+    {
+        if (transition == null)
+            return string.Empty;
+
+        string relation = transition.isDefault
+            ? "默认后续"
+            : "选项：" + GetTransitionChoiceDisplayName(transition);
+        return relation + "  →  " + GetNodeDisplayName(FindNode(transition.targetNodeId));
+    }
+
+    private string GetTransitionChoiceDisplayName(StoryNodeTransitionDocument transition)
+    {
+        StoryConditionDocument condition = transition?.condition?.conditions?
+            .FirstOrDefault(value => value != null && string.Equals(value.type, "choiceSelected", StringComparison.OrdinalIgnoreCase));
+        if (condition == null)
+            return "未配置";
+
+        WorkshopStoryChoiceOption choice = (controller.GetSelectedNodeChoiceOptions() ?? Array.Empty<WorkshopStoryChoiceOption>())
+            .FirstOrDefault(option => option != null
+                && string.Equals(option.commandId, condition.commandId, StringComparison.OrdinalIgnoreCase)
+                && string.Equals(option.choiceId, condition.choiceId, StringComparison.OrdinalIgnoreCase)
+                && string.Equals(option.optionId, condition.optionId, StringComparison.OrdinalIgnoreCase));
+        return choice == null ? condition.optionId : Shorten(choice.displayName, 12);
+    }
+
+    private StoryNodeDocument FindNode(string nodeId)
+    {
+        return (controller.SelectedDocument?.nodes ?? Array.Empty<StoryNodeDocument>())
+            .FirstOrDefault(node => node != null && string.Equals(node.id, nodeId, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static string GetNodeDisplayName(StoryNodeDocument node)
+    {
+        if (node == null)
+            return "目标不存在";
+        return string.IsNullOrWhiteSpace(node.displayName) ? node.id : node.displayName;
+    }
+
+    private static string Shorten(string value, int maxLength)
+    {
+        if (string.IsNullOrEmpty(value) || value.Length <= maxLength)
+            return value ?? string.Empty;
+        return value.Substring(0, maxLength) + "…";
     }
 
     private void SetInputFieldValue(IInputField input, string value, bool interactable)
@@ -594,6 +928,76 @@ public class WorkshopStoryBrowserPanel : Panel
             Destroy(child.gameObject);
     }
 
+    private Dropdown CreateDropdown(Transform parent, Vector2 position, Vector2 dimensions, UnityAction<int> onChanged)
+    {
+        if (dropdownPrefab == null)
+            return null;
+
+        GameObject item = Instantiate(dropdownPrefab, parent);
+        item.name = "Story Transition Selector";
+        RectTransform rect = item.GetComponent<RectTransform>();
+        rect.anchorMin = new Vector2(0f, 1f);
+        rect.anchorMax = new Vector2(0f, 1f);
+        rect.pivot = new Vector2(0f, 1f);
+        rect.anchoredPosition = position;
+        rect.sizeDelta = dimensions;
+
+        Dropdown dropdown = item.GetComponent<Dropdown>();
+        if (dropdown == null)
+            return null;
+
+        dropdown.onValueChanged = new Dropdown.DropdownEvent();
+        dropdown.onValueChanged.AddListener(onChanged);
+        if (dropdown.captionText != null)
+        {
+            dropdown.captionText.font = font;
+            dropdown.captionText.fontSize = 13;
+            dropdown.captionText.alignment = TextAnchor.MiddleLeft;
+            dropdown.captionText.color = Cyan;
+        }
+        if (dropdown.itemText != null)
+        {
+            dropdown.itemText.font = font;
+            dropdown.itemText.fontSize = 13;
+            dropdown.itemText.color = Cyan;
+        }
+        return dropdown;
+    }
+
+    private Text CreateSelectorValueText(Dropdown dropdown)
+    {
+        if (dropdown == null)
+            return null;
+
+        Text text = CreateText("Selector Value", dropdown.transform, string.Empty, 13, TextAnchor.MiddleLeft, Cyan,
+            Vector2.zero, new Vector2(.5f, .5f), Vector2.zero, Vector2.zero);
+        RectTransform rect = text.rectTransform;
+        rect.anchorMin = Vector2.zero;
+        rect.anchorMax = Vector2.one;
+        rect.offsetMin = new Vector2(8f, 1f);
+        rect.offsetMax = new Vector2(-26f, -1f);
+        text.horizontalOverflow = HorizontalWrapMode.Overflow;
+        text.verticalOverflow = VerticalWrapMode.Truncate;
+        text.raycastTarget = false;
+        text.transform.SetAsLastSibling();
+        return text;
+    }
+
+    private static void SetSelectorValueText(Text text, Dropdown dropdown, string emptyText)
+    {
+        if (text == null)
+            return;
+
+        if (dropdown == null || dropdown.options == null || dropdown.options.Count == 0)
+        {
+            text.text = emptyText ?? string.Empty;
+            return;
+        }
+
+        int value = Mathf.Clamp(dropdown.value, 0, dropdown.options.Count - 1);
+        text.text = dropdown.options[value]?.text ?? (emptyText ?? string.Empty);
+    }
+
     private GameObject FindWorkshopActionButtonPrefab()
     {
         GameObject workshopPanel = ResourceManager.instance.GetPanel("Workshop");
@@ -603,6 +1007,13 @@ public class WorkshopStoryBrowserPanel : Panel
         IButton button = workshopPanel.GetComponentsInChildren<IButton>(true)
             .FirstOrDefault(value => value.GetComponentInChildren<Text>(true)?.text == "导出 mod");
         return button?.gameObject;
+    }
+
+    private GameObject FindWorkshopDropdownPrefab()
+    {
+        GameObject workshopPanel = ResourceManager.instance.GetPanel("Workshop");
+        return workshopPanel?.GetComponentsInChildren<IDropdown>(true)
+            .FirstOrDefault()?.gameObject;
     }
 
     private void FindWorkshopPetInputFieldPrefabs()

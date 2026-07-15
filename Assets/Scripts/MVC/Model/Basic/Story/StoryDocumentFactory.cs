@@ -33,6 +33,7 @@ public static class StoryDocumentFactory
             actorReferences = Array.Empty<StoryActorReferenceDocument>(),
             scenes = Array.Empty<StorySceneDocument>(),
             commands = Array.Empty<StoryCommandDocument>(),
+            transitions = Array.Empty<StoryNodeTransitionDocument>(),
         };
     }
 }

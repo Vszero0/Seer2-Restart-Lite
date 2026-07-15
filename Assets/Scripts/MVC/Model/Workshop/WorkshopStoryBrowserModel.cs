@@ -12,6 +12,8 @@ public sealed class WorkshopStoryBrowserModel
     public StoryNodeDocument SelectedNode { get; private set; }
     public bool HasUnsavedChanges { get; private set; }
 
+    public IReadOnlyList<WorkshopStoryChoiceOption> SelectedNodeChoiceOptions => GetSelectedNodeChoiceOptions();
+
     public WorkshopStoryBrowserModel(WorkshopStoryRepository repository)
     {
         this.repository = repository;
@@ -177,6 +179,184 @@ public sealed class WorkshopStoryBrowserModel
         return true;
     }
 
+    public bool AddSelectedNodeDefaultTransition(out string transitionId, out string error)
+    {
+        transitionId = string.Empty;
+        if (!TryGetSelectedNode(out error))
+            return false;
+
+        if ((SelectedNode.transitions ?? Array.Empty<StoryNodeTransitionDocument>()).Any(value => value != null && value.isDefault))
+        {
+            error = "当前剧情点已有默认后续连接。";
+            return false;
+        }
+
+        StoryNodeDocument target = GetSuggestedTransitionTarget();
+        if (target == null)
+        {
+            error = "请先选择有效的剧情点。";
+            return false;
+        }
+
+        StoryNodeTransitionDocument transition = new StoryNodeTransitionDocument
+        {
+            transitionId = CreateAvailableTransitionId(),
+            targetNodeId = target.id,
+            isDefault = true,
+        };
+        AppendTransition(transition);
+        transitionId = transition.transitionId;
+        error = string.Empty;
+        return true;
+    }
+
+    public bool AddSelectedNodeChoiceTransition(out string transitionId, out string error)
+    {
+        transitionId = string.Empty;
+        if (!TryGetSelectedNode(out error))
+            return false;
+
+        WorkshopStoryChoiceOption choice = GetSelectedNodeChoiceOptions().FirstOrDefault();
+        if (choice == null)
+        {
+            error = "当前剧情点还没有选项；请先在可视化编辑页面添加选项。";
+            return false;
+        }
+
+        StoryNodeDocument target = GetSuggestedTransitionTarget();
+        if (target == null)
+        {
+            error = "请先选择有效的剧情点。";
+            return false;
+        }
+
+        StoryNodeTransitionDocument transition = new StoryNodeTransitionDocument
+        {
+            transitionId = CreateAvailableTransitionId(),
+            targetNodeId = target.id,
+            condition = new ConditionGroupDocument
+            {
+                operatorType = "AND",
+                conditions = new[]
+                {
+                    new StoryConditionDocument
+                    {
+                        type = "choiceSelected",
+                        commandId = choice.commandId,
+                        choiceId = choice.choiceId,
+                        optionId = choice.optionId,
+                    },
+                },
+            },
+        };
+        AppendTransition(transition);
+        transitionId = transition.transitionId;
+        error = string.Empty;
+        return true;
+    }
+
+    public bool UpdateSelectedNodeTransitionTarget(string transitionId, string targetNodeId, out string error)
+    {
+        if (!TryGetSelectedTransition(transitionId, out StoryNodeTransitionDocument transition, out error))
+            return false;
+
+        if (!(SelectedDocument.nodes ?? Array.Empty<StoryNodeDocument>())
+            .Any(node => node != null && string.Equals(node.id, targetNodeId, StringComparison.OrdinalIgnoreCase)))
+        {
+            error = "请选择有效的目标剧情点。";
+            return false;
+        }
+
+        transition.targetNodeId = targetNodeId;
+        MarkUnsaved();
+        error = string.Empty;
+        return true;
+    }
+
+    public bool UpdateSelectedNodeTransitionChoice(string transitionId, string commandId, string choiceId, string optionId, out string error)
+    {
+        if (!TryGetSelectedTransition(transitionId, out StoryNodeTransitionDocument transition, out error))
+            return false;
+
+        if (transition.isDefault)
+        {
+            error = "默认连接不需要选择触发选项。";
+            return false;
+        }
+
+        WorkshopStoryChoiceOption selected = GetSelectedNodeChoiceOptions().FirstOrDefault(value => value != null
+            && string.Equals(value.commandId, commandId, StringComparison.OrdinalIgnoreCase)
+            && string.Equals(value.choiceId, choiceId, StringComparison.OrdinalIgnoreCase)
+            && string.Equals(value.optionId, optionId, StringComparison.OrdinalIgnoreCase));
+        if (selected == null)
+        {
+            error = "请选择当前剧情点中的有效选项。";
+            return false;
+        }
+
+        transition.condition = new ConditionGroupDocument
+        {
+            operatorType = transition.condition?.operatorType == "OR" ? "OR" : "AND",
+            conditions = new[]
+            {
+                new StoryConditionDocument
+                {
+                    type = "choiceSelected",
+                    commandId = selected.commandId,
+                    choiceId = selected.choiceId,
+                    optionId = selected.optionId,
+                },
+            },
+        };
+        MarkUnsaved();
+        error = string.Empty;
+        return true;
+    }
+
+    public bool MoveSelectedNodeTransition(string transitionId, bool moveDown, out string error)
+    {
+        if (!TryGetSelectedTransition(transitionId, out StoryNodeTransitionDocument transition, out error))
+            return false;
+
+        List<StoryNodeTransitionDocument> transitions = (SelectedNode.transitions ?? Array.Empty<StoryNodeTransitionDocument>())
+            .Where(value => value != null)
+            .ToList();
+        int index = transitions.IndexOf(transition);
+        int targetIndex = index + (moveDown ? 1 : -1);
+        if (targetIndex < 0 || targetIndex >= transitions.Count)
+        {
+            error = "已经位于连接列表的边界。";
+            return false;
+        }
+
+        if (transition.isDefault || transitions[targetIndex].isDefault)
+        {
+            error = "默认连接始终位于最后，不能调整优先级。";
+            return false;
+        }
+
+        StoryNodeTransitionDocument temporary = transitions[index];
+        transitions[index] = transitions[targetIndex];
+        transitions[targetIndex] = temporary;
+        SelectedNode.transitions = transitions.ToArray();
+        MarkUnsaved();
+        error = string.Empty;
+        return true;
+    }
+
+    public bool RemoveSelectedNodeTransition(string transitionId, out string error)
+    {
+        if (!TryGetSelectedTransition(transitionId, out StoryNodeTransitionDocument transition, out error))
+            return false;
+
+        SelectedNode.transitions = (SelectedNode.transitions ?? Array.Empty<StoryNodeTransitionDocument>())
+            .Where(value => value != null && value != transition)
+            .ToArray();
+        MarkUnsaved();
+        error = string.Empty;
+        return true;
+    }
+
     public bool CreateDraft(out string error)
     {
         if (HasUnsavedChanges)
@@ -242,6 +422,99 @@ public sealed class WorkshopStoryBrowserModel
         return true;
     }
 
+    private bool TryGetSelectedNode(out string error)
+    {
+        if (!TryGetSelectedDocument(out error))
+            return false;
+
+        if (SelectedNode == null)
+        {
+            error = "请先选择一个剧情点。";
+            return false;
+        }
+
+        return true;
+    }
+
+    private bool TryGetSelectedTransition(string transitionId, out StoryNodeTransitionDocument transition, out string error)
+    {
+        transition = null;
+        if (!TryGetSelectedNode(out error))
+            return false;
+
+        transition = (SelectedNode.transitions ?? Array.Empty<StoryNodeTransitionDocument>())
+            .FirstOrDefault(value => value != null && string.Equals(value.transitionId, transitionId, StringComparison.OrdinalIgnoreCase));
+        if (transition == null)
+        {
+            error = "未找到要编辑的后续连接。";
+            return false;
+        }
+
+        error = string.Empty;
+        return true;
+    }
+
+    private WorkshopStoryChoiceOption[] GetSelectedNodeChoiceOptions()
+    {
+        if (SelectedNode == null)
+            return Array.Empty<WorkshopStoryChoiceOption>();
+
+        return (SelectedNode.commands ?? Array.Empty<StoryCommandDocument>())
+            .Where(command => command != null && string.Equals(command.type, "choice", StringComparison.OrdinalIgnoreCase))
+            .SelectMany(command => (command.choices ?? Array.Empty<StoryChoiceDocument>())
+                .Where(choice => choice != null && !string.IsNullOrWhiteSpace(choice.optionId))
+                .Select(choice => new WorkshopStoryChoiceOption
+                {
+                    commandId = command.commandId,
+                    choiceId = command.choiceId,
+                    optionId = choice.optionId,
+                    text = choice.text,
+                }))
+            .ToArray();
+    }
+
+    private StoryNodeDocument GetSuggestedTransitionTarget()
+    {
+        StoryNodeDocument[] nodes = (SelectedDocument?.nodes ?? Array.Empty<StoryNodeDocument>())
+            .Where(node => node != null)
+            .ToArray();
+        return nodes.FirstOrDefault(node => !string.Equals(node.id, SelectedNode?.id, StringComparison.OrdinalIgnoreCase))
+            ?? nodes.FirstOrDefault(node => string.Equals(node.id, SelectedNode?.id, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private string CreateAvailableTransitionId()
+    {
+        int index = 1;
+        string transitionId;
+        do
+        {
+            transitionId = "transition_" + index++;
+        }
+        while ((SelectedNode.transitions ?? Array.Empty<StoryNodeTransitionDocument>())
+            .Any(value => value != null && string.Equals(value.transitionId, transitionId, StringComparison.OrdinalIgnoreCase)));
+
+        return transitionId;
+    }
+
+    private void AppendTransition(StoryNodeTransitionDocument transition)
+    {
+        List<StoryNodeTransitionDocument> transitions = (SelectedNode.transitions ?? Array.Empty<StoryNodeTransitionDocument>())
+            .Where(value => value != null && !value.isDefault)
+            .ToList();
+        StoryNodeTransitionDocument defaultTransition = (SelectedNode.transitions ?? Array.Empty<StoryNodeTransitionDocument>())
+            .FirstOrDefault(value => value != null && value.isDefault);
+        transitions.Add(transition);
+        if (defaultTransition != null)
+            transitions.Add(defaultTransition);
+        SelectedNode.transitions = transitions.ToArray();
+        MarkUnsaved();
+    }
+
+    private void MarkUnsaved()
+    {
+        HasUnsavedChanges = true;
+    }
+
     private string CreateAvailableNodeId()
     {
         int index = 1;
@@ -273,8 +546,24 @@ public sealed class WorkshopStoryBrowserModel
                     .Any(choice => choice != null && string.Equals(choice.target, nodeId, StringComparison.OrdinalIgnoreCase)))
                     return true;
             }
+
+            if ((node?.transitions ?? Array.Empty<StoryNodeTransitionDocument>())
+                .Any(transition => transition != null && string.Equals(transition.targetNodeId, nodeId, StringComparison.OrdinalIgnoreCase)))
+                return true;
         }
 
         return false;
     }
+}
+
+public sealed class WorkshopStoryChoiceOption
+{
+    public string commandId;
+    public string choiceId;
+    public string optionId;
+    public string text;
+
+    public string displayName => string.IsNullOrWhiteSpace(text)
+        ? optionId
+        : optionId + " | " + text;
 }
