@@ -22,9 +22,11 @@ public class WorkshopStoryNodeEditorPanel : Panel
 
     private string pendingStoryPath;
     private string pendingNodeId;
+    private Action closedCallback;
     private string activeSceneId;
     private bool hasBuilt;
     private bool isUpdatingDialogueInput;
+    private bool isUpdatingNodeNameInput;
     private int sceneVisualRequestVersion;
     private int sceneMusicRequestVersion;
     private Font font;
@@ -42,6 +44,8 @@ public class WorkshopStoryNodeEditorPanel : Panel
     private RectTransform editorActions;
     private RectTransform choiceEditor;
     private Text nodeTitleText;
+    private IInputField nodeNameInput;
+    private InputField nativeNodeNameInput;
     private Text dirtyStateText;
     private Text sceneStateText;
     private Dropdown sceneDropdown;
@@ -65,7 +69,7 @@ public class WorkshopStoryNodeEditorPanel : Panel
     private string renderedActorSignature;
     private string renderedMusicSignature;
 
-    public static WorkshopStoryNodeEditorPanel Open(string storyPath, string nodeId)
+    public static WorkshopStoryNodeEditorPanel Open(string storyPath, string nodeId, Action onClosed = null)
     {
         GameObject canvas = GameObject.Find("Canvas");
         if (canvas == null)
@@ -87,6 +91,7 @@ public class WorkshopStoryNodeEditorPanel : Panel
         rootImage.raycastTarget = false;
 
         WorkshopStoryNodeEditorPanel panel = obj.GetComponent<WorkshopStoryNodeEditorPanel>();
+        panel.closedCallback = onClosed;
         panel.OpenTarget(storyPath, nodeId);
         return panel;
     }
@@ -113,9 +118,12 @@ public class WorkshopStoryNodeEditorPanel : Panel
 
     public override void ClosePanel()
     {
+        Action onClosed = closedCallback;
+        closedCallback = null;
         resourcePicker?.Close();
         actorStage?.Clear();
         base.ClosePanel();
+        onClosed?.Invoke();
     }
 
     public void OpenTarget(string storyPath, string nodeId)
@@ -185,8 +193,9 @@ public class WorkshopStoryNodeEditorPanel : Panel
         CreateToolbarButton(toolbar, "返回", new Vector2(18f, -8f), new Vector2(96f, 28f), ClosePanel, false);
         CreateToolbarButton(toolbar, "保存", new Vector2(-18f, -8f), new Vector2(96f, 28f), SaveDraft, true);
         CreateToolbarButton(toolbar, "预览", new Vector2(-122f, -8f), new Vector2(96f, 28f), PreviewDraft, true);
-        nodeTitleText = CreateText("Node Title", toolbar, "编辑剧情点", 22, TextAnchor.MiddleCenter, Cyan,
-            new Vector2(.5f, 1f), new Vector2(.5f, 1f), new Vector2(0f, -8f), new Vector2(420f, 28f));
+        nodeTitleText = CreateText("Node Title", toolbar, "编辑剧情点 ·", 22, TextAnchor.MiddleRight, Cyan,
+            new Vector2(.5f, 1f), new Vector2(.5f, 1f), new Vector2(-12f, -8f), new Vector2(250f, 28f));
+        CreateNodeNameInput();
 
         editorActions = CreateRect("Story Editor Console", transform, new Vector2(0f, 1f), new Vector2(0f, 1f),
             new Vector2(14f, -58f), new Vector2(604f, 128f));
@@ -235,6 +244,79 @@ public class WorkshopStoryNodeEditorPanel : Panel
         BuildChoiceEditor();
         toolbar.SetAsLastSibling();
         editorActions.SetAsLastSibling();
+    }
+
+    private void CreateNodeNameInput()
+    {
+        if (dialogueInputPrefab == null)
+            return;
+
+        GameObject item = Instantiate(dialogueInputPrefab, toolbar);
+        item.name = "Story Node Name Input";
+        RectTransform rect = item.GetComponent<RectTransform>();
+        rect.anchorMin = new Vector2(.5f, 1f);
+        rect.anchorMax = new Vector2(.5f, 1f);
+        rect.pivot = new Vector2(0f, 1f);
+        rect.anchoredPosition = new Vector2(118f, -8f);
+        rect.sizeDelta = new Vector2(140f, 28f);
+
+        nodeNameInput = item.GetComponent<IInputField>();
+        nativeNodeNameInput = item.GetComponent<InputField>();
+        if (nodeNameInput == null || nativeNodeNameInput == null)
+        {
+            Destroy(item);
+            nodeNameInput = null;
+            nativeNodeNameInput = null;
+            return;
+        }
+
+        nativeNodeNameInput.onValueChanged = new InputField.OnChangeEvent();
+        nativeNodeNameInput.onEndEdit = new InputField.EndEditEvent();
+        nativeNodeNameInput.onEndEdit.AddListener(OnNodeNameEdited);
+        nativeNodeNameInput.interactable = true;
+        nativeNodeNameInput.readOnly = false;
+        nativeNodeNameInput.lineType = InputField.LineType.SingleLine;
+        nativeNodeNameInput.contentType = InputField.ContentType.Standard;
+        nodeNameInput.SetPlaceHolderText("剧情点名称");
+
+        Text inputText = nativeNodeNameInput.textComponent;
+        if (inputText != null)
+        {
+            inputText.font = font;
+            inputText.fontSize = 18;
+            inputText.alignment = TextAnchor.MiddleLeft;
+            inputText.color = Color.white;
+            inputText.raycastTarget = false;
+        }
+
+        Text placeholder = nativeNodeNameInput.placeholder as Text;
+        if (placeholder != null)
+        {
+            placeholder.font = font;
+            placeholder.fontSize = 18;
+            placeholder.alignment = TextAnchor.MiddleLeft;
+            placeholder.color = new Color(1f, 1f, 1f, .55f);
+            placeholder.raycastTarget = false;
+        }
+
+        Image inputImage = item.GetComponent<Image>();
+        if (inputImage != null)
+            inputImage.raycastTarget = true;
+    }
+
+    private void OnNodeNameEdited(string displayName)
+    {
+        if (isUpdatingNodeNameInput)
+            return;
+
+        if (!controller.RenameNode(displayName, out string error))
+        {
+            Hintbox.OpenHintboxWithContent(error, 16);
+            return;
+        }
+
+        dirtyStateText.text = "未保存";
+        RefreshCanvas();
     }
 
     private void LoadTarget(string storyPath, string nodeId)
@@ -444,7 +526,13 @@ public class WorkshopStoryNodeEditorPanel : Panel
             return;
 
         string displayName = string.IsNullOrWhiteSpace(node.displayName) ? node.id : node.displayName;
-        nodeTitleText.text = "编辑剧情点 · " + displayName;
+        nodeTitleText.text = "编辑剧情点 ·";
+        if (nativeNodeNameInput != null && !nativeNodeNameInput.isFocused)
+        {
+            isUpdatingNodeNameInput = true;
+            nativeNodeNameInput.SetTextWithoutNotify(displayName);
+            isUpdatingNodeNameInput = false;
+        }
         dirtyStateText.text = controller.HasUnsavedChanges ? "未保存" : string.Empty;
 
         List<WorkshopStorySceneSection> sections = controller.GetSceneSections();

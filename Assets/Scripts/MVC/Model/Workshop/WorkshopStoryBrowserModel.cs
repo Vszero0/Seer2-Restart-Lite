@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using UnityEngine;
 
 public sealed class WorkshopStoryBrowserModel
 {
@@ -133,7 +134,58 @@ public sealed class WorkshopStoryBrowserModel
             return false;
         }
 
+        if (SelectedNode.isBranch)
+        {
+            error = "branch node cannot be used as the entry point";
+            return false;
+        }
+
         SelectedDocument.entry = SelectedNode.id;
+        HasUnsavedChanges = true;
+        error = string.Empty;
+        return true;
+    }
+
+    public bool CopySelectedNode(out string error)
+    {
+        if (!TryGetSelectedNode(out error))
+            return false;
+
+        StoryNodeDocument source = SelectedNode;
+        string newNodeId = CreateAvailableNodeId();
+        StoryNodeDocument copy = JsonUtility.FromJson<StoryNodeDocument>(JsonUtility.ToJson(source));
+        if (copy == null)
+        {
+            error = "Unable to copy the selected story point";
+            return false;
+        }
+
+        Dictionary<string, string> sceneIdMap = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        Dictionary<string, string> commandIdMap = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        Dictionary<string, string> choiceIdMap = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        Dictionary<string, string> optionIdMap = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+        copy.id = newNodeId;
+        copy.displayName = (string.IsNullOrWhiteSpace(source.displayName) ? source.id : source.displayName) + "（分支）";
+        copy.flowRole = "branch";
+        copy.fallbackNodeId = GetDefaultFlowTargetForCopy(source);
+
+        RemapCopiedScenes(source, copy, newNodeId, sceneIdMap);
+        RemapCopiedCommands(source, copy, newNodeId, sceneIdMap, commandIdMap, choiceIdMap, optionIdMap);
+        RemapCopiedTransitions(source, copy, newNodeId, commandIdMap, choiceIdMap, optionIdMap);
+
+        StoryNodeDocument[] nodes = (SelectedDocument.nodes ?? Array.Empty<StoryNodeDocument>())
+            .Where(node => node != null)
+            .ToArray();
+        int sourceIndex = Array.IndexOf(nodes, source);
+        List<StoryNodeDocument> updatedNodes = nodes.ToList();
+        if (sourceIndex < 0)
+            updatedNodes.Add(copy);
+        else
+            updatedNodes.Insert(sourceIndex + 1, copy);
+
+        SelectedDocument.nodes = updatedNodes.ToArray();
+        SelectedNode = copy;
         HasUnsavedChanges = true;
         error = string.Empty;
         return true;
@@ -383,12 +435,17 @@ public sealed class WorkshopStoryBrowserModel
             return false;
         }
 
+        string selectedNodeId = SelectedNode?.id;
         if (!repository.TrySave(SelectedStory.path, SelectedDocument, out error))
             return false;
 
         bool reloaded = Reload(out error);
         if (reloaded)
+        {
+            if (!string.IsNullOrWhiteSpace(selectedNodeId))
+                SelectNode(selectedNodeId);
             HasUnsavedChanges = false;
+        }
         return reloaded;
     }
 
@@ -529,6 +586,227 @@ public sealed class WorkshopStoryBrowserModel
         return nodeId;
     }
 
+    private string GetDefaultFlowTargetForCopy(StoryNodeDocument source)
+    {
+        StoryNodeTransitionDocument explicitDefault = (source?.transitions ?? Array.Empty<StoryNodeTransitionDocument>())
+            .FirstOrDefault(transition => transition != null
+                && transition.isDefault
+                && !string.IsNullOrWhiteSpace(transition.targetNodeId));
+        if (explicitDefault != null)
+            return explicitDefault.targetNodeId;
+
+        if (source != null && source.isBranch)
+            return source.fallbackNodeId;
+
+        StoryNodeDocument[] sequenceNodes = (SelectedDocument?.nodes ?? Array.Empty<StoryNodeDocument>())
+            .Where(node => node != null && !node.isBranch)
+            .ToArray();
+        int sourceIndex = Array.IndexOf(sequenceNodes, source);
+        return sourceIndex >= 0 && sourceIndex + 1 < sequenceNodes.Length
+            ? sequenceNodes[sourceIndex + 1].id
+            : string.Empty;
+    }
+
+    private static void RemapCopiedScenes(
+        StoryNodeDocument source,
+        StoryNodeDocument copy,
+        string newNodeId,
+        Dictionary<string, string> sceneIdMap)
+    {
+        StorySceneDocument[] sourceScenes = source?.scenes ?? Array.Empty<StorySceneDocument>();
+        StorySceneDocument[] copiedScenes = copy?.scenes ?? Array.Empty<StorySceneDocument>();
+        for (int i = 0; i < copiedScenes.Length; i++)
+        {
+            StorySceneDocument copiedScene = copiedScenes[i];
+            if (copiedScene == null)
+                continue;
+
+            string oldId = i < sourceScenes.Length ? sourceScenes[i]?.id : null;
+            string newId = newNodeId + ":scene:" + (i + 1);
+            if (!string.IsNullOrWhiteSpace(oldId))
+                sceneIdMap[oldId] = newId;
+            copiedScene.id = newId;
+        }
+    }
+
+    private static void RemapCopiedCommands(
+        StoryNodeDocument source,
+        StoryNodeDocument copy,
+        string newNodeId,
+        Dictionary<string, string> sceneIdMap,
+        Dictionary<string, string> commandIdMap,
+        Dictionary<string, string> choiceIdMap,
+        Dictionary<string, string> optionIdMap)
+    {
+        StoryCommandDocument[] sourceCommands = source?.commands ?? Array.Empty<StoryCommandDocument>();
+        StoryCommandDocument[] copiedCommands = copy?.commands ?? Array.Empty<StoryCommandDocument>();
+
+        for (int i = 0; i < copiedCommands.Length; i++)
+        {
+            StoryCommandDocument copiedCommand = copiedCommands[i];
+            if (copiedCommand == null)
+                continue;
+
+            StoryCommandDocument sourceCommand = i < sourceCommands.Length ? sourceCommands[i] : null;
+            string newCommandId = newNodeId + ":command:" + (i + 1);
+            if (!string.IsNullOrWhiteSpace(sourceCommand?.commandId))
+                commandIdMap[sourceCommand.commandId] = newCommandId;
+
+            if (copiedCommand.choices == null || copiedCommand.choices.Length == 0)
+                continue;
+
+            string newChoiceId = newCommandId + ":choice";
+            if (!string.IsNullOrWhiteSpace(sourceCommand?.choiceId))
+                choiceIdMap[sourceCommand.choiceId] = newChoiceId;
+            for (int choiceIndex = 0; choiceIndex < copiedCommand.choices.Length; choiceIndex++)
+            {
+                StoryChoiceDocument sourceChoice = sourceCommand?.choices != null && choiceIndex < sourceCommand.choices.Length
+                    ? sourceCommand.choices[choiceIndex]
+                    : null;
+                if (!string.IsNullOrWhiteSpace(sourceChoice?.choiceId))
+                    choiceIdMap[sourceChoice.choiceId] = newChoiceId;
+                if (!string.IsNullOrWhiteSpace(sourceChoice?.optionId))
+                    optionIdMap[sourceChoice.optionId] = newChoiceId + ":" + (choiceIndex + 1);
+            }
+        }
+
+        for (int i = 0; i < copiedCommands.Length; i++)
+        {
+            StoryCommandDocument copiedCommand = copiedCommands[i];
+            if (copiedCommand == null)
+                continue;
+
+            StoryCommandDocument sourceCommand = i < sourceCommands.Length ? sourceCommands[i] : null;
+            string oldCommandId = sourceCommand?.commandId;
+            string newCommandId = newNodeId + ":command:" + (i + 1);
+            if (!string.IsNullOrWhiteSpace(oldCommandId))
+                commandIdMap[oldCommandId] = newCommandId;
+            copiedCommand.commandId = newCommandId;
+            copiedCommand.sceneId = RemapId(copiedCommand.sceneId, sceneIdMap);
+            copiedCommand.target = RemapSelfTarget(copiedCommand.target, source?.id, newNodeId);
+            copiedCommand.condition = RemapConditionGroup(copiedCommand.condition, source?.id, newNodeId, commandIdMap, choiceIdMap, optionIdMap);
+            copiedCommand.displayCondition = RemapConditionGroup(copiedCommand.displayCondition, source?.id, newNodeId, commandIdMap, choiceIdMap, optionIdMap);
+
+            if (copiedCommand.choices == null || copiedCommand.choices.Length == 0)
+                continue;
+
+            string oldChoiceId = sourceCommand?.choiceId;
+            string newChoiceId = newCommandId + ":choice";
+            if (!string.IsNullOrWhiteSpace(oldChoiceId))
+                choiceIdMap[oldChoiceId] = newChoiceId;
+            copiedCommand.choiceId = newChoiceId;
+            for (int choiceIndex = 0; choiceIndex < copiedCommand.choices.Length; choiceIndex++)
+            {
+                StoryChoiceDocument choice = copiedCommand.choices[choiceIndex];
+                if (choice == null)
+                    continue;
+
+                StoryChoiceDocument sourceChoice = sourceCommand?.choices != null && choiceIndex < sourceCommand.choices.Length
+                    ? sourceCommand.choices[choiceIndex]
+                    : null;
+                if (!string.IsNullOrWhiteSpace(sourceChoice?.choiceId))
+                    choiceIdMap[sourceChoice.choiceId] = newChoiceId;
+                if (!string.IsNullOrWhiteSpace(sourceChoice?.optionId))
+                    optionIdMap[sourceChoice.optionId] = newChoiceId + ":" + (choiceIndex + 1);
+                choice.choiceId = newChoiceId;
+                choice.optionId = newChoiceId + ":" + (choiceIndex + 1);
+                choice.target = RemapSelfTarget(choice.target, source?.id, newNodeId);
+            }
+        }
+    }
+
+    private static void RemapCopiedTransitions(
+        StoryNodeDocument source,
+        StoryNodeDocument copy,
+        string newNodeId,
+        Dictionary<string, string> commandIdMap,
+        Dictionary<string, string> choiceIdMap,
+        Dictionary<string, string> optionIdMap)
+    {
+        StoryNodeTransitionDocument[] copiedTransitions = copy?.transitions ?? Array.Empty<StoryNodeTransitionDocument>();
+        List<StoryNodeTransitionDocument> transitions = new List<StoryNodeTransitionDocument>();
+        int copiedIndex = 0;
+        for (int i = 0; i < copiedTransitions.Length; i++)
+        {
+            StoryNodeTransitionDocument transition = copiedTransitions[i];
+            if (transition == null || transition.isDefault)
+                continue;
+
+            transition.transitionId = newNodeId + ":transition:" + (++copiedIndex);
+            transition.targetNodeId = RemapSelfTarget(transition.targetNodeId, source?.id, newNodeId);
+            transition.condition = RemapConditionGroup(transition.condition, source?.id, newNodeId, commandIdMap, choiceIdMap, optionIdMap);
+            transitions.Add(transition);
+        }
+        copy.transitions = transitions.ToArray();
+    }
+
+    private static ConditionGroupDocument RemapConditionGroup(
+        ConditionGroupDocument source,
+        string oldNodeId,
+        string newNodeId,
+        Dictionary<string, string> commandIdMap,
+        Dictionary<string, string> choiceIdMap,
+        Dictionary<string, string> optionIdMap)
+    {
+        if (source == null)
+            return null;
+
+        return new ConditionGroupDocument
+        {
+            operatorType = source.operatorType,
+            conditions = (source.conditions ?? Array.Empty<StoryConditionDocument>())
+                .Select(condition => RemapCondition(condition, oldNodeId, newNodeId, commandIdMap, choiceIdMap, optionIdMap))
+                .ToArray(),
+        };
+    }
+
+    private static StoryConditionDocument RemapCondition(
+        StoryConditionDocument source,
+        string oldNodeId,
+        string newNodeId,
+        Dictionary<string, string> commandIdMap,
+        Dictionary<string, string> choiceIdMap,
+        Dictionary<string, string> optionIdMap)
+    {
+        if (source == null)
+            return null;
+
+        return new StoryConditionDocument
+        {
+            type = source.type,
+            pointId = !string.IsNullOrWhiteSpace(oldNodeId)
+                && string.Equals(source.pointId, oldNodeId, StringComparison.OrdinalIgnoreCase)
+                ? newNodeId
+                : source.pointId,
+            commandId = RemapId(source.commandId, commandIdMap),
+            choiceId = RemapId(source.choiceId, choiceIdMap),
+            optionId = RemapId(source.optionId, optionIdMap),
+            optionSequence = (source.optionSequence ?? Array.Empty<string>())
+                .Select(value => RemapId(value, optionIdMap))
+                .ToArray(),
+            flag = source.flag,
+            value = source.value,
+            missionId = source.missionId,
+            missionState = source.missionState,
+        };
+    }
+
+    private static string RemapId(string value, Dictionary<string, string> map)
+    {
+        if (string.IsNullOrWhiteSpace(value) || map == null)
+            return value;
+
+        return map.TryGetValue(value, out string mapped) ? mapped : value;
+    }
+
+    private static string RemapSelfTarget(string value, string oldNodeId, string newNodeId)
+    {
+        return !string.IsNullOrWhiteSpace(oldNodeId)
+            && string.Equals(value, oldNodeId, StringComparison.OrdinalIgnoreCase)
+            ? newNodeId
+            : value;
+    }
+
     private bool HasNodeReference(string nodeId)
     {
         foreach (StoryNodeDocument node in SelectedDocument.nodes ?? Array.Empty<StoryNodeDocument>())
@@ -549,6 +827,9 @@ public sealed class WorkshopStoryBrowserModel
 
             if ((node?.transitions ?? Array.Empty<StoryNodeTransitionDocument>())
                 .Any(transition => transition != null && string.Equals(transition.targetNodeId, nodeId, StringComparison.OrdinalIgnoreCase)))
+                return true;
+
+            if (string.Equals(node?.fallbackNodeId, nodeId, StringComparison.OrdinalIgnoreCase))
                 return true;
         }
 

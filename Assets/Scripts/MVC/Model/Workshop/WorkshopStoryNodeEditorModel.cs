@@ -112,6 +112,22 @@ public sealed class WorkshopStoryNodeEditorModel
         return string.IsNullOrWhiteSpace(resource?.source) ? "auto" : resource.source;
     }
 
+    public bool RenameNode(string displayName, out string error)
+    {
+        if (DraftNode == null)
+        {
+            error = "当前没有可编辑的剧情点草稿。";
+            return false;
+        }
+
+        DraftNode.displayName = string.IsNullOrWhiteSpace(displayName)
+            ? "未命名剧情点"
+            : displayName.Trim();
+        HasUnsavedChanges = true;
+        error = string.Empty;
+        return true;
+    }
+
     public bool UpdateCommandText(string commandId, string text, out string error)
     {
         if (DraftNode == null)

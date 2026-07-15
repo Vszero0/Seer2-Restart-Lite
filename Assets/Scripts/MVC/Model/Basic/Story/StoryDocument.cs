@@ -171,7 +171,12 @@ public class StoryDocument
         if (nodes == null)
             return script;
 
-        foreach (StoryNodeDocument node in GetOrderedNodes())
+        List<StoryNodeDocument> orderedNodes = GetOrderedNodes();
+        List<StoryNodeDocument> sequenceNodes = orderedNodes
+            .Where(node => node != null && !node.isBranch)
+            .ToList();
+
+        foreach (StoryNodeDocument node in orderedNodes)
         {
             if (node == null || string.IsNullOrEmpty(node.id))
                 continue;
@@ -205,6 +210,11 @@ public class StoryDocument
             }
 
             AppendNodeTransitions(script, node);
+            if (!HasExplicitDefaultTransition(node))
+            {
+                string fallbackNodeId = GetDefaultFlowTarget(node, sequenceNodes);
+                AppendNodeFlowFallback(script, node, fallbackNodeId);
+            }
         }
 
         return script;
@@ -218,22 +228,21 @@ public class StoryDocument
         return actors.FirstOrDefault(x => x != null && x.id == actorId);
     }
 
-    private IEnumerable<StoryNodeDocument> GetOrderedNodes()
+    private List<StoryNodeDocument> GetOrderedNodes()
     {
-        StoryNodeDocument entryNode = nodes.FirstOrDefault(x => x != null && x.id == entry);
+        StoryNodeDocument[] allNodes = nodes ?? Array.Empty<StoryNodeDocument>();
+        List<StoryNodeDocument> orderedNodes = allNodes
+            .Where(node => node != null && !node.isBranch)
+            .ToList();
+        StoryNodeDocument entryNode = orderedNodes.FirstOrDefault(node => node.id == entry);
         if (entryNode != null)
-            yield return entryNode;
-
-        foreach (StoryNodeDocument node in nodes)
         {
-            if (node == null)
-                continue;
-
-            if (entryNode != null && node.id == entryNode.id)
-                continue;
-
-            yield return node;
+            orderedNodes.Remove(entryNode);
+            orderedNodes.Insert(0, entryNode);
         }
+
+        orderedNodes.AddRange(allNodes.Where(node => node != null && node.isBranch));
+        return orderedNodes;
     }
 
     private static void AppendNodeTransitions(StoryScript script, StoryNodeDocument node)
@@ -258,6 +267,52 @@ public class StoryDocument
                 condition = transition.isDefault ? null : transition.condition,
             });
         }
+    }
+
+    private static bool HasExplicitDefaultTransition(StoryNodeDocument node)
+    {
+        return (node?.transitions ?? Array.Empty<StoryNodeTransitionDocument>())
+            .Any(transition => transition != null
+                && transition.isDefault
+                && !string.IsNullOrWhiteSpace(transition.targetNodeId));
+    }
+
+    private static string GetDefaultFlowTarget(StoryNodeDocument node, List<StoryNodeDocument> sequenceNodes)
+    {
+        if (node == null)
+            return string.Empty;
+
+        if (node.isBranch)
+            return node.fallbackNodeId;
+
+        int nodeIndex = sequenceNodes.IndexOf(node);
+        if (nodeIndex < 0 || nodeIndex + 1 >= sequenceNodes.Count)
+            return string.Empty;
+
+        return sequenceNodes[nodeIndex + 1]?.id;
+    }
+
+    private static void AppendNodeFlowFallback(StoryScript script, StoryNodeDocument node, string fallbackNodeId)
+    {
+        if (script == null || node == null)
+            return;
+
+        if (!string.IsNullOrWhiteSpace(fallbackNodeId))
+        {
+            script.commands.Add(new StoryCommand
+            {
+                commandId = node.id + ":flow",
+                type = StoryCommandType.Jump,
+                args = fallbackNodeId,
+            });
+            return;
+        }
+
+        script.commands.Add(new StoryCommand
+        {
+            commandId = node.id + ":flow:end",
+            type = StoryCommandType.End,
+        });
     }
 }
 
@@ -307,12 +362,19 @@ public class StoryNodeDocument
 {
     public string id;
     public string displayName;
+    public string flowRole = "sequence";
+    public string fallbackNodeId;
     public StoryMapReferenceDocument[] mapReferences;
     public StoryActorReferenceDocument[] actorReferences;
     public StorySceneDocument[] scenes;
     public StoryTextStyleDocument style;
     public StoryCommandDocument[] commands;
     public StoryNodeTransitionDocument[] transitions;
+
+    public string normalizedFlowRole => string.Equals(flowRole, "branch", StringComparison.OrdinalIgnoreCase)
+        ? "branch"
+        : "sequence";
+    public bool isBranch => string.Equals(normalizedFlowRole, "branch", StringComparison.OrdinalIgnoreCase);
 
     public StorySceneDocument GetScene(string sceneId)
     {

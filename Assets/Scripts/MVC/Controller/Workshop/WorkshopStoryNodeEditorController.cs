@@ -27,6 +27,11 @@ public sealed class WorkshopStoryNodeEditorController
         return model.GetResourceSource(resourcePath);
     }
 
+    public bool RenameNode(string displayName, out string error)
+    {
+        return model.RenameNode(displayName, out error);
+    }
+
     public bool UpdateCommandText(string commandId, string text, out string error)
     {
         return model.UpdateCommandText(commandId, text, out error);

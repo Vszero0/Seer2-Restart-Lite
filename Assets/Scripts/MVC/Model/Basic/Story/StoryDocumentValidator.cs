@@ -63,6 +63,7 @@ public static class StoryValidator
 
         foreach (StoryNodeDocument node in document.nodes ?? Array.Empty<StoryNodeDocument>())
         {
+            ValidateNodeFlow(node, nodeDict, entry, errors);
             ValidateNodeScenes(node, actorDict, errors);
             ValidateNodeCommands(node, actorDict, nodeDict, errors);
             ValidateNodeTransitions(node, nodeDict, errors);
@@ -95,7 +96,10 @@ public static class StoryValidator
             errors.Add("entry 指向的剧情点不存在：" + document.entry);
 
         foreach (StoryNodeDocument node in document.nodes ?? Array.Empty<StoryNodeDocument>())
+        {
+            ValidateNodeFlow(node, nodeDict, document.entry, errors);
             ValidateNodeTransitions(node, nodeDict, errors);
+        }
 
         error = string.Join("\n", errors);
         return errors.Count == 0;
@@ -179,6 +183,36 @@ public static class StoryValidator
         }
 
         return nodeDict;
+    }
+
+    private static void ValidateNodeFlow(
+        StoryNodeDocument node,
+        Dictionary<string, StoryNodeDocument> nodeDict,
+        string entry,
+        List<string> errors)
+    {
+        if (node == null)
+            return;
+
+        string flowRole = string.IsNullOrWhiteSpace(node.flowRole)
+            ? "sequence"
+            : node.flowRole.Trim().ToLower();
+        string location = "node[" + node.id + "]";
+        if (flowRole != "sequence" && flowRole != "branch")
+            errors.Add(location + ".flowRole must be sequence or branch");
+
+        if (string.Equals(node.id, entry, StringComparison.OrdinalIgnoreCase) && flowRole == "branch")
+            errors.Add(location + " entry node must use sequence flowRole");
+
+        if (flowRole == "branch")
+        {
+            if (!string.IsNullOrWhiteSpace(node.fallbackNodeId))
+                ValidateTarget(node.fallbackNodeId, nodeDict, errors, location + ".fallbackNodeId");
+        }
+        else if (!string.IsNullOrWhiteSpace(node.fallbackNodeId))
+        {
+            errors.Add(location + ".fallbackNodeId is only valid for branch nodes");
+        }
     }
 
     private static void ValidateNodeCommands(
@@ -297,7 +331,7 @@ public static class StoryValidator
             if (transition.isDefault)
             {
                 defaultCount++;
-                if (transition.condition != null)
+                if (transition.condition?.conditions != null && transition.condition.conditions.Length > 0)
                     errors.Add(location + " 默认连接不能配置 condition");
                 if (i != node.transitions.Length - 1)
                     errors.Add(location + " 默认连接必须位于 transitions 的最后");

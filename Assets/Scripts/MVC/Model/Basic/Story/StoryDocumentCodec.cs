@@ -33,6 +33,8 @@ public static class StoryDocumentCodec
             return false;
         }
 
+        Normalize(document);
+
         if (validate && !StoryValidator.Validate(document, out error))
         {
             document = null;
@@ -44,6 +46,31 @@ public static class StoryDocumentCodec
 
     public static string Serialize(StoryDocument document, bool prettyPrint = true)
     {
+        Normalize(document);
         return JsonUtility.ToJson(document, prettyPrint);
+    }
+
+    private static void Normalize(StoryDocument document)
+    {
+        if (document == null)
+            return;
+
+        foreach (StoryNodeDocument node in document.nodes ?? Array.Empty<StoryNodeDocument>())
+        {
+            if (node != null && string.IsNullOrWhiteSpace(node.flowRole))
+                node.flowRole = "sequence";
+
+            foreach (StoryNodeTransitionDocument transition in node?.transitions ?? Array.Empty<StoryNodeTransitionDocument>())
+            {
+                if (transition != null
+                    && transition.isDefault
+                    && (transition.condition == null
+                        || transition.condition.conditions == null
+                        || transition.condition.conditions.Length == 0))
+                {
+                    transition.condition = null;
+                }
+            }
+        }
     }
 }

@@ -95,6 +95,7 @@ public class WorkshopStoryBrowserPanel : Panel
             new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(18f, -84f), new Vector2(52f, 26f));
         storySummaryInput = CreateInputField(petDescriptionInputFieldPrefab, infoSection, "Story Summary Input", "剧本简介", "暂无简介",
             new Vector2(70f, -84f), new Vector2(360f, 26f), OnStorySummaryEdited);
+        CreateActionButton(infoSection, "预览剧本", new Vector2(-120f, -84f), new Vector2(96f, 26f), PreviewStory, TextAnchor.UpperRight);
         CreateActionButton(infoSection, "保存", new Vector2(-16f, -84f), new Vector2(96f, 26f), SaveStory, TextAnchor.UpperRight);
 
         CreateActionButton(nodeSection, "新建", new Vector2(16f, -50f), new Vector2(94f, 28f), CreateNode);
@@ -102,7 +103,8 @@ public class WorkshopStoryBrowserPanel : Panel
         CreateActionButton(nodeSection, "设为入口", new Vector2(224f, -50f), new Vector2(116f, 28f), SetEntryNode);
         CreateActionButton(nodeSection, "编辑剧情点", new Vector2(352f, -50f), new Vector2(132f, 28f), OpenNodeEditor);
         CreateActionButton(nodeSection, "编辑连接", new Vector2(496f, -50f), new Vector2(120f, 28f), OpenConnectionEditor);
-        nodeContent = CreateScrollContent(nodeSection, new Vector2(14f, 14f), new Vector2(-14f, -86f));
+        CreateActionButton(nodeSection, "复制并新增", new Vector2(16f, -84f), new Vector2(112f, 28f), CopyNode);
+        nodeContent = CreateScrollContent(nodeSection, new Vector2(14f, 14f), new Vector2(-14f, -118f));
         BuildConnectionEditor(nodeSection);
     }
 
@@ -122,10 +124,9 @@ public class WorkshopStoryBrowserPanel : Panel
         overlayOutline.effectColor = new Color(Cyan.r, Cyan.g, Cyan.b, .62f);
         overlayOutline.effectDistance = new Vector2(1f, -1f);
 
-        CreateText("Transition Heading", connectionOverlay, "后续连接", 17, TextAnchor.MiddleCenter, Cyan,
+        CreateText("Transition Heading", connectionOverlay, "剧情分支", 17, TextAnchor.MiddleCenter, Cyan,
             new Vector2(.5f, 1f), new Vector2(.5f, 1f), new Vector2(0f, -15f), new Vector2(160f, 22f));
-        CreateActionButton(connectionOverlay, "+默认后续", new Vector2(10f, -8f), new Vector2(82f, 24f), AddDefaultTransition);
-        CreateActionButton(connectionOverlay, "+选项分支", new Vector2(100f, -8f), new Vector2(92f, 24f), AddChoiceTransition);
+        CreateActionButton(connectionOverlay, "添加分支", new Vector2(10f, -8f), new Vector2(92f, 24f), AddChoiceTransition);
         CreateActionButton(connectionOverlay, "返回列表", new Vector2(-10f, -8f), new Vector2(82f, 24f), CloseConnectionEditor, TextAnchor.UpperRight);
 
         transitionContent = CreateScrollContent(connectionOverlay, new Vector2(10f, 10f), new Vector2(-248f, -42f));
@@ -390,6 +391,13 @@ public class WorkshopStoryBrowserPanel : Panel
         RefreshView();
     }
 
+    private void CopyNode()
+    {
+        if (!controller.CopySelectedNode(out string error) && !string.IsNullOrEmpty(error))
+            Hintbox.OpenHintboxWithContent(error, 16);
+        RefreshView();
+    }
+
     private void DeleteNode()
     {
         if (!controller.DeleteSelectedNode(out string error) && !string.IsNullOrEmpty(error))
@@ -412,7 +420,28 @@ public class WorkshopStoryBrowserPanel : Panel
             return;
         }
 
-        WorkshopStoryNodeEditorPanel.Open(controller.SelectedStory.path, controller.SelectedNode.id);
+        string storyPath = controller.SelectedStory.path;
+        string nodeId = controller.SelectedNode.id;
+        if (!controller.SaveSelected(out string error))
+        {
+            Hintbox.OpenHintboxWithContent(error, 16);
+            return;
+        }
+
+        WorkshopStoryNodeEditorPanel.Open(storyPath, nodeId, Reload);
+    }
+
+    private void PreviewStory()
+    {
+        StoryDocument document = controller.SelectedDocument;
+        if (document == null)
+        {
+            Hintbox.OpenHintboxWithContent("请先选择要预览的剧本。", 16);
+            return;
+        }
+
+        if (StoryPanel.OpenPreview(document, document.entry) == null)
+            Hintbox.OpenHintboxWithContent("无法打开剧本预览。", 16);
     }
 
     private void OpenConnectionEditor()
@@ -610,12 +639,13 @@ public class WorkshopStoryBrowserPanel : Panel
             return;
         }
 
-        string status = document.isDraft ? "草稿" : "已发布";
+        string status = (document.isDraft ? "草稿" : "已发布")
+            + " · " + (controller.HasUnsavedChanges ? "未保存" : "已保存");
         int nodeCount = (document.nodes ?? Array.Empty<StoryNodeDocument>()).Count(node => node != null);
         SetInputFieldValue(storyTitleInput, document.title, true);
         SetInputFieldValue(storySummaryInput, document.summary, true);
         storyStatusText.text = "状态：" + status + "\n剧情点：" + nodeCount;
-        storyStatusText.color = document.isDraft ? HintColor : WarningColor;
+        storyStatusText.color = controller.HasUnsavedChanges ? WarningColor : HintColor;
     }
 
     private void RefreshNodes()
@@ -631,6 +661,8 @@ public class WorkshopStoryBrowserPanel : Panel
             string displayName = string.IsNullOrWhiteSpace(node.displayName) ? node.id : node.displayName;
             int sceneCount = (node.scenes ?? Array.Empty<StorySceneDocument>()).Count(scene => scene != null);
             int commandCount = (node.commands ?? Array.Empty<StoryCommandDocument>()).Count(command => command != null);
+            if (node.isBranch)
+                displayName = "分支 · " + displayName;
             string label = (node.id == controller.SelectedDocument.entry ? "入口 · " : string.Empty)
                 + displayName + "    场景 " + sceneCount + " / 命令 " + commandCount;
             string nodeId = node.id;
@@ -667,7 +699,7 @@ public class WorkshopStoryBrowserPanel : Panel
         }
 
         if (transitions.Length == 0)
-            CreateHint(transitionContent, "尚未设置后续连接。\n可添加默认后续，或按选项分支。");
+            CreateHint(transitionContent, "尚未设置剧情分支。\n没有分支命中时，将按剧情点列表顺序继续。");
         else
             transitionContent.sizeDelta = new Vector2(0f, 12f + transitions.Length * 42f);
 

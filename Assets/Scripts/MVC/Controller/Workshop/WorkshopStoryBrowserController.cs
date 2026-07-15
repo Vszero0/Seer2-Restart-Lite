@@ -56,6 +56,11 @@ public sealed class WorkshopStoryBrowserController
         return model.DeleteSelectedNode(out error);
     }
 
+    public bool CopySelectedNode(out string error)
+    {
+        return model.CopySelectedNode(out error);
+    }
+
     public bool AddSelectedNodeDefaultTransition(out string transitionId, out string error)
     {
         return model.AddSelectedNodeDefaultTransition(out transitionId, out error);

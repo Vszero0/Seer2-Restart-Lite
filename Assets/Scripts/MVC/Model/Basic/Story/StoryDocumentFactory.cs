@@ -29,6 +29,7 @@ public static class StoryDocumentFactory
         return new StoryNodeDocument
         {
             id = pointId,
+            flowRole = "sequence",
             displayName = "未命名剧情点",
             actorReferences = Array.Empty<StoryActorReferenceDocument>(),
             scenes = Array.Empty<StorySceneDocument>(),
