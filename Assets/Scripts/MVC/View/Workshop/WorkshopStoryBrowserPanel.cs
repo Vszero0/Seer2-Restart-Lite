@@ -33,6 +33,8 @@ public class WorkshopStoryBrowserPanel : Panel
     private Text connectionNodeTitle;
     private Text connectionDefaultText;
     private Text storyStatusText;
+    private Text nodeDetailTitle;
+    private Text nodeDetailBody;
     private Font font;
     private GameObject listButtonPrefab;
     private GameObject actionButtonPrefab;
@@ -103,8 +105,33 @@ public class WorkshopStoryBrowserPanel : Panel
         CreateActionButton(nodeSection, "编辑剧情点", new Vector2(352f, -50f), new Vector2(132f, 28f), OpenNodeEditor);
         CreateActionButton(nodeSection, "编辑连接", new Vector2(496f, -50f), new Vector2(120f, 28f), OpenConnectionEditor);
         CreateActionButton(nodeSection, "复制并新增", new Vector2(16f, -84f), new Vector2(112f, 28f), CopyNode);
-        nodeContent = CreateScrollContent(nodeSection, new Vector2(14f, 14f), new Vector2(-14f, -118f));
+        nodeContent = CreateScrollContent(nodeSection, new Vector2(14f, 14f), new Vector2(-246f, -118f));
+        BuildNodeDetailPanel(nodeSection);
         BuildConnectionEditor(root);
+    }
+
+    private void BuildNodeDetailPanel(RectTransform nodeSection)
+    {
+        GameObject panelObject = new GameObject("Selected Node Details", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image), typeof(Outline));
+        panelObject.transform.SetParent(nodeSection, false);
+        RectTransform panel = panelObject.GetComponent<RectTransform>();
+        panel.anchorMin = new Vector2(1f, 1f);
+        panel.anchorMax = new Vector2(1f, 1f);
+        panel.pivot = new Vector2(1f, 1f);
+        panel.anchoredPosition = new Vector2(-14f, -118f);
+        panel.sizeDelta = new Vector2(220f, 142f);
+
+        panelObject.GetComponent<Image>().color = new Color32(0, 18, 25, 235);
+        Outline outline = panelObject.GetComponent<Outline>();
+        outline.effectColor = new Color(Cyan.r, Cyan.g, Cyan.b, .38f);
+        outline.effectDistance = new Vector2(1f, -1f);
+
+        nodeDetailTitle = CreateText("Selected Node Title", panel, "剧情点详情", 16, TextAnchor.MiddleLeft, WarningColor,
+            new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(12f, -8f), new Vector2(196f, 24f));
+        nodeDetailBody = CreateText("Selected Node Body", panel, string.Empty, 13, TextAnchor.UpperLeft, HintColor,
+            new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(12f, -36f), new Vector2(196f, 96f));
+        nodeDetailBody.horizontalOverflow = HorizontalWrapMode.Wrap;
+        nodeDetailBody.verticalOverflow = VerticalWrapMode.Truncate;
     }
 
     private void BuildConnectionEditor(RectTransform root)
@@ -438,6 +465,7 @@ public class WorkshopStoryBrowserPanel : Panel
         if (connectionOverlay != null)
             connectionOverlay.gameObject.SetActive(false);
         RefreshStoryInfo();
+        RefreshNodes();
     }
 
     private void AddChoiceTransition()
@@ -548,12 +576,9 @@ public class WorkshopStoryBrowserPanel : Panel
                 continue;
 
             string displayName = string.IsNullOrWhiteSpace(node.displayName) ? node.id : node.displayName;
-            int sceneCount = (node.scenes ?? Array.Empty<StorySceneDocument>()).Count(scene => scene != null);
-            int commandCount = (node.commands ?? Array.Empty<StoryCommandDocument>()).Count(command => command != null);
-            if (node.isBranch)
-                displayName = "分支 · " + displayName;
-            string label = (node.id == controller.SelectedDocument.entry ? "入口 · " : string.Empty)
-                + displayName + "    场景 " + sceneCount + " / 命令 " + commandCount;
+            string roles = (node.id == controller.SelectedDocument.entry ? "入口·" : string.Empty)
+                + (node.isEnding ? "结束·" : string.Empty);
+            string label = roles + (node.isBranch ? "分支" : "顺序") + " - " + displayName;
             string nodeId = node.id;
             CreateListButton(nodeContent, label, node == controller.SelectedNode, index++, () => SelectNode(nodeId));
         }
@@ -563,8 +588,63 @@ public class WorkshopStoryBrowserPanel : Panel
         else
             nodeContent.sizeDelta = new Vector2(0f, 12f + index * 42f);
 
+        RefreshNodeDetails();
+
         if (connectionOverlay != null && connectionOverlay.gameObject.activeSelf)
             RefreshConnections();
+    }
+
+    private void RefreshNodeDetails()
+    {
+        StoryNodeDocument node = controller.SelectedNode;
+        if (nodeDetailTitle == null || nodeDetailBody == null)
+            return;
+
+        if (node == null)
+        {
+            nodeDetailTitle.text = "剧情点详情";
+            nodeDetailBody.text = "选中剧情点后，\n在这里查看结构和走向。";
+            return;
+        }
+
+        int sceneCount = (node.scenes ?? Array.Empty<StorySceneDocument>()).Count(scene => scene != null);
+        int actorCount = (node.actorReferences ?? Array.Empty<StoryActorReferenceDocument>()).Count(actor => actor != null);
+        int contentCount = (node.commands ?? Array.Empty<StoryCommandDocument>()).Count(command => command != null);
+        int ruleCount = (node.transitions ?? Array.Empty<StoryNodeTransitionDocument>())
+            .Count(transition => transition != null && !transition.isDefault);
+        string flowState = node.isEnding
+            ? "结束节点"
+            : node.defaultEnds
+                ? "默认结束，另有后续"
+                : node.hasEndingPath
+                    ? "含结束分支"
+                    : "继续剧情";
+
+        nodeDetailTitle.text = GetNodeDisplayName(node);
+        nodeDetailBody.text = "类型：" + (node.isBranch ? "分支" : "顺序")
+            + "  |  " + flowState
+            + "\n场景：" + sceneCount + "    角色：" + actorCount
+            + "\n内容：" + contentCount + "    分支规则：" + ruleCount
+            + "\n默认后续：" + GetDefaultFlowDescription(node);
+    }
+
+    private string GetDefaultFlowDescription(StoryNodeDocument node)
+    {
+        StoryNodeTransitionDocument explicitDefault = (node?.transitions ?? Array.Empty<StoryNodeTransitionDocument>())
+            .FirstOrDefault(transition => transition != null && transition.isDefault);
+        if (explicitDefault != null)
+            return explicitDefault.isEnd ? "结束剧情" : GetNodeDisplayName(FindNode(explicitDefault.targetNodeId));
+        if (node != null && node.isBranch)
+            return string.IsNullOrWhiteSpace(node.fallbackNodeId)
+                ? "结束剧情"
+                : GetNodeDisplayName(FindNode(node.fallbackNodeId));
+
+        string targetNodeId = node == controller.SelectedNode
+            ? controller.GetSelectedNodeDefaultFlowTarget()
+            : string.Empty;
+        return string.IsNullOrWhiteSpace(targetNodeId)
+            ? "未明确设置"
+            : GetNodeDisplayName(FindNode(targetNodeId));
     }
 
     private void RefreshConnections()
@@ -790,8 +870,11 @@ public class WorkshopStoryBrowserPanel : Panel
         if (explicitDefault != null)
         {
             CreateTargetDropdown(card, explicitDefault, new Vector2(286f, -38f), new Vector2(350f, 26f));
-            CreateActionButton(card, "恢复默认顺序", new Vector2(-14f, -28f), new Vector2(126f, 28f),
-                () => RestoreDefaultFlow(explicitDefault.transitionId), TextAnchor.UpperRight);
+            if (!explicitDefault.isAutoGenerated)
+            {
+                CreateActionButton(card, "恢复默认顺序", new Vector2(-14f, -28f), new Vector2(126f, 28f),
+                    () => RestoreDefaultFlow(explicitDefault.transitionId), TextAnchor.UpperRight);
+            }
         }
         else
         {

@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using UnityEngine;
 
 /// <summary>
@@ -55,7 +56,8 @@ public static class StoryDocumentCodec
         if (document == null)
             return;
 
-        document.schemaVersion = Math.Max(3, document.schemaVersion);
+        int sourceVersion = document.schemaVersion;
+        document.schemaVersion = Math.Max(4, document.schemaVersion);
         foreach (StoryNodeDocument node in document.nodes ?? Array.Empty<StoryNodeDocument>())
         {
             if (node != null && string.IsNullOrWhiteSpace(node.flowRole))
@@ -88,6 +90,43 @@ public static class StoryDocumentCodec
                 NormalizeConditionGroup(command?.displayCondition);
             }
         }
+
+        if (sourceVersion < 4)
+            EnsureAutoEnding(document);
+    }
+
+    private static void EnsureAutoEnding(StoryDocument document)
+    {
+        StoryNodeDocument[] nodes = document?.nodes ?? Array.Empty<StoryNodeDocument>();
+        if (nodes.Any(node => node != null && node.isEnding))
+            return;
+
+        StoryNodeDocument candidate = nodes
+            .Where(node => node != null && !node.isBranch && CanBecomeEnding(node))
+            .LastOrDefault()
+            ?? nodes.LastOrDefault(node => node != null && CanBecomeEnding(node));
+        if (candidate == null)
+            return;
+
+        candidate.transitions = (candidate.transitions ?? Array.Empty<StoryNodeTransitionDocument>())
+            .Where(transition => transition != null && !transition.isDefault)
+            .Append(StoryDocumentFactory.CreateAutoEndTransition(candidate.id))
+            .ToArray();
+    }
+
+    private static bool CanBecomeEnding(StoryNodeDocument node)
+    {
+        if ((node?.transitions ?? Array.Empty<StoryNodeTransitionDocument>())
+            .Any(transition => transition != null && !transition.isEnd))
+        {
+            return false;
+        }
+
+        return !(node?.commands ?? Array.Empty<StoryCommandDocument>())
+            .Any(command => command != null
+                && (string.Equals(command.type, "jump", StringComparison.OrdinalIgnoreCase)
+                    || (command.choices ?? Array.Empty<StoryChoiceDocument>())
+                        .Any(choice => choice != null && !string.IsNullOrWhiteSpace(choice.target))));
     }
 
     private static void NormalizeStableIds(StoryNodeDocument node)

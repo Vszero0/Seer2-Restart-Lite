@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 
 /// <summary>
 /// 剧本文档的结构与引用校验。
@@ -69,6 +70,12 @@ public static class StoryValidator
             ValidateNodeTransitions(node, nodeDict, errors);
         }
 
+        if (nodeDict.Count > 0 && !(document.nodes ?? Array.Empty<StoryNodeDocument>())
+            .Any(node => node != null && node.isEnding))
+        {
+            errors.Add("剧本至少需要一个明确的结束节点");
+        }
+
         error = string.Join("\n", errors);
         return errors.Count == 0;
     }
@@ -100,6 +107,12 @@ public static class StoryValidator
             ValidateNodeFlow(node, nodeDict, document.entry, errors);
             ValidateDraftStableIds(node, errors);
             ValidateNodeTransitions(node, nodeDict, errors);
+        }
+
+        if (nodeDict.Count > 0 && !(document.nodes ?? Array.Empty<StoryNodeDocument>())
+            .Any(node => node != null && node.isEnding))
+        {
+            errors.Add("剧本至少需要一个明确的结束节点");
         }
 
         error = string.Join("\n", errors);
