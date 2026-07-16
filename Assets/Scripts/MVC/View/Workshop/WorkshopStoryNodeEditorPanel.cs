@@ -67,7 +67,11 @@ public class WorkshopStoryNodeEditorPanel : Panel
     private WorkshopStoryPointResourcePicker resourcePicker;
     private int renderedMapId = int.MinValue;
     private string renderedActorSignature;
-    private string renderedMusicSignature;
+    private string requestedSceneMusicSignature;
+    private string activeMusicIdentity;
+    private bool hasChangedMusicIdentity;
+    private bool hasRestartedMusic;
+    private AudioSystem.MusicPlaybackSnapshot musicSnapshot;
 
     public static WorkshopStoryNodeEditorPanel Open(string storyPath, string nodeId, Action onClosed = null)
     {
@@ -111,6 +115,7 @@ public class WorkshopStoryNodeEditorPanel : Panel
         BuildRuntimeCanvas();
         BuildToolbar();
         resourcePicker = new WorkshopStoryPointResourcePicker(transform, actionButtonPrefab, listButtonPrefab, dialogueInputPrefab, font);
+        CaptureMusicContext();
 
         if (!string.IsNullOrWhiteSpace(pendingStoryPath))
             LoadTarget(pendingStoryPath, pendingNodeId);
@@ -120,6 +125,8 @@ public class WorkshopStoryNodeEditorPanel : Panel
     {
         Action onClosed = closedCallback;
         closedCallback = null;
+        sceneMusicRequestVersion++;
+        RestoreMusicContext();
         resourcePicker?.Close();
         actorStage?.Clear();
         base.ClosePanel();
@@ -332,7 +339,7 @@ public class WorkshopStoryNodeEditorPanel : Panel
         activeDialogueCommand = null;
         renderedMapId = int.MinValue;
         renderedActorSignature = null;
-        renderedMusicSignature = null;
+        requestedSceneMusicSignature = null;
         RefreshCanvas();
     }
 
@@ -605,11 +612,10 @@ public class WorkshopStoryNodeEditorPanel : Panel
         if (AudioSystem.instance == null || scene == null)
             return;
 
-        string musicSignature = scene.mapId + "|" + (scene.bgmResourcePath ?? string.Empty);
-        if (string.Equals(renderedMusicSignature, musicSignature, StringComparison.Ordinal))
+        string sceneMusicSignature = scene.mapId + "|" + (scene.bgmResourcePath ?? string.Empty);
+        if (string.Equals(requestedSceneMusicSignature, sceneMusicSignature, StringComparison.Ordinal))
             return;
-
-        renderedMusicSignature = musicSignature;
+        requestedSceneMusicSignature = sceneMusicSignature;
 
         int requestVersion = ++sceneMusicRequestVersion;
         if (string.IsNullOrWhiteSpace(scene.bgmResourcePath))
@@ -617,27 +623,66 @@ public class WorkshopStoryNodeEditorPanel : Panel
             Map.GetMap(scene.mapId, map =>
             {
                 if (requestVersion == sceneMusicRequestVersion && map?.resources?.bgm != null)
-                    AudioSystem.instance?.PlayMusic(map.resources.bgm, AudioVolumeType.BGM);
+                    ApplyResolvedSceneMusic(map.resources.bgm, AudioSystem.BuildMapMusicIdentity(map), requestVersion);
             }, _ => { });
             return;
         }
 
         string source = controller.GetResourceSource(scene.bgmResourcePath);
+        string musicIdentity = AudioSystem.BuildResourceMusicIdentity(source, scene.bgmResourcePath);
+        if (string.Equals(activeMusicIdentity, musicIdentity, StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
         bool modOnly = source == "mod" || source == "auto";
         ResourceManager.instance.GetLocalAddressables<AudioClip>(scene.bgmResourcePath, modOnly,
             clip =>
             {
-                if (requestVersion == sceneMusicRequestVersion)
-                    AudioSystem.instance?.PlayMusic(clip, AudioVolumeType.BGM);
+                ApplyResolvedSceneMusic(clip, musicIdentity, requestVersion);
             },
             modOnly && source == "auto"
                 ? _ => ResourceManager.instance.GetLocalAddressables<AudioClip>(scene.bgmResourcePath, false,
                     clip =>
                     {
-                        if (requestVersion == sceneMusicRequestVersion)
-                            AudioSystem.instance?.PlayMusic(clip, AudioVolumeType.BGM);
+                        ApplyResolvedSceneMusic(clip, musicIdentity, requestVersion);
                     })
                 : null);
+    }
+
+    private void CaptureMusicContext()
+    {
+        if (AudioSystem.instance == null || musicSnapshot != null)
+            return;
+
+        musicSnapshot = AudioSystem.instance.CaptureMusic();
+        activeMusicIdentity = AudioSystem.instance.CurrentMusicIdentity;
+    }
+
+    private void ApplyResolvedSceneMusic(AudioClip clip, string musicIdentity, int requestVersion)
+    {
+        if (requestVersion != sceneMusicRequestVersion || AudioSystem.instance == null || clip == null)
+            return;
+        if (string.Equals(activeMusicIdentity, musicIdentity, StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        hasChangedMusicIdentity = true;
+        hasRestartedMusic |= AudioSystem.instance.PlayMusicTracked(clip, AudioVolumeType.BGM, musicIdentity);
+        activeMusicIdentity = musicIdentity;
+    }
+
+    private void RestoreMusicContext()
+    {
+        if (musicSnapshot == null)
+            return;
+
+        if (hasChangedMusicIdentity && AudioSystem.instance != null)
+            AudioSystem.instance.TryRestoreMusic(musicSnapshot, activeMusicIdentity, hasRestartedMusic);
+
+        musicSnapshot = null;
+        hasChangedMusicIdentity = false;
+        hasRestartedMusic = false;
     }
 
     private void RefreshActorStage(StoryDocument document, StorySceneDocument scene)
@@ -1357,11 +1402,14 @@ public class WorkshopStoryNodeEditorPanel : Panel
         }
 
         resourcePicker?.Close();
+        sceneMusicRequestVersion++;
         gameObject.SetActive(false);
         StoryPanel preview = StoryPanel.OpenPreview(document, node.id, ResumeAfterPreview);
         if (preview == null)
         {
             gameObject.SetActive(true);
+            requestedSceneMusicSignature = null;
+            RefreshCanvas();
             Hintbox.OpenHintboxWithContent("无法打开剧情预览。", 16);
         }
     }
@@ -1373,6 +1421,7 @@ public class WorkshopStoryNodeEditorPanel : Panel
 
         gameObject.SetActive(true);
         transform.SetAsLastSibling();
+        requestedSceneMusicSignature = null;
         RefreshCanvas();
     }
 

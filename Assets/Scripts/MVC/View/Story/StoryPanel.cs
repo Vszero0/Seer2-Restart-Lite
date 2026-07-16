@@ -26,6 +26,11 @@ public class StoryPanel : Panel
     private bool isClosing;
     private bool waitingForChoice;
     private bool isPreviewMode;
+    private bool suppressMusicRestore;
+    private bool hasChangedMusicIdentity;
+    private bool hasRestartedMusic;
+    private string activeMusicIdentity;
+    private AudioSystem.MusicPlaybackSnapshot musicSnapshot;
 
     private Image sceneImage;
     private RectTransform actorLayer;
@@ -107,6 +112,7 @@ public class StoryPanel : Panel
         base.Init();
         BuildUI();
         isBuilt = true;
+        CaptureMusicContext();
 
         if (pendingPreviewStory != null)
             LoadRuntimeStory(pendingPreviewStory, pendingPreviewStartNodeId);
@@ -118,6 +124,8 @@ public class StoryPanel : Panel
     {
         Action onPreviewClosed = previewClosedCallback;
         previewClosedCallback = null;
+        sceneMusicRequestVersion++;
+        RestoreMusicContext();
         ClearDialogHandlers();
         actorStage?.Clear();
         DialogManager.instance?.CloseDialog();
@@ -284,7 +292,7 @@ public class StoryPanel : Panel
                 if (requestVersion != sceneMusicRequestVersion || map?.resources?.bgm == null)
                     return;
 
-                AudioSystem.instance?.PlayMusic(map.resources.bgm, AudioVolumeType.BGM);
+                ApplyResolvedSceneMusic(map.resources.bgm, AudioSystem.BuildMapMusicIdentity(map), requestVersion);
             });
             return;
         }
@@ -293,21 +301,56 @@ public class StoryPanel : Panel
             return;
 
         string source = story?.GetResourceSource(resourcePath) ?? "auto";
+        string musicIdentity = AudioSystem.BuildResourceMusicIdentity(source, resourcePath);
+        if (string.Equals(activeMusicIdentity, musicIdentity, StringComparison.OrdinalIgnoreCase))
+            return;
         bool modOnly = source == "mod" || source == "auto";
         ResourceManager.instance.GetLocalAddressables<AudioClip>(resourcePath, modOnly,
             clip =>
             {
-                if (requestVersion == sceneMusicRequestVersion)
-                    AudioSystem.instance?.PlayMusic(clip, AudioVolumeType.BGM);
+                ApplyResolvedSceneMusic(clip, musicIdentity, requestVersion);
             },
             modOnly && source == "auto"
                 ? _ => ResourceManager.instance.GetLocalAddressables<AudioClip>(resourcePath, false,
                     clip =>
                     {
-                        if (requestVersion == sceneMusicRequestVersion)
-                            AudioSystem.instance?.PlayMusic(clip, AudioVolumeType.BGM);
+                        ApplyResolvedSceneMusic(clip, musicIdentity, requestVersion);
                     })
                 : null);
+    }
+
+    private void CaptureMusicContext()
+    {
+        if (AudioSystem.instance == null || musicSnapshot != null)
+            return;
+
+        musicSnapshot = AudioSystem.instance.CaptureMusic();
+        activeMusicIdentity = AudioSystem.instance.CurrentMusicIdentity;
+    }
+
+    private void ApplyResolvedSceneMusic(AudioClip clip, string musicIdentity, int requestVersion)
+    {
+        if (requestVersion != sceneMusicRequestVersion || AudioSystem.instance == null || clip == null)
+            return;
+        if (string.Equals(activeMusicIdentity, musicIdentity, StringComparison.OrdinalIgnoreCase))
+            return;
+
+        hasChangedMusicIdentity = true;
+        hasRestartedMusic |= AudioSystem.instance.PlayMusicTracked(clip, AudioVolumeType.BGM, musicIdentity);
+        activeMusicIdentity = musicIdentity;
+    }
+
+    private void RestoreMusicContext()
+    {
+        if (musicSnapshot == null)
+            return;
+
+        if (!suppressMusicRestore && hasChangedMusicIdentity && AudioSystem.instance != null)
+            AudioSystem.instance.TryRestoreMusic(musicSnapshot, activeMusicIdentity, hasRestartedMusic);
+
+        musicSnapshot = null;
+        hasChangedMusicIdentity = false;
+        hasRestartedMusic = false;
     }
 
     private void SetScene(string path, int mapId = 0)
@@ -529,6 +572,7 @@ public class StoryPanel : Panel
             return;
 
         isClosing = true;
+        suppressMusicRestore = true;
         ClosePanel();
         TeleportHandler.Teleport(mapId);
     }

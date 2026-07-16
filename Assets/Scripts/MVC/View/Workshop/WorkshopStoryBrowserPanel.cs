@@ -37,6 +37,12 @@ public class WorkshopStoryBrowserPanel : Panel
     }
 
     private const string StoryEndGraphNodeId = "__story_end__";
+    private const float GraphNodeWidth = 180f;
+    private const float GraphNodeHeight = 76f;
+    private const float GraphColumnSpacing = 310f;
+    private const float GraphRowSpacing = 122f;
+    private const float GraphLeftPadding = 34f;
+    private const float GraphTopPadding = 40f;
 
     private static readonly Color Cyan = new Color32(82, 229, 249, 255);
     private static readonly Color HintColor = new Color32(180, 220, 230, 255);
@@ -749,12 +755,34 @@ public class WorkshopStoryBrowserPanel : Panel
         List<StoryGraphEdge> edges = BuildStoryGraphEdges(document, nodes);
         Dictionary<string, StoryGraphNodeLayout> layouts = BuildStoryGraphLayout(document, nodes, edges);
         int maxLevel = layouts.Values.Max(layout => layout.level);
-        int maxRows = layouts.Values.GroupBy(layout => layout.level).Max(group => group.Count());
+        float cardsBottom = layouts.Values.Max(layout => layout.position.y) + GraphNodeHeight;
+        List<IGrouping<string, StoryGraphEdge>> renderedEdges = edges
+            .GroupBy(edge => edge.sourceId + "\n" + edge.targetId)
+            .ToList();
+        int returnEdgeCount = renderedEdges.Count(group =>
+            layouts.TryGetValue(group.First().sourceId, out StoryGraphNodeLayout source)
+            && layouts.TryGetValue(group.First().targetId, out StoryGraphNodeLayout target)
+            && target.level < source.level);
+        float returnLaneTop = cardsBottom + 44f;
         graphContent.sizeDelta = new Vector2(
-            Mathf.Max(840f, 46f + (maxLevel + 1) * 220f),
-            Mathf.Max(320f, 42f + maxRows * 106f));
+            Mathf.Max(840f, GraphLeftPadding + maxLevel * GraphColumnSpacing + GraphNodeWidth + 110f),
+            Mathf.Max(320f, returnLaneTop + returnEdgeCount * 22f + 48f));
 
-        foreach (IGrouping<string, StoryGraphEdge> group in edges.GroupBy(edge => edge.sourceId + "\n" + edge.targetId))
+        Dictionary<string, int> targetTotals = renderedEdges
+            .GroupBy(group => group.First().targetId, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(group => group.Key, group => group.Count(), StringComparer.OrdinalIgnoreCase);
+        Dictionary<string, string> targetLabels = renderedEdges
+            .GroupBy(group => group.First().targetId, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(
+                group => group.Key,
+                group => string.Join(" / ", group.SelectMany(edgeGroup => edgeGroup)
+                    .Select(edge => edge.label).Distinct().ToArray()),
+                StringComparer.OrdinalIgnoreCase);
+        HashSet<string> shownTargetLabels = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        HashSet<string> shownTargetArrows = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        Dictionary<string, int> sourceSlots = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        int returnLaneIndex = 0;
+        foreach (IGrouping<string, StoryGraphEdge> group in renderedEdges)
         {
             StoryGraphEdge[] groupedEdges = group.ToArray();
             StoryGraphEdge edge = groupedEdges[0];
@@ -765,7 +793,25 @@ public class WorkshopStoryBrowserPanel : Panel
             }
 
             string label = string.Join(" / ", groupedEdges.Select(value => value.label).Distinct().ToArray());
-            CreateGraphEdge(source.position, target.position, label, groupedEdges.Any(value => value.isConditional));
+            string displayLabel = targetTotals[edge.targetId] > 1
+                ? shownTargetLabels.Add(edge.targetId) ? targetLabels[edge.targetId] : null
+                : label;
+            bool showTargetArrow = targetTotals[edge.targetId] <= 1 || shownTargetArrows.Add(edge.targetId);
+            int sourceSlot = sourceSlots.TryGetValue(edge.sourceId, out int usedSlots) ? usedSlots : 0;
+            sourceSlots[edge.sourceId] = sourceSlot + 1;
+            bool isReturnEdge = target.level < source.level;
+            CreateGraphEdge(source.position, target.position, displayLabel,
+                groupedEdges.Any(value => value.isConditional),
+                sourceSlot, showTargetArrow,
+                isReturnEdge ? returnLaneIndex++ : -1, returnLaneTop);
+        }
+
+        foreach (Transform child in graphContent.Cast<Transform>()
+            .Where(child => child.gameObject.name == "Graph Edge Label"
+                || child.gameObject.name == "Graph Edge Arrow")
+            .ToArray())
+        {
+            child.SetAsLastSibling();
         }
 
         foreach (StoryGraphNodeLayout layout in layouts.Values.OrderBy(value => value.level).ThenBy(value => value.position.y))
@@ -896,46 +942,149 @@ public class WorkshopStoryBrowserPanel : Panel
             layout.level = unreachableLevel;
 
         foreach (IGrouping<int, StoryGraphNodeLayout> levelGroup in layouts.Values
-            .OrderBy(layout => Array.FindIndex(nodes, node => node != null && node.id == layout.id))
+            .OrderBy(layout => layout.level)
             .GroupBy(layout => layout.level))
         {
-            int row = 0;
-            foreach (StoryGraphNodeLayout layout in levelGroup)
-                layout.position = new Vector2(32f + layout.level * 220f, 34f + row++ * 106f);
+            List<StoryGraphNodeLayout> levelLayouts = levelGroup
+                .OrderBy(layout =>
+                {
+                    int index = Array.FindIndex(nodes, node => node != null && node.id == layout.id);
+                    return index < 0 ? int.MaxValue : index;
+                })
+                .ToList();
+            List<KeyValuePair<StoryGraphNodeLayout, float>> desiredPositions = new List<KeyValuePair<StoryGraphNodeLayout, float>>();
+            for (int index = 0; index < levelLayouts.Count; index++)
+            {
+                StoryGraphNodeLayout layout = levelLayouts[index];
+                float[] predecessorRows = edges
+                    .Where(edge => string.Equals(edge.targetId, layout.id, StringComparison.OrdinalIgnoreCase))
+                    .Select(edge => layouts.TryGetValue(edge.sourceId, out StoryGraphNodeLayout source) ? source : null)
+                    .Where(source => source != null && source.level < layout.level)
+                    .Select(source => source.position.y)
+                    .ToArray();
+                float desiredY = predecessorRows.Length > 0
+                    ? predecessorRows.Average()
+                    : GraphTopPadding + index * GraphRowSpacing;
+                desiredPositions.Add(new KeyValuePair<StoryGraphNodeLayout, float>(layout, desiredY));
+            }
+
+            float nextY = GraphTopPadding;
+            foreach (KeyValuePair<StoryGraphNodeLayout, float> item in desiredPositions.OrderBy(item => item.Value))
+            {
+                float y = Mathf.Max(nextY, item.Value);
+                item.Key.position = new Vector2(GraphLeftPadding + item.Key.level * GraphColumnSpacing, y);
+                nextY = y + GraphRowSpacing;
+            }
         }
         return layouts;
     }
 
-    private void CreateGraphEdge(Vector2 sourcePosition, Vector2 targetPosition, string label, bool conditional)
+    private void CreateGraphEdge(
+        Vector2 sourcePosition,
+        Vector2 targetPosition,
+        string label,
+        bool conditional,
+        int sourceSlot,
+        bool showTargetArrow,
+        int returnLaneIndex,
+        float returnLaneTop)
     {
-        Vector2 sourceCenter = sourcePosition + new Vector2(82f, 34f);
-        Vector2 targetCenter = targetPosition + new Vector2(82f, 34f);
+        Vector2 sourceCenter = sourcePosition + new Vector2(GraphNodeWidth * .5f, GraphNodeHeight * .5f);
+        Vector2 targetCenter = targetPosition + new Vector2(GraphNodeWidth * .5f, GraphNodeHeight * .5f);
         if ((targetCenter - sourceCenter).sqrMagnitude < 1f)
         {
-            Vector2 first = sourceCenter + new Vector2(72f, 0f);
-            Vector2 second = first + new Vector2(32f, 0f);
-            Vector2 third = second + new Vector2(0f, -28f);
-            Vector2 fourth = sourceCenter + new Vector2(38f, -34f);
+            Vector2 first = sourceCenter + new Vector2(GraphNodeWidth * .5f, 0f);
+            Vector2 second = first + new Vector2(42f + sourceSlot * 10f, 0f);
+            Vector2 third = second + new Vector2(0f, -34f - sourceSlot * 8f);
+            Vector2 fourth = sourceCenter + new Vector2(42f, -GraphNodeHeight * .5f);
             CreateGraphLineSegment(first, second, conditional);
             CreateGraphLineSegment(second, third, conditional);
             CreateGraphLineSegment(third, fourth, conditional);
-            CreateText("Graph Loop Label", graphContent, "↺ " + label, 12, TextAnchor.MiddleCenter,
-                conditional ? WarningColor : HintColor,
-                new Vector2(0f, 1f), new Vector2(.5f, .5f),
-                new Vector2(second.x + 8f, -second.y + 14f), new Vector2(100f, 20f));
+            if (!string.IsNullOrWhiteSpace(label))
+                CreateGraphEdgeLabel(new Vector2(second.x + 8f, third.y - 13f), "↺ " + label, conditional);
+            if (showTargetArrow)
+                CreateGraphArrow(fourth, "▼", conditional);
             return;
         }
 
-        Vector2 direction = (targetCenter - sourceCenter).normalized;
-        Vector2 start = sourceCenter + direction * 72f;
-        Vector2 end = targetCenter - direction * 72f;
-        CreateGraphLineSegment(start, end, conditional);
+        if (returnLaneIndex >= 0)
+        {
+            Vector2 start = new Vector2(sourcePosition.x, sourceCenter.y);
+            Vector2 end = new Vector2(targetPosition.x + GraphNodeWidth, targetCenter.y);
+            float sourceLaneX = start.x - 28f - sourceSlot * 8f;
+            float targetLaneX = end.x + 28f + sourceSlot * 8f;
+            float laneY = returnLaneTop + returnLaneIndex * 22f;
+            CreateGraphLineSegment(start, new Vector2(sourceLaneX, start.y), conditional);
+            CreateGraphLineSegment(new Vector2(sourceLaneX, start.y), new Vector2(sourceLaneX, laneY), conditional);
+            CreateGraphLineSegment(new Vector2(sourceLaneX, laneY), new Vector2(targetLaneX, laneY), conditional);
+            CreateGraphLineSegment(new Vector2(targetLaneX, laneY), new Vector2(targetLaneX, end.y), conditional);
+            CreateGraphLineSegment(new Vector2(targetLaneX, end.y), end, conditional);
+            if (!string.IsNullOrWhiteSpace(label))
+                CreateGraphEdgeLabel(new Vector2((sourceLaneX + targetLaneX) * .5f, laneY - 13f), "↩ " + label, conditional);
+            if (showTargetArrow)
+                CreateGraphArrow(end, "◀", conditional);
+            return;
+        }
 
-        Text edgeLabel = CreateText("Graph Edge Label", graphContent, "→ " + label, 12, TextAnchor.MiddleCenter,
+        if (Mathf.Abs(targetPosition.x - sourcePosition.x) < 1f)
+        {
+            Vector2 start = new Vector2(sourcePosition.x + GraphNodeWidth, sourceCenter.y);
+            Vector2 end = new Vector2(targetPosition.x + GraphNodeWidth, targetCenter.y);
+            float laneX = start.x + 44f + sourceSlot * 12f;
+            CreateGraphLineSegment(start, new Vector2(laneX, start.y), conditional);
+            CreateGraphLineSegment(new Vector2(laneX, start.y), new Vector2(laneX, end.y), conditional);
+            CreateGraphLineSegment(new Vector2(laneX, end.y), end, conditional);
+            if (!string.IsNullOrWhiteSpace(label))
+                CreateGraphEdgeLabel(new Vector2(laneX + 8f, (start.y + end.y) * .5f), label, conditional);
+            if (showTargetArrow)
+                CreateGraphArrow(end, "◀", conditional);
+            return;
+        }
+
+        Vector2 forwardStart = new Vector2(sourcePosition.x + GraphNodeWidth, sourceCenter.y);
+        Vector2 forwardEnd = new Vector2(targetPosition.x, targetCenter.y);
+        float laneXForward = (forwardStart.x + forwardEnd.x) * .5f;
+        CreateGraphLineSegment(forwardStart, new Vector2(laneXForward, forwardStart.y), conditional);
+        CreateGraphLineSegment(new Vector2(laneXForward, forwardStart.y), new Vector2(laneXForward, forwardEnd.y), conditional);
+        CreateGraphLineSegment(new Vector2(laneXForward, forwardEnd.y), forwardEnd, conditional);
+        if (!string.IsNullOrWhiteSpace(label))
+        {
+            CreateGraphEdgeLabel(
+                new Vector2(laneXForward, forwardEnd.y - 17f),
+                label, conditional);
+        }
+        if (showTargetArrow)
+            CreateGraphArrow(forwardEnd, "▶", conditional);
+    }
+
+    private void CreateGraphEdgeLabel(Vector2 position, string label, bool conditional)
+    {
+        float width = Mathf.Clamp(46f + (label?.Length ?? 0) * 8f, 66f, 104f);
+        GameObject labelObject = new GameObject("Graph Edge Label", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));
+        labelObject.transform.SetParent(graphContent, false);
+        RectTransform rect = labelObject.GetComponent<RectTransform>();
+        rect.anchorMin = new Vector2(0f, 1f);
+        rect.anchorMax = new Vector2(0f, 1f);
+        rect.pivot = new Vector2(.5f, .5f);
+        rect.anchoredPosition = new Vector2(position.x, -position.y);
+        rect.sizeDelta = new Vector2(width, 22f);
+        Image backgroundImage = labelObject.GetComponent<Image>();
+        backgroundImage.color = new Color32(0, 9, 13, 245);
+        backgroundImage.raycastTarget = false;
+
+        Text text = CreateText("Label", rect, label, 11, TextAnchor.MiddleCenter,
             conditional ? WarningColor : HintColor,
+            new Vector2(.5f, .5f), new Vector2(.5f, .5f), Vector2.zero, new Vector2(width - 8f, 18f));
+        text.horizontalOverflow = HorizontalWrapMode.Wrap;
+        text.verticalOverflow = VerticalWrapMode.Truncate;
+    }
+
+    private void CreateGraphArrow(Vector2 position, string arrow, bool conditional)
+    {
+        CreateText("Graph Edge Arrow", graphContent, arrow, 13, TextAnchor.MiddleCenter,
+            conditional ? WarningColor : Cyan,
             new Vector2(0f, 1f), new Vector2(.5f, .5f),
-            new Vector2((start.x + end.x) * .5f, -(start.y + end.y) * .5f - 10f), new Vector2(110f, 20f));
-        edgeLabel.horizontalOverflow = HorizontalWrapMode.Wrap;
+            new Vector2(position.x, -position.y), new Vector2(18f, 18f));
     }
 
     private void CreateGraphLineSegment(Vector2 start, Vector2 end, bool conditional)
@@ -950,7 +1099,9 @@ public class WorkshopStoryBrowserPanel : Panel
         line.anchoredPosition = new Vector2((start.x + end.x) * .5f, -(start.y + end.y) * .5f);
         line.sizeDelta = new Vector2(Mathf.Max(1f, delta.magnitude), conditional ? 3f : 2f);
         line.localRotation = Quaternion.Euler(0f, 0f, -Mathf.Atan2(delta.y, delta.x) * Mathf.Rad2Deg);
-        lineObject.GetComponent<Image>().color = conditional ? WarningColor : Cyan;
+        Image lineImage = lineObject.GetComponent<Image>();
+        lineImage.color = conditional ? WarningColor : Cyan;
+        lineImage.raycastTarget = false;
     }
 
     private void CreateGraphNode(StoryGraphNodeLayout layout, string entryId)
@@ -962,7 +1113,7 @@ public class WorkshopStoryBrowserPanel : Panel
         card.anchorMax = new Vector2(0f, 1f);
         card.pivot = new Vector2(0f, 1f);
         card.anchoredPosition = new Vector2(layout.position.x, -layout.position.y);
-        card.sizeDelta = new Vector2(164f, 68f);
+        card.sizeDelta = new Vector2(GraphNodeWidth, GraphNodeHeight);
 
         bool isEndCard = string.Equals(layout.id, StoryEndGraphNodeId, StringComparison.Ordinal);
         bool isEntry = !isEndCard && string.Equals(layout.id, entryId, StringComparison.OrdinalIgnoreCase);
@@ -981,7 +1132,7 @@ public class WorkshopStoryBrowserPanel : Panel
         if (isEndCard)
         {
             CreateText("End", card, "结束剧情", 17, TextAnchor.MiddleCenter, WarningColor,
-                new Vector2(.5f, .5f), new Vector2(.5f, .5f), Vector2.zero, new Vector2(142f, 34f));
+                new Vector2(.5f, .5f), new Vector2(.5f, .5f), Vector2.zero, new Vector2(156f, 34f));
             return;
         }
 
@@ -989,12 +1140,14 @@ public class WorkshopStoryBrowserPanel : Panel
             + (layout.node.isEnding ? "结束 · " : string.Empty)
             + (layout.node.isBranch ? "分支" : "顺序");
         CreateText("Node Role", card, roles, 12, TextAnchor.MiddleLeft, layout.isReachable ? WarningColor : HintColor,
-            new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(10f, -6f), new Vector2(144f, 20f));
-        CreateText("Node Name", card, Shorten(GetNodeDisplayName(layout.node), 12), 15, TextAnchor.MiddleLeft,
+            new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(10f, -7f), new Vector2(160f, 20f));
+        Text nodeName = CreateText("Node Name", card, Shorten(GetNodeDisplayName(layout.node), 13), 15, TextAnchor.MiddleLeft,
             layout.isReachable ? Cyan : HintColor,
-            new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(10f, -28f), new Vector2(144f, 24f));
-        CreateText("Node Id", card, layout.isReachable ? layout.id : "不可达 · " + layout.id, 10, TextAnchor.MiddleLeft, HintColor,
-            new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(10f, -50f), new Vector2(144f, 14f));
+            new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(10f, -30f), new Vector2(160f, 24f));
+        nodeName.horizontalOverflow = HorizontalWrapMode.Wrap;
+        nodeName.verticalOverflow = VerticalWrapMode.Truncate;
+        CreateText("Node Id", card, Shorten(layout.isReachable ? layout.id : "不可达 · " + layout.id, 20), 10, TextAnchor.MiddleLeft, HintColor,
+            new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(10f, -57f), new Vector2(160f, 14f));
     }
 
     private string GetDefaultFlowDescription(StoryNodeDocument node)
