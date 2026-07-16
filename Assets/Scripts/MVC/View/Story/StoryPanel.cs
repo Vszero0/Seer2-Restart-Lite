@@ -831,6 +831,7 @@ public class StoryPanel : Panel
         actorStage.ApplyScene(command.actorLayouts, command.layout);
         foreach (StoryActorDocument actor in command.sceneActors ?? Array.Empty<StoryActorDocument>())
             actorStage.Show(actor, false);
+        actorStage.PlaySceneEntrance();
     }
 
     private void PrepareSceneBoundary()

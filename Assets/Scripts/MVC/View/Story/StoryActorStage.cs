@@ -58,6 +58,7 @@ public sealed class StoryActorStage
         if (actor == null || string.IsNullOrEmpty(actor.id))
             return;
 
+        bool isNewActor = false;
         if (!actors.TryGetValue(actor.id, out StoryActorRuntime runtime))
         {
             runtime = new StoryActorRuntime
@@ -69,9 +70,8 @@ public sealed class StoryActorStage
             };
             runtime.canvasGroup = runtime.image.GetComponent<CanvasGroup>();
             actors[actor.id] = runtime;
-            if (fadeIn)
-                PlayActorFade(runtime);
-            else if (runtime.canvasGroup != null)
+            isNewActor = true;
+            if (!fadeIn && runtime.canvasGroup != null)
                 runtime.canvasGroup.alpha = 1f;
         }
         else
@@ -82,6 +82,19 @@ public sealed class StoryActorStage
         }
 
         LayoutActors();
+        if (isNewActor && fadeIn)
+            PlayActorEntrance(runtime);
+    }
+
+    public void PlaySceneEntrance()
+    {
+        int index = 0;
+        foreach (StoryActorRuntime runtime in actors.Values
+                     .Where(value => value?.image != null && value.image.gameObject.activeSelf)
+                     .OrderBy(value => value.order))
+        {
+            PlayActorEntrance(runtime, index++ * .04f);
+        }
     }
 
     public void Hide(string actorId)
@@ -95,6 +108,7 @@ public sealed class StoryActorStage
         if (!actors.TryGetValue(actorId, out StoryActorRuntime runtime))
             return;
 
+        StopActorAnimations(runtime);
         if (runtime.image != null)
         {
             runtime.image.gameObject.SetActive(false);
@@ -107,16 +121,24 @@ public sealed class StoryActorStage
 
     public void SetActiveActor(string actorId)
     {
+        StoryActorRuntime activeRuntime = null;
         foreach (StoryActorRuntime runtime in actors.Values)
         {
             if (runtime?.image == null)
                 continue;
 
+            StopActorFocus(runtime);
             bool active = !string.IsNullOrEmpty(actorId) && runtime.document.id == actorId;
             runtime.image.color = active ? Color.white : new Color32(118, 118, 126, 255);
             if (active)
+            {
                 runtime.image.transform.SetAsLastSibling();
+                activeRuntime = runtime;
+            }
         }
+
+        if (activeRuntime != null)
+            PlayActorFocus(activeRuntime);
     }
 
     public StorySceneActorLayoutDocument GetPlacement(StoryActorDocument actor)
@@ -147,8 +169,7 @@ public sealed class StoryActorStage
     {
         foreach (StoryActorRuntime runtime in actors.Values)
         {
-            if (runtime?.fadeCoroutine != null)
-                coroutineHost.StopCoroutine(runtime.fadeCoroutine);
+            StopActorAnimations(runtime);
 
             if (runtime?.image != null)
             {
@@ -223,7 +244,7 @@ public sealed class StoryActorStage
         return int.TryParse(actor?.petId, out int petId) ? petId : 0;
     }
 
-    private void PlayActorFade(StoryActorRuntime runtime)
+    private void PlayActorEntrance(StoryActorRuntime runtime, float delay = 0f)
     {
         if (runtime == null || runtime.canvasGroup == null)
             return;
@@ -231,24 +252,90 @@ public sealed class StoryActorStage
         if (runtime.fadeCoroutine != null)
             coroutineHost.StopCoroutine(runtime.fadeCoroutine);
 
-        runtime.fadeCoroutine = coroutineHost.StartCoroutine(ActorFadeCoroutine(runtime));
+        runtime.fadeCoroutine = coroutineHost.StartCoroutine(ActorEntranceCoroutine(runtime, delay));
     }
 
-    private IEnumerator ActorFadeCoroutine(StoryActorRuntime runtime)
+    private IEnumerator ActorEntranceCoroutine(StoryActorRuntime runtime, float delay)
     {
-        const float duration = .18f;
+        const float duration = .2f;
         float time = 0f;
         runtime.canvasGroup.alpha = 0f;
+        runtime.image.rectTransform.anchoredPosition = runtime.basePosition + Vector2.down * 12f;
 
+        while (time < delay)
+        {
+            time += Time.unscaledDeltaTime;
+            yield return null;
+        }
+
+        time = 0f;
         while (time < duration)
         {
-            runtime.canvasGroup.alpha = Mathf.Clamp01(time / duration);
+            float progress = Mathf.Clamp01(time / duration);
+            float eased = progress * progress * (3f - 2f * progress);
+            runtime.canvasGroup.alpha = eased;
+            runtime.image.rectTransform.anchoredPosition = runtime.basePosition + Vector2.down * (12f * (1f - eased));
             time += Time.unscaledDeltaTime;
             yield return null;
         }
 
         runtime.canvasGroup.alpha = 1f;
+        runtime.image.rectTransform.anchoredPosition = runtime.basePosition;
         runtime.fadeCoroutine = null;
+    }
+
+    private void PlayActorFocus(StoryActorRuntime runtime)
+    {
+        if (runtime?.image == null)
+            return;
+
+        StopActorFocus(runtime);
+        runtime.focusCoroutine = coroutineHost.StartCoroutine(ActorFocusCoroutine(runtime));
+    }
+
+    private IEnumerator ActorFocusCoroutine(StoryActorRuntime runtime)
+    {
+        const float duration = .22f;
+        float time = 0f;
+        while (time < duration)
+        {
+            float progress = Mathf.Clamp01(time / duration);
+            float scale = 1f + Mathf.Sin(progress * Mathf.PI) * .03f;
+            runtime.image.rectTransform.localScale = new Vector3(
+                runtime.baseScale.x * scale,
+                runtime.baseScale.y * scale,
+                runtime.baseScale.z);
+            time += Time.unscaledDeltaTime;
+            yield return null;
+        }
+
+        runtime.image.rectTransform.localScale = runtime.baseScale;
+        runtime.focusCoroutine = null;
+    }
+
+    private void StopActorAnimations(StoryActorRuntime runtime)
+    {
+        if (runtime == null)
+            return;
+        if (runtime.fadeCoroutine != null)
+        {
+            coroutineHost.StopCoroutine(runtime.fadeCoroutine);
+            runtime.fadeCoroutine = null;
+        }
+        StopActorFocus(runtime);
+    }
+
+    private void StopActorFocus(StoryActorRuntime runtime)
+    {
+        if (runtime == null)
+            return;
+        if (runtime.focusCoroutine != null)
+        {
+            coroutineHost.StopCoroutine(runtime.focusCoroutine);
+            runtime.focusCoroutine = null;
+        }
+        if (runtime.image != null)
+            runtime.image.rectTransform.localScale = runtime.baseScale;
     }
 
     private void LayoutActors()
@@ -290,6 +377,8 @@ public sealed class StoryActorStage
             rect.anchoredPosition = new Vector2(isRight ? sideOffset : -sideOffset, activeLayout.actorBottom + yOffset);
             rect.sizeDelta = new Vector2(originalSize.x * scale, originalSize.y * scale);
             rect.localScale = new Vector3(runtime.placement.faceLeft ? -1f : 1f, 1f, 1f);
+            runtime.basePosition = rect.anchoredPosition;
+            runtime.baseScale = rect.localScale;
         }
     }
 
@@ -306,6 +395,8 @@ public sealed class StoryActorStage
             rect.anchoredPosition = new Vector2(runtime.placement.x, runtime.placement.y);
             rect.sizeDelta = new Vector2(originalSize.x * scale, originalSize.y * scale);
             rect.localScale = new Vector3(runtime.placement.faceLeft ? -1f : 1f, 1f, 1f);
+            runtime.basePosition = rect.anchoredPosition;
+            runtime.baseScale = rect.localScale;
         }
     }
 
@@ -327,6 +418,9 @@ public sealed class StoryActorStage
         public Image image;
         public CanvasGroup canvasGroup;
         public Coroutine fadeCoroutine;
+        public Coroutine focusCoroutine;
+        public Vector2 basePosition;
+        public Vector3 baseScale = Vector3.one;
         public int order;
         public StorySceneActorLayoutDocument placement;
     }
