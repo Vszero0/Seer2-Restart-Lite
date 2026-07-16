@@ -10,6 +10,7 @@ public static class StoryActorPlacementCalculator
 {
     private const float DefaultActorSpacing = 132f;
     private const float DefaultActorHeight = 250f;
+    private const float ActorMaxWidthToHeightRatio = 1.4f;
     private const float DefaultActorBottom = 166f;
     private const float DefaultActorCenterGap = 112f;
     private const float DefaultActorStackOffset = 16f;
@@ -29,15 +30,18 @@ public static class StoryActorPlacementCalculator
         };
     }
 
-    public static Vector2 GetSpriteSize(Sprite sprite, float fallbackHeight)
+    public static Vector2 GetSpriteSize(Sprite sprite, float maxHeight)
     {
+        float resolvedMaxHeight = maxHeight > 0f ? maxHeight : DefaultActorHeight;
         if (sprite == null || sprite.rect.width <= 0f || sprite.rect.height <= 0f)
-        {
-            float height = fallbackHeight > 0f ? fallbackHeight : DefaultActorHeight;
-            return new Vector2(height * .72f, height);
-        }
+            return new Vector2(resolvedMaxHeight * .72f, resolvedMaxHeight);
 
-        return new Vector2(sprite.rect.width, sprite.rect.height);
+        float resolvedMaxWidth = resolvedMaxHeight * ActorMaxWidthToHeightRatio;
+        float shrinkScale = Mathf.Min(
+            1f,
+            resolvedMaxHeight / sprite.rect.height,
+            resolvedMaxWidth / sprite.rect.width);
+        return new Vector2(sprite.rect.width * shrinkScale, sprite.rect.height * shrinkScale);
     }
 
     public static Vector2 GetVisibleBottomPivot(Sprite sprite)
