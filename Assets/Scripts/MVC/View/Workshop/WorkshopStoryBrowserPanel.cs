@@ -19,6 +19,25 @@ public class WorkshopStoryBrowserPanel : Panel
         public string displayName;
     }
 
+    private sealed class StoryGraphEdge
+    {
+        public string sourceId;
+        public string targetId;
+        public string label;
+        public bool isConditional;
+    }
+
+    private sealed class StoryGraphNodeLayout
+    {
+        public string id;
+        public StoryNodeDocument node;
+        public int level;
+        public bool isReachable;
+        public Vector2 position;
+    }
+
+    private const string StoryEndGraphNodeId = "__story_end__";
+
     private static readonly Color Cyan = new Color32(82, 229, 249, 255);
     private static readonly Color HintColor = new Color32(180, 220, 230, 255);
     private static readonly Color WarningColor = new Color32(255, 232, 71, 255);
@@ -30,6 +49,8 @@ public class WorkshopStoryBrowserPanel : Panel
     private RectTransform nodeContent;
     private RectTransform connectionOverlay;
     private RectTransform transitionContent;
+    private RectTransform graphOverlay;
+    private RectTransform graphContent;
     private Text connectionNodeTitle;
     private Text connectionDefaultText;
     private Text storyStatusText;
@@ -95,7 +116,8 @@ public class WorkshopStoryBrowserPanel : Panel
         CreateText("Summary Label", infoSection, "简介：", 15, TextAnchor.MiddleLeft, Cyan,
             new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(18f, -84f), new Vector2(52f, 26f));
         storySummaryInput = CreateInputField(petDescriptionInputFieldPrefab, infoSection, "Story Summary Input", "剧本简介", "暂无简介",
-            new Vector2(70f, -84f), new Vector2(360f, 26f), OnStorySummaryEdited);
+            new Vector2(70f, -84f), new Vector2(244f, 26f), OnStorySummaryEdited);
+        CreateActionButton(infoSection, "查看结构", new Vector2(-220f, -84f), new Vector2(92f, 26f), OpenGraphViewer, TextAnchor.UpperRight);
         CreateActionButton(infoSection, "预览剧本", new Vector2(-120f, -84f), new Vector2(96f, 26f), PreviewStory, TextAnchor.UpperRight);
         CreateActionButton(infoSection, "保存", new Vector2(-16f, -84f), new Vector2(96f, 26f), SaveStory, TextAnchor.UpperRight);
 
@@ -108,6 +130,7 @@ public class WorkshopStoryBrowserPanel : Panel
         nodeContent = CreateScrollContent(nodeSection, new Vector2(14f, 14f), new Vector2(-246f, -118f));
         BuildNodeDetailPanel(nodeSection);
         BuildConnectionEditor(root);
+        BuildGraphViewer(root);
     }
 
     private void BuildNodeDetailPanel(RectTransform nodeSection)
@@ -161,6 +184,64 @@ public class WorkshopStoryBrowserPanel : Panel
 
         transitionContent = CreateScrollContent(connectionOverlay, new Vector2(16f, 14f), new Vector2(-16f, -112f));
         overlayObject.SetActive(false);
+    }
+
+    private void BuildGraphViewer(RectTransform root)
+    {
+        GameObject overlayObject = new GameObject("Story Graph Viewer", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image), typeof(Outline));
+        overlayObject.transform.SetParent(root, false);
+        graphOverlay = overlayObject.GetComponent<RectTransform>();
+        graphOverlay.anchorMin = new Vector2(.5f, .5f);
+        graphOverlay.anchorMax = new Vector2(.5f, .5f);
+        graphOverlay.pivot = new Vector2(.5f, .5f);
+        graphOverlay.anchoredPosition = new Vector2(0f, -12f);
+        graphOverlay.sizeDelta = new Vector2(872f, 420f);
+
+        Image overlay = overlayObject.GetComponent<Image>();
+        overlay.color = new Color32(0, 8, 12, 252);
+        Outline outline = overlayObject.GetComponent<Outline>();
+        outline.effectColor = new Color(Cyan.r, Cyan.g, Cyan.b, .86f);
+        outline.effectDistance = new Vector2(2f, -2f);
+
+        CreateText("Graph Heading", graphOverlay, "剧情点结构", 22, TextAnchor.MiddleCenter, Cyan,
+            new Vector2(.5f, 1f), new Vector2(.5f, 1f), new Vector2(0f, -18f), new Vector2(260f, 30f));
+        CreateText("Graph Legend", graphOverlay, "只读视图  ·  青色：顺序/默认  ·  黄色：条件分支  ·  灰色：入口不可达",
+            13, TextAnchor.MiddleLeft, HintColor,
+            new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(18f, -52f), new Vector2(680f, 24f));
+        CreateActionButton(graphOverlay, "返回列表", new Vector2(-16f, -46f), new Vector2(88f, 28f), CloseGraphViewer, TextAnchor.UpperRight);
+        graphContent = CreateGraphScrollContent(graphOverlay);
+        overlayObject.SetActive(false);
+    }
+
+    private RectTransform CreateGraphScrollContent(RectTransform parent)
+    {
+        GameObject viewportObject = new GameObject("Graph Viewport", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image), typeof(Mask), typeof(ScrollRect));
+        viewportObject.transform.SetParent(parent, false);
+        RectTransform viewport = viewportObject.GetComponent<RectTransform>();
+        viewport.anchorMin = Vector2.zero;
+        viewport.anchorMax = Vector2.one;
+        viewport.offsetMin = new Vector2(16f, 16f);
+        viewport.offsetMax = new Vector2(-16f, -82f);
+        viewportObject.GetComponent<Image>().color = new Color32(0, 13, 18, 255);
+        viewportObject.GetComponent<Mask>().showMaskGraphic = true;
+
+        GameObject contentObject = new GameObject("Graph Content", typeof(RectTransform));
+        contentObject.transform.SetParent(viewport, false);
+        RectTransform content = contentObject.GetComponent<RectTransform>();
+        content.anchorMin = new Vector2(0f, 1f);
+        content.anchorMax = new Vector2(0f, 1f);
+        content.pivot = new Vector2(0f, 1f);
+        content.anchoredPosition = Vector2.zero;
+        content.sizeDelta = new Vector2(840f, 320f);
+
+        ScrollRect scroll = viewportObject.GetComponent<ScrollRect>();
+        scroll.viewport = viewport;
+        scroll.content = content;
+        scroll.horizontal = true;
+        scroll.vertical = true;
+        scroll.movementType = ScrollRect.MovementType.Clamped;
+        scroll.scrollSensitivity = 70f;
+        return content;
     }
 
     private void CreateTitleDecoration()
@@ -448,6 +529,24 @@ public class WorkshopStoryBrowserPanel : Panel
             Hintbox.OpenHintboxWithContent("无法打开剧本预览。", 16);
     }
 
+    private void OpenGraphViewer()
+    {
+        if (controller.SelectedDocument == null)
+        {
+            Hintbox.OpenHintboxWithContent("请先选择要查看的剧本。", 16);
+            return;
+        }
+
+        graphOverlay.gameObject.SetActive(true);
+        RefreshGraphViewer();
+    }
+
+    private void CloseGraphViewer()
+    {
+        if (graphOverlay != null)
+            graphOverlay.gameObject.SetActive(false);
+    }
+
     private void OpenConnectionEditor()
     {
         if (controller.SelectedNode == null)
@@ -626,6 +725,276 @@ public class WorkshopStoryBrowserPanel : Panel
             + "\n场景：" + sceneCount + "    角色：" + actorCount
             + "\n内容：" + contentCount + "    分支规则：" + ruleCount
             + "\n默认后续：" + GetDefaultFlowDescription(node);
+    }
+
+    private void RefreshGraphViewer()
+    {
+        if (graphContent == null)
+            return;
+
+        ClearChildren(graphContent);
+        graphContent.anchoredPosition = Vector2.zero;
+        StoryDocument document = controller.SelectedDocument;
+        StoryNodeDocument[] nodes = (document?.nodes ?? Array.Empty<StoryNodeDocument>())
+            .Where(node => node != null)
+            .ToArray();
+        if (nodes.Length == 0)
+        {
+            graphContent.sizeDelta = new Vector2(840f, 320f);
+            CreateText("Empty Graph", graphContent, "当前剧本没有剧情点。", 16, TextAnchor.MiddleCenter, HintColor,
+                new Vector2(0f, 1f), new Vector2(.5f, .5f), new Vector2(420f, -140f), new Vector2(260f, 40f));
+            return;
+        }
+
+        List<StoryGraphEdge> edges = BuildStoryGraphEdges(document, nodes);
+        Dictionary<string, StoryGraphNodeLayout> layouts = BuildStoryGraphLayout(document, nodes, edges);
+        int maxLevel = layouts.Values.Max(layout => layout.level);
+        int maxRows = layouts.Values.GroupBy(layout => layout.level).Max(group => group.Count());
+        graphContent.sizeDelta = new Vector2(
+            Mathf.Max(840f, 46f + (maxLevel + 1) * 220f),
+            Mathf.Max(320f, 42f + maxRows * 106f));
+
+        foreach (IGrouping<string, StoryGraphEdge> group in edges.GroupBy(edge => edge.sourceId + "\n" + edge.targetId))
+        {
+            StoryGraphEdge[] groupedEdges = group.ToArray();
+            StoryGraphEdge edge = groupedEdges[0];
+            if (!layouts.TryGetValue(edge.sourceId, out StoryGraphNodeLayout source)
+                || !layouts.TryGetValue(edge.targetId, out StoryGraphNodeLayout target))
+            {
+                continue;
+            }
+
+            string label = string.Join(" / ", groupedEdges.Select(value => value.label).Distinct().ToArray());
+            CreateGraphEdge(source.position, target.position, label, groupedEdges.Any(value => value.isConditional));
+        }
+
+        foreach (StoryGraphNodeLayout layout in layouts.Values.OrderBy(value => value.level).ThenBy(value => value.position.y))
+            CreateGraphNode(layout, document.entry);
+    }
+
+    private List<StoryGraphEdge> BuildStoryGraphEdges(StoryDocument document, StoryNodeDocument[] nodes)
+    {
+        List<StoryGraphEdge> edges = new List<StoryGraphEdge>();
+        HashSet<string> nodeIds = new HashSet<string>(nodes.Select(node => node.id), StringComparer.OrdinalIgnoreCase);
+        List<StoryNodeDocument> sequenceNodes = nodes.Where(node => !node.isBranch).ToList();
+        StoryNodeDocument entryNode = sequenceNodes.FirstOrDefault(node => string.Equals(node.id, document.entry, StringComparison.OrdinalIgnoreCase));
+        if (entryNode != null)
+        {
+            sequenceNodes.Remove(entryNode);
+            sequenceNodes.Insert(0, entryNode);
+        }
+
+        foreach (StoryNodeDocument node in nodes)
+        {
+            StoryNodeTransitionDocument[] transitions = (node.transitions ?? Array.Empty<StoryNodeTransitionDocument>())
+                .Where(transition => transition != null)
+                .ToArray();
+            int ruleIndex = 0;
+            foreach (StoryNodeTransitionDocument transition in transitions)
+            {
+                bool conditional = !transition.isDefault;
+                if (conditional)
+                    ruleIndex++;
+                AddGraphEdge(edges, nodeIds, node.id,
+                    transition.isEnd ? StoryEndGraphNodeId : transition.targetNodeId,
+                    transition.isDefault ? "默认" : "条件" + ruleIndex,
+                    conditional);
+            }
+
+            if (!transitions.Any(transition => transition.isDefault))
+            {
+                string fallbackTarget;
+                string label;
+                if (node.isBranch)
+                {
+                    fallbackTarget = string.IsNullOrWhiteSpace(node.fallbackNodeId)
+                        ? StoryEndGraphNodeId
+                        : node.fallbackNodeId;
+                    label = "默认";
+                }
+                else
+                {
+                    int sequenceIndex = sequenceNodes.IndexOf(node);
+                    fallbackTarget = sequenceIndex >= 0 && sequenceIndex + 1 < sequenceNodes.Count
+                        ? sequenceNodes[sequenceIndex + 1].id
+                        : StoryEndGraphNodeId;
+                    label = "顺序";
+                }
+                AddGraphEdge(edges, nodeIds, node.id, fallbackTarget, label, false);
+            }
+
+            foreach (StoryCommandDocument command in node.commands ?? Array.Empty<StoryCommandDocument>())
+            {
+                if (command == null)
+                    continue;
+                bool conditional = command.condition != null && command.condition.hasConditions;
+                if (string.Equals(command.type, "jump", StringComparison.OrdinalIgnoreCase))
+                    AddGraphEdge(edges, nodeIds, node.id, command.target, conditional ? "条件跳转" : "跳转命令", conditional);
+                else if (string.Equals(command.type, "end", StringComparison.OrdinalIgnoreCase))
+                    AddGraphEdge(edges, nodeIds, node.id, StoryEndGraphNodeId, conditional ? "条件结束" : "结束命令", conditional);
+            }
+        }
+        return edges;
+    }
+
+    private static void AddGraphEdge(List<StoryGraphEdge> edges, HashSet<string> nodeIds,
+        string sourceId, string targetId, string label, bool conditional)
+    {
+        if (string.IsNullOrWhiteSpace(sourceId) || string.IsNullOrWhiteSpace(targetId))
+            return;
+        if (!string.Equals(targetId, StoryEndGraphNodeId, StringComparison.Ordinal)
+            && !nodeIds.Contains(targetId))
+        {
+            return;
+        }
+
+        edges.Add(new StoryGraphEdge
+        {
+            sourceId = sourceId,
+            targetId = targetId,
+            label = label,
+            isConditional = conditional,
+        });
+    }
+
+    private Dictionary<string, StoryGraphNodeLayout> BuildStoryGraphLayout(
+        StoryDocument document,
+        StoryNodeDocument[] nodes,
+        List<StoryGraphEdge> edges)
+    {
+        Dictionary<string, StoryGraphNodeLayout> layouts = nodes.ToDictionary(
+            node => node.id,
+            node => new StoryGraphNodeLayout { id = node.id, node = node, level = -1 },
+            StringComparer.OrdinalIgnoreCase);
+        if (edges.Any(edge => string.Equals(edge.targetId, StoryEndGraphNodeId, StringComparison.Ordinal)))
+            layouts[StoryEndGraphNodeId] = new StoryGraphNodeLayout { id = StoryEndGraphNodeId, level = -1 };
+
+        string entryId = !string.IsNullOrWhiteSpace(document.entry) && layouts.ContainsKey(document.entry)
+            ? document.entry
+            : nodes[0].id;
+        Queue<string> queue = new Queue<string>();
+        layouts[entryId].level = 0;
+        layouts[entryId].isReachable = true;
+        queue.Enqueue(entryId);
+        while (queue.Count > 0)
+        {
+            string sourceId = queue.Dequeue();
+            int nextLevel = layouts[sourceId].level + 1;
+            foreach (string targetId in edges.Where(edge => string.Equals(edge.sourceId, sourceId, StringComparison.OrdinalIgnoreCase))
+                .Select(edge => edge.targetId).Distinct(StringComparer.OrdinalIgnoreCase))
+            {
+                if (!layouts.TryGetValue(targetId, out StoryGraphNodeLayout target) || target.isReachable)
+                    continue;
+                target.level = nextLevel;
+                target.isReachable = true;
+                queue.Enqueue(targetId);
+            }
+        }
+
+        int unreachableLevel = layouts.Values.Where(layout => layout.isReachable).Select(layout => layout.level).DefaultIfEmpty(0).Max() + 1;
+        foreach (StoryGraphNodeLayout layout in layouts.Values.Where(layout => !layout.isReachable))
+            layout.level = unreachableLevel;
+
+        foreach (IGrouping<int, StoryGraphNodeLayout> levelGroup in layouts.Values
+            .OrderBy(layout => Array.FindIndex(nodes, node => node != null && node.id == layout.id))
+            .GroupBy(layout => layout.level))
+        {
+            int row = 0;
+            foreach (StoryGraphNodeLayout layout in levelGroup)
+                layout.position = new Vector2(32f + layout.level * 220f, 34f + row++ * 106f);
+        }
+        return layouts;
+    }
+
+    private void CreateGraphEdge(Vector2 sourcePosition, Vector2 targetPosition, string label, bool conditional)
+    {
+        Vector2 sourceCenter = sourcePosition + new Vector2(82f, 34f);
+        Vector2 targetCenter = targetPosition + new Vector2(82f, 34f);
+        if ((targetCenter - sourceCenter).sqrMagnitude < 1f)
+        {
+            Vector2 first = sourceCenter + new Vector2(72f, 0f);
+            Vector2 second = first + new Vector2(32f, 0f);
+            Vector2 third = second + new Vector2(0f, -28f);
+            Vector2 fourth = sourceCenter + new Vector2(38f, -34f);
+            CreateGraphLineSegment(first, second, conditional);
+            CreateGraphLineSegment(second, third, conditional);
+            CreateGraphLineSegment(third, fourth, conditional);
+            CreateText("Graph Loop Label", graphContent, "↺ " + label, 12, TextAnchor.MiddleCenter,
+                conditional ? WarningColor : HintColor,
+                new Vector2(0f, 1f), new Vector2(.5f, .5f),
+                new Vector2(second.x + 8f, -second.y + 14f), new Vector2(100f, 20f));
+            return;
+        }
+
+        Vector2 direction = (targetCenter - sourceCenter).normalized;
+        Vector2 start = sourceCenter + direction * 72f;
+        Vector2 end = targetCenter - direction * 72f;
+        CreateGraphLineSegment(start, end, conditional);
+
+        Text edgeLabel = CreateText("Graph Edge Label", graphContent, "→ " + label, 12, TextAnchor.MiddleCenter,
+            conditional ? WarningColor : HintColor,
+            new Vector2(0f, 1f), new Vector2(.5f, .5f),
+            new Vector2((start.x + end.x) * .5f, -(start.y + end.y) * .5f - 10f), new Vector2(110f, 20f));
+        edgeLabel.horizontalOverflow = HorizontalWrapMode.Wrap;
+    }
+
+    private void CreateGraphLineSegment(Vector2 start, Vector2 end, bool conditional)
+    {
+        Vector2 delta = end - start;
+        GameObject lineObject = new GameObject("Graph Edge", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));
+        lineObject.transform.SetParent(graphContent, false);
+        RectTransform line = lineObject.GetComponent<RectTransform>();
+        line.anchorMin = new Vector2(0f, 1f);
+        line.anchorMax = new Vector2(0f, 1f);
+        line.pivot = new Vector2(.5f, .5f);
+        line.anchoredPosition = new Vector2((start.x + end.x) * .5f, -(start.y + end.y) * .5f);
+        line.sizeDelta = new Vector2(Mathf.Max(1f, delta.magnitude), conditional ? 3f : 2f);
+        line.localRotation = Quaternion.Euler(0f, 0f, -Mathf.Atan2(delta.y, delta.x) * Mathf.Rad2Deg);
+        lineObject.GetComponent<Image>().color = conditional ? WarningColor : Cyan;
+    }
+
+    private void CreateGraphNode(StoryGraphNodeLayout layout, string entryId)
+    {
+        GameObject cardObject = new GameObject("Graph Node " + layout.id, typeof(RectTransform), typeof(CanvasRenderer), typeof(Image), typeof(Outline));
+        cardObject.transform.SetParent(graphContent, false);
+        RectTransform card = cardObject.GetComponent<RectTransform>();
+        card.anchorMin = new Vector2(0f, 1f);
+        card.anchorMax = new Vector2(0f, 1f);
+        card.pivot = new Vector2(0f, 1f);
+        card.anchoredPosition = new Vector2(layout.position.x, -layout.position.y);
+        card.sizeDelta = new Vector2(164f, 68f);
+
+        bool isEndCard = string.Equals(layout.id, StoryEndGraphNodeId, StringComparison.Ordinal);
+        bool isEntry = !isEndCard && string.Equals(layout.id, entryId, StringComparison.OrdinalIgnoreCase);
+        Color cardColor = !layout.isReachable
+            ? new Color32(30, 36, 38, 245)
+            : isEndCard
+                ? new Color32(36, 28, 8, 245)
+                : layout.node != null && layout.node.isBranch
+                    ? new Color32(8, 32, 42, 245)
+                    : new Color32(0, 24, 32, 245);
+        cardObject.GetComponent<Image>().color = cardColor;
+        Outline outline = cardObject.GetComponent<Outline>();
+        outline.effectColor = !layout.isReachable || isEndCard || isEntry ? WarningColor : Cyan;
+        outline.effectDistance = new Vector2(2f, -2f);
+
+        if (isEndCard)
+        {
+            CreateText("End", card, "结束剧情", 17, TextAnchor.MiddleCenter, WarningColor,
+                new Vector2(.5f, .5f), new Vector2(.5f, .5f), Vector2.zero, new Vector2(142f, 34f));
+            return;
+        }
+
+        string roles = (isEntry ? "入口 · " : string.Empty)
+            + (layout.node.isEnding ? "结束 · " : string.Empty)
+            + (layout.node.isBranch ? "分支" : "顺序");
+        CreateText("Node Role", card, roles, 12, TextAnchor.MiddleLeft, layout.isReachable ? WarningColor : HintColor,
+            new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(10f, -6f), new Vector2(144f, 20f));
+        CreateText("Node Name", card, Shorten(GetNodeDisplayName(layout.node), 12), 15, TextAnchor.MiddleLeft,
+            layout.isReachable ? Cyan : HintColor,
+            new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(10f, -28f), new Vector2(144f, 24f));
+        CreateText("Node Id", card, layout.isReachable ? layout.id : "不可达 · " + layout.id, 10, TextAnchor.MiddleLeft, HintColor,
+            new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(10f, -50f), new Vector2(144f, 14f));
     }
 
     private string GetDefaultFlowDescription(StoryNodeDocument node)
