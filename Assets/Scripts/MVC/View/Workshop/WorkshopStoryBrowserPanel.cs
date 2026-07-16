@@ -52,17 +52,25 @@ public class WorkshopStoryBrowserPanel : Panel
         new WorkshopStoryBrowserModel(new WorkshopStoryRepository()));
 
     private RectTransform storyContent;
-    private RectTransform nodeContent;
     private RectTransform modalLayer;
+    private RectTransform nodeManagerOverlay;
+    private RectTransform nodeManagerContent;
+    private ScrollRect nodeManagerScroll;
     private RectTransform connectionOverlay;
     private RectTransform transitionContent;
     private RectTransform graphOverlay;
     private RectTransform graphContent;
     private Text connectionNodeTitle;
     private Text connectionDefaultText;
+    private Text nodeManagerCountText;
+    private Text nodeManagerDetailTitle;
+    private Text nodeManagerDetailBody;
+    private Dropdown nodeManagerFilterDropdown;
+    private Text nodeManagerFilterValueText;
+    private IInputField nodeManagerSearchInput;
     private Text storyStatusText;
-    private Text nodeDetailTitle;
-    private Text nodeDetailBody;
+    private Text storyOverviewText;
+    private Text storyStructureText;
     private Font font;
     private GameObject listButtonPrefab;
     private GameObject actionButtonPrefab;
@@ -73,6 +81,10 @@ public class WorkshopStoryBrowserPanel : Panel
     private IInputField storySummaryInput;
     private Image projectFrameImage;
     private Outline projectFrameOutline;
+    private string nodeManagerSearchQuery = string.Empty;
+    private int nodeManagerFilterIndex;
+    private float nodeManagerScrollPosition = 1f;
+    private bool returnToNodeManagerAfterConnection;
     private bool hasBuilt;
 
     public override void Init()
@@ -104,6 +116,11 @@ public class WorkshopStoryBrowserPanel : Panel
             CloseConnectionEditor();
             return;
         }
+        if (nodeManagerOverlay != null && nodeManagerOverlay.gameObject.activeSelf)
+        {
+            CloseNodeManager();
+            return;
+        }
 
         base.ClosePanel();
     }
@@ -123,8 +140,7 @@ public class WorkshopStoryBrowserPanel : Panel
         CreateCloseButton();
 
         RectTransform storySection = CreateSection("剧本", new Vector2(18f, -76f), new Vector2(236f, 402f));
-        RectTransform infoSection = CreateSection("剧本信息", new Vector2(270f, -76f), new Vector2(632f, 116f));
-        RectTransform nodeSection = CreateSection("剧情点", new Vector2(270f, -204f), new Vector2(632f, 274f));
+        RectTransform infoSection = CreateSection("剧本信息", new Vector2(270f, -76f), new Vector2(632f, 402f));
 
         CreateActionButton(storySection, "新建", new Vector2(16f, -50f), new Vector2(96f, 28f), CreateStory);
         CreateActionButton(storySection, "删除", new Vector2(124f, -50f), new Vector2(96f, 28f), DeleteStory);
@@ -134,25 +150,43 @@ public class WorkshopStoryBrowserPanel : Panel
             new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(18f, -50f), new Vector2(52f, 26f));
         storyTitleInput = CreateInputField(petNameInputFieldPrefab, infoSection, "Story Title Input", "剧本标题", "未命名剧本",
             new Vector2(70f, -50f), new Vector2(230f, 26f), OnStoryTitleEdited);
-        storyStatusText = CreateText("Story Status", infoSection, string.Empty, 13, TextAnchor.MiddleCenter, HintColor,
-            new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(312f, -50f), new Vector2(118f, 26f));
+        storyStatusText = CreateText("Story Status", infoSection, string.Empty, 13, TextAnchor.MiddleLeft, HintColor,
+            new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(312f, -50f), new Vector2(302f, 26f));
         CreateText("Summary Label", infoSection, "简介：", 15, TextAnchor.MiddleLeft, Cyan,
             new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(18f, -84f), new Vector2(52f, 26f));
         storySummaryInput = CreateInputField(petDescriptionInputFieldPrefab, infoSection, "Story Summary Input", "剧本简介", "暂无简介",
             new Vector2(70f, -84f), new Vector2(244f, 26f), OnStorySummaryEdited);
-        CreateActionButton(infoSection, "查看结构", new Vector2(-220f, -84f), new Vector2(92f, 26f), OpenGraphViewer, TextAnchor.UpperRight);
-        CreateActionButton(infoSection, "剧本预览", new Vector2(-120f, -84f), new Vector2(96f, 26f), PreviewStory, TextAnchor.UpperRight);
-        CreateActionButton(infoSection, "保存", new Vector2(-16f, -84f), new Vector2(96f, 26f), SaveStory, TextAnchor.UpperRight);
+        IButton manageButton = CreateActionButton(infoSection, "管理剧情点", new Vector2(18f, -126f),
+            new Vector2(164f, 36f), OpenNodeManager);
+        EmphasizePrimaryAction(manageButton);
+        CreateActionButton(infoSection, "查看结构", new Vector2(-222f, -130f), new Vector2(92f, 28f), OpenGraphViewer, TextAnchor.UpperRight);
+        CreateActionButton(infoSection, "剧本预览", new Vector2(-118f, -130f), new Vector2(96f, 28f), PreviewStory, TextAnchor.UpperRight);
+        CreateActionButton(infoSection, "保存", new Vector2(-14f, -130f), new Vector2(96f, 28f), SaveStory, TextAnchor.UpperRight);
 
-        CreateActionButton(nodeSection, "新建", new Vector2(16f, -50f), new Vector2(94f, 28f), CreateNode);
-        CreateActionButton(nodeSection, "删除", new Vector2(120f, -50f), new Vector2(94f, 28f), DeleteNode);
-        CreateActionButton(nodeSection, "设为入口", new Vector2(224f, -50f), new Vector2(116f, 28f), SetEntryNode);
-        CreateActionButton(nodeSection, "编辑剧情点", new Vector2(352f, -50f), new Vector2(132f, 28f), OpenNodeEditor);
-        CreateActionButton(nodeSection, "编辑连接", new Vector2(496f, -50f), new Vector2(120f, 28f), OpenConnectionEditor);
-        CreateActionButton(nodeSection, "复制并新增", new Vector2(16f, -84f), new Vector2(112f, 28f), CopyNode);
-        nodeContent = CreateScrollContent(nodeSection, new Vector2(14f, 14f), new Vector2(-246f, -118f));
-        BuildNodeDetailPanel(nodeSection);
+        GameObject overviewObject = new GameObject("Story Overview", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image), typeof(Outline));
+        overviewObject.transform.SetParent(infoSection, false);
+        RectTransform overviewPanel = overviewObject.GetComponent<RectTransform>();
+        overviewPanel.anchorMin = new Vector2(0f, 1f);
+        overviewPanel.anchorMax = new Vector2(1f, 1f);
+        overviewPanel.pivot = new Vector2(.5f, 1f);
+        overviewPanel.anchoredPosition = new Vector2(0f, -178f);
+        overviewPanel.sizeDelta = new Vector2(-28f, 208f);
+        overviewObject.GetComponent<Image>().color = new Color32(0, 18, 25, 235);
+        Outline overviewOutline = overviewObject.GetComponent<Outline>();
+        overviewOutline.effectColor = new Color(Cyan.r, Cyan.g, Cyan.b, .38f);
+        overviewOutline.effectDistance = new Vector2(1f, -1f);
+        CreateText("Story Overview Heading", overviewPanel, "剧情信息", 18, TextAnchor.MiddleLeft, Cyan,
+            new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(18f, -12f), new Vector2(180f, 28f));
+        storyOverviewText = CreateText("Story Overview Body", overviewPanel, string.Empty, 15, TextAnchor.UpperLeft, HintColor,
+            new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(18f, -50f), new Vector2(360f, 140f));
+        storyOverviewText.horizontalOverflow = HorizontalWrapMode.Wrap;
+        storyOverviewText.verticalOverflow = VerticalWrapMode.Truncate;
+        storyStructureText = CreateText("Story Structure Health", overviewPanel, string.Empty, 14, TextAnchor.UpperLeft, HintColor,
+            new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(398f, -50f), new Vector2(190f, 140f));
+        storyStructureText.horizontalOverflow = HorizontalWrapMode.Wrap;
+        storyStructureText.verticalOverflow = VerticalWrapMode.Truncate;
         BuildModalLayer(root);
+        BuildNodeManager(modalLayer);
         BuildConnectionEditor(modalLayer);
         BuildGraphViewer(modalLayer);
         modalLayer.gameObject.SetActive(false);
@@ -176,28 +210,111 @@ public class WorkshopStoryBrowserPanel : Panel
         dimmer.raycastTarget = true;
     }
 
-    private void BuildNodeDetailPanel(RectTransform nodeSection)
+    private void EmphasizePrimaryAction(IButton button)
     {
-        GameObject panelObject = new GameObject("Selected Node Details", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image), typeof(Outline));
-        panelObject.transform.SetParent(nodeSection, false);
+        if (button == null)
+            return;
+
+        Text text = button.GetComponentInChildren<Text>();
+        if (text != null)
+        {
+            text.fontSize = 17;
+            text.color = WarningColor;
+        }
+
+        Outline outline = button.gameObject.GetComponent<Outline>();
+        if (outline == null)
+            outline = button.gameObject.AddComponent<Outline>();
+        outline.effectColor = new Color(WarningColor.r, WarningColor.g, WarningColor.b, .72f);
+        outline.effectDistance = new Vector2(1f, -1f);
+    }
+
+    private void BuildNodeManager(RectTransform root)
+    {
+        GameObject overlayObject = new GameObject("Story Node Manager",
+            typeof(RectTransform), typeof(CanvasRenderer), typeof(Image), typeof(Outline));
+        overlayObject.transform.SetParent(root, false);
+        nodeManagerOverlay = overlayObject.GetComponent<RectTransform>();
+        nodeManagerOverlay.anchorMin = new Vector2(.5f, .5f);
+        nodeManagerOverlay.anchorMax = new Vector2(.5f, .5f);
+        nodeManagerOverlay.pivot = new Vector2(.5f, .5f);
+        nodeManagerOverlay.anchoredPosition = Vector2.zero;
+        nodeManagerOverlay.sizeDelta = new Vector2(892f, 472f);
+
+        Image overlay = overlayObject.GetComponent<Image>();
+        overlay.color = new Color32(0, 8, 12, 252);
+        Outline outline = overlayObject.GetComponent<Outline>();
+        outline.effectColor = new Color(Cyan.r, Cyan.g, Cyan.b, .86f);
+        outline.effectDistance = new Vector2(2f, -2f);
+
+        CreateText("Node Manager Heading", nodeManagerOverlay, "剧情点管理", 22, TextAnchor.MiddleCenter, Cyan,
+            new Vector2(.5f, 1f), new Vector2(.5f, 1f), new Vector2(0f, -18f), new Vector2(260f, 30f));
+        CreateText("Node Search Label", nodeManagerOverlay, "搜索：", 14, TextAnchor.MiddleLeft, Cyan,
+            new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(18f, -52f), new Vector2(54f, 28f));
+        nodeManagerSearchInput = CreateInputField(petNameInputFieldPrefab, nodeManagerOverlay,
+            "Node Search Input", "名称或 ID", string.Empty,
+            new Vector2(72f, -52f), new Vector2(246f, 28f), OnNodeManagerSearchChanged);
+        InputField nativeSearchInput = nodeManagerSearchInput?.GetComponent<InputField>();
+        if (nativeSearchInput != null)
+        {
+            nativeSearchInput.onValueChanged = new InputField.OnChangeEvent();
+            nativeSearchInput.onValueChanged.AddListener(OnNodeManagerSearchChanged);
+        }
+
+        nodeManagerFilterDropdown = CreateDropdown(nodeManagerOverlay, new Vector2(330f, -52f),
+            new Vector2(132f, 28f), OnNodeManagerFilterChanged);
+        if (nodeManagerFilterDropdown != null)
+        {
+            nodeManagerFilterDropdown.ClearOptions();
+            nodeManagerFilterDropdown.AddOptions(new List<string> { "全部类型", "顺序", "分支", "入口", "结束" });
+            nodeManagerFilterValueText = CreateSelectorValueText(nodeManagerFilterDropdown);
+            SetSelectorValueText(nodeManagerFilterValueText, nodeManagerFilterDropdown, "全部类型");
+        }
+        nodeManagerCountText = CreateText("Node Manager Count", nodeManagerOverlay, string.Empty,
+            13, TextAnchor.MiddleLeft, HintColor,
+            new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(474f, -52f), new Vector2(180f, 28f));
+        CreateActionButton(nodeManagerOverlay, "保存", new Vector2(-58f, -52f),
+            new Vector2(88f, 28f), SaveStory, TextAnchor.UpperRight);
+        CreateModalCloseButton(nodeManagerOverlay, CloseNodeManager);
+
+        CreateActionButton(nodeManagerOverlay, "新建", new Vector2(18f, -88f), new Vector2(84f, 28f), CreateNode);
+        CreateActionButton(nodeManagerOverlay, "复制并新增", new Vector2(110f, -88f), new Vector2(114f, 28f), CopyNode);
+        CreateActionButton(nodeManagerOverlay, "删除", new Vector2(232f, -88f), new Vector2(84f, 28f), DeleteNode);
+        CreateActionButton(nodeManagerOverlay, "设为入口", new Vector2(324f, -88f), new Vector2(104f, 28f), SetEntryNode);
+        CreateActionButton(nodeManagerOverlay, "编辑剧情点", new Vector2(436f, -88f), new Vector2(122f, 28f), OpenNodeEditor);
+        CreateActionButton(nodeManagerOverlay, "编辑连接", new Vector2(566f, -88f), new Vector2(108f, 28f), OpenConnectionEditor);
+
+        nodeManagerContent = CreateScrollContent(nodeManagerOverlay, new Vector2(16f, 16f), new Vector2(-286f, -124f));
+        nodeManagerScroll = nodeManagerContent.parent.GetComponent<ScrollRect>();
+        BuildNodeManagerDetailPanel();
+        overlayObject.SetActive(false);
+    }
+
+    private void BuildNodeManagerDetailPanel()
+    {
+        GameObject panelObject = new GameObject("Managed Node Details",
+            typeof(RectTransform), typeof(CanvasRenderer), typeof(Image), typeof(Outline));
+        panelObject.transform.SetParent(nodeManagerOverlay, false);
         RectTransform panel = panelObject.GetComponent<RectTransform>();
         panel.anchorMin = new Vector2(1f, 1f);
         panel.anchorMax = new Vector2(1f, 1f);
         panel.pivot = new Vector2(1f, 1f);
-        panel.anchoredPosition = new Vector2(-14f, -118f);
-        panel.sizeDelta = new Vector2(220f, 142f);
+        panel.anchoredPosition = new Vector2(-16f, -124f);
+        panel.sizeDelta = new Vector2(254f, 332f);
 
         panelObject.GetComponent<Image>().color = new Color32(0, 18, 25, 235);
         Outline outline = panelObject.GetComponent<Outline>();
         outline.effectColor = new Color(Cyan.r, Cyan.g, Cyan.b, .38f);
         outline.effectDistance = new Vector2(1f, -1f);
 
-        nodeDetailTitle = CreateText("Selected Node Title", panel, "剧情点详情", 16, TextAnchor.MiddleLeft, WarningColor,
-            new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(12f, -8f), new Vector2(196f, 24f));
-        nodeDetailBody = CreateText("Selected Node Body", panel, string.Empty, 13, TextAnchor.UpperLeft, HintColor,
-            new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(12f, -36f), new Vector2(196f, 96f));
-        nodeDetailBody.horizontalOverflow = HorizontalWrapMode.Wrap;
-        nodeDetailBody.verticalOverflow = VerticalWrapMode.Truncate;
+        nodeManagerDetailTitle = CreateText("Managed Node Title", panel, "剧情点详情", 17,
+            TextAnchor.MiddleLeft, WarningColor,
+            new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(14f, -12f), new Vector2(226f, 28f));
+        nodeManagerDetailBody = CreateText("Managed Node Body", panel, string.Empty, 14,
+            TextAnchor.UpperLeft, HintColor,
+            new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(14f, -48f), new Vector2(226f, 264f));
+        nodeManagerDetailBody.horizontalOverflow = HorizontalWrapMode.Wrap;
+        nodeManagerDetailBody.verticalOverflow = VerticalWrapMode.Truncate;
     }
 
     private void BuildConnectionEditor(RectTransform root)
@@ -537,23 +654,36 @@ public class WorkshopStoryBrowserPanel : Panel
 
     private void CreateNode()
     {
-        if (!controller.CreateNode(out string error) && !string.IsNullOrEmpty(error))
+        bool success = controller.CreateNode(out string error);
+        if (!success && !string.IsNullOrEmpty(error))
             Hintbox.OpenHintboxWithContent(error, 16);
+        if (success)
+            ResetNodeManagerFilters();
         RefreshView();
+        if (success && nodeManagerOverlay != null && nodeManagerOverlay.gameObject.activeSelf)
+            RefreshNodeManager(true);
     }
 
     private void CopyNode()
     {
-        if (!controller.CopySelectedNode(out string error) && !string.IsNullOrEmpty(error))
+        bool success = controller.CopySelectedNode(out string error);
+        if (!success && !string.IsNullOrEmpty(error))
             Hintbox.OpenHintboxWithContent(error, 16);
+        if (success)
+            ResetNodeManagerFilters();
         RefreshView();
+        if (success && nodeManagerOverlay != null && nodeManagerOverlay.gameObject.activeSelf)
+            RefreshNodeManager(true);
     }
 
     private void DeleteNode()
     {
-        if (!controller.DeleteSelectedNode(out string error) && !string.IsNullOrEmpty(error))
+        bool success = controller.DeleteSelectedNode(out string error);
+        if (!success && !string.IsNullOrEmpty(error))
             Hintbox.OpenHintboxWithContent(error, 16);
         RefreshView();
+        if (success && nodeManagerOverlay != null && nodeManagerOverlay.gameObject.activeSelf)
+            RefreshNodeManager(true);
     }
 
     private void SetEntryNode()
@@ -579,7 +709,17 @@ public class WorkshopStoryBrowserPanel : Panel
             return;
         }
 
-        WorkshopStoryNodeEditorPanel.Open(storyPath, nodeId, Reload);
+        WorkshopStoryNodeEditorPanel.Open(storyPath, nodeId, () => ReloadAndSelectNode(nodeId));
+    }
+
+    private void ReloadAndSelectNode(string nodeId)
+    {
+        if (!controller.Open(out string error) && !string.IsNullOrEmpty(error))
+            Hintbox.OpenHintboxWithContent(error, 16);
+        controller.SelectNode(nodeId);
+        RefreshView();
+        if (nodeManagerOverlay != null && nodeManagerOverlay.gameObject.activeSelf)
+            RefreshNodeManager(true);
     }
 
     private void PreviewStory()
@@ -607,6 +747,27 @@ public class WorkshopStoryBrowserPanel : Panel
         RefreshGraphViewer();
     }
 
+    private void OpenNodeManager()
+    {
+        if (controller.SelectedDocument == null)
+        {
+            Hintbox.OpenHintboxWithContent("请先选择要管理的剧本。", 16);
+            return;
+        }
+
+        OpenModal(nodeManagerOverlay);
+        RefreshNodeManager(true);
+    }
+
+    private void CloseNodeManager()
+    {
+        CaptureNodeManagerScrollPosition();
+        if (nodeManagerOverlay != null)
+            nodeManagerOverlay.gameObject.SetActive(false);
+        HideModalLayer();
+        RefreshStoryInfo();
+    }
+
     private void CloseGraphViewer()
     {
         if (graphOverlay != null)
@@ -622,6 +783,8 @@ public class WorkshopStoryBrowserPanel : Panel
             return;
         }
 
+        returnToNodeManagerAfterConnection = nodeManagerOverlay != null
+            && nodeManagerOverlay.gameObject.activeSelf;
         OpenModal(connectionOverlay);
         RefreshConnections();
     }
@@ -630,9 +793,16 @@ public class WorkshopStoryBrowserPanel : Panel
     {
         if (connectionOverlay != null)
             connectionOverlay.gameObject.SetActive(false);
-        HideModalLayer();
         RefreshStoryInfo();
-        RefreshNodes();
+        RefreshNodeRelatedState();
+        if (returnToNodeManagerAfterConnection)
+        {
+            returnToNodeManagerAfterConnection = false;
+            OpenModal(nodeManagerOverlay);
+            RefreshNodeManager(true);
+            return;
+        }
+        HideModalLayer();
     }
 
     private void OpenModal(RectTransform overlay)
@@ -644,6 +814,8 @@ public class WorkshopStoryBrowserPanel : Panel
             connectionOverlay.gameObject.SetActive(connectionOverlay == overlay);
         if (graphOverlay != null)
             graphOverlay.gameObject.SetActive(graphOverlay == overlay);
+        if (nodeManagerOverlay != null)
+            nodeManagerOverlay.gameObject.SetActive(nodeManagerOverlay == overlay);
         modalLayer.gameObject.SetActive(true);
         modalLayer.transform.SetAsLastSibling();
         overlay.transform.SetAsLastSibling();
@@ -652,7 +824,8 @@ public class WorkshopStoryBrowserPanel : Panel
     private void HideModalLayer()
     {
         bool hasOpenModal = (connectionOverlay != null && connectionOverlay.gameObject.activeSelf)
-            || (graphOverlay != null && graphOverlay.gameObject.activeSelf);
+            || (graphOverlay != null && graphOverlay.gameObject.activeSelf)
+            || (nodeManagerOverlay != null && nodeManagerOverlay.gameObject.activeSelf);
         if (!hasOpenModal && modalLayer != null)
             modalLayer.gameObject.SetActive(false);
     }
@@ -672,7 +845,36 @@ public class WorkshopStoryBrowserPanel : Panel
     private void SelectNode(string nodeId)
     {
         controller.SelectNode(nodeId);
-        RefreshNodes();
+        RefreshNodeRelatedState();
+    }
+
+    private void OnNodeManagerSearchChanged(string value)
+    {
+        string query = value ?? string.Empty;
+        if (string.Equals(nodeManagerSearchQuery, query, StringComparison.Ordinal))
+            return;
+
+        nodeManagerSearchQuery = query;
+        nodeManagerScrollPosition = 1f;
+        RefreshNodeManager();
+    }
+
+    private void OnNodeManagerFilterChanged(int index)
+    {
+        nodeManagerFilterIndex = Mathf.Clamp(index, 0, 4);
+        SetSelectorValueText(nodeManagerFilterValueText, nodeManagerFilterDropdown, "全部类型");
+        nodeManagerScrollPosition = 1f;
+        RefreshNodeManager();
+    }
+
+    private void ResetNodeManagerFilters()
+    {
+        nodeManagerSearchQuery = string.Empty;
+        nodeManagerFilterIndex = 0;
+        nodeManagerScrollPosition = 1f;
+        nodeManagerSearchInput?.inputField?.SetTextWithoutNotify(string.Empty);
+        nodeManagerFilterDropdown?.SetValueWithoutNotify(0);
+        SetSelectorValueText(nodeManagerFilterValueText, nodeManagerFilterDropdown, "全部类型");
     }
 
     private void OnStoryTitleEdited(string title)
@@ -711,7 +913,7 @@ public class WorkshopStoryBrowserPanel : Panel
     {
         RefreshStories();
         RefreshStoryInfo();
-        RefreshNodes();
+        RefreshNodeRelatedState();
     }
 
     private void RefreshStories()
@@ -742,57 +944,206 @@ public class WorkshopStoryBrowserPanel : Panel
             SetInputFieldValue(storyTitleInput, string.Empty, false);
             SetInputFieldValue(storySummaryInput, string.Empty, false);
             storyStatusText.text = string.Empty;
+            if (storyOverviewText != null)
+                storyOverviewText.text = "请先从左侧选择剧本。\n\n选择后可在这里查看整体剧情规模与结构状态。";
+            if (storyStructureText != null)
+            {
+                storyStructureText.text = "结构状态\n—";
+                storyStructureText.color = HintColor;
+            }
             return;
         }
 
         string status = (document.isDraft ? "草稿" : "已发布")
             + " · " + (controller.HasUnsavedChanges ? "未保存" : "已保存");
-        int nodeCount = (document.nodes ?? Array.Empty<StoryNodeDocument>()).Count(node => node != null);
         SetInputFieldValue(storyTitleInput, document.title, true);
         SetInputFieldValue(storySummaryInput, document.summary, true);
-        storyStatusText.text = "状态：" + status + "\n剧情点：" + nodeCount;
+        storyStatusText.text = "状态：" + status;
         storyStatusText.color = controller.HasUnsavedChanges ? WarningColor : HintColor;
+        RefreshStoryOverview(document);
     }
 
-    private void RefreshNodes()
+    private void RefreshStoryOverview(StoryDocument document)
     {
-        ClearChildren(nodeContent);
-        StoryNodeDocument[] nodes = controller.SelectedDocument?.nodes ?? Array.Empty<StoryNodeDocument>();
-        int index = 0;
-        foreach (StoryNodeDocument node in nodes)
-        {
-            if (node == null)
-                continue;
-
-            string displayName = string.IsNullOrWhiteSpace(node.displayName) ? node.id : node.displayName;
-            string roles = (node.id == controller.SelectedDocument.entry ? "入口·" : string.Empty)
-                + (node.isEnding ? "结束·" : string.Empty);
-            string label = roles + (node.isBranch ? "分支" : "顺序") + " - " + displayName;
-            string nodeId = node.id;
-            CreateListButton(nodeContent, label, node == controller.SelectedNode, index++, () => SelectNode(nodeId));
-        }
-
-        if (index == 0)
-            CreateHint(nodeContent, controller.SelectedDocument == null ? "请选择剧本。" : "当前剧本没有剧情点。");
-        else
-            nodeContent.sizeDelta = new Vector2(0f, 12f + index * 42f);
-
-        RefreshNodeDetails();
-
-        if (connectionOverlay != null && connectionOverlay.gameObject.activeSelf)
-            RefreshConnections();
-    }
-
-    private void RefreshNodeDetails()
-    {
-        StoryNodeDocument node = controller.SelectedNode;
-        if (nodeDetailTitle == null || nodeDetailBody == null)
+        if (storyOverviewText == null || storyStructureText == null)
             return;
 
+        StoryNodeDocument[] nodes = (document.nodes ?? Array.Empty<StoryNodeDocument>())
+            .Where(node => node != null)
+            .ToArray();
+        if (nodes.Length == 0)
+        {
+            storyOverviewText.text = "当前剧本还没有剧情点。\n\n点击上方“管理剧情点”创建第一个剧情点，\n它将同时成为入口节点与结束节点。";
+            storyStructureText.text = "结构状态\n尚未建立剧情";
+            storyStructureText.color = WarningColor;
+            return;
+        }
+
+        int sequenceCount = nodes.Count(node => !node.isBranch);
+        int branchCount = nodes.Length - sequenceCount;
+        int endingCount = nodes.Count(node => node.isEnding);
+        int sceneCount = nodes.Sum(node => (node.scenes ?? Array.Empty<StorySceneDocument>()).Count(scene => scene != null));
+        int actorCount = nodes.Sum(node => (node.actorReferences ?? Array.Empty<StoryActorReferenceDocument>()).Count(actor => actor != null));
+        int contentCount = nodes.Sum(node => (node.commands ?? Array.Empty<StoryCommandDocument>()).Count(command => command != null));
+        int ruleCount = nodes.Sum(node => (node.transitions ?? Array.Empty<StoryNodeTransitionDocument>())
+            .Count(transition => transition != null && !transition.isDefault));
+        StoryNodeDocument entryNode = nodes.FirstOrDefault(node =>
+            string.Equals(node.id, document.entry, StringComparison.OrdinalIgnoreCase));
+        string entryName = entryNode == null ? "未设置" : GetNodeDisplayName(entryNode);
+
+        storyOverviewText.text = "剧情点：" + nodes.Length
+            + "    顺序：" + sequenceCount
+            + "    分支：" + branchCount
+            + "    结束：" + endingCount
+            + "\n入口节点：" + entryName
+            + "\n场景：" + sceneCount
+            + "    角色配置：" + actorCount
+            + "    内容：" + contentCount
+            + "\n条件分支规则：" + ruleCount;
+
+        List<string> warnings = new List<string>();
+        if (entryNode == null)
+            warnings.Add("缺少有效入口节点");
+        if (endingCount == 0)
+            warnings.Add("缺少结束节点");
+        if (entryNode != null)
+        {
+            List<StoryGraphEdge> edges = BuildStoryGraphEdges(document, nodes);
+            Dictionary<string, StoryGraphNodeLayout> layouts = BuildStoryGraphLayout(document, nodes, edges);
+            int unreachableCount = layouts.Values.Count(layout => layout.node != null && !layout.isReachable);
+            if (unreachableCount > 0)
+                warnings.Add(unreachableCount + " 个剧情点不可达");
+        }
+
+        if (warnings.Count == 0)
+        {
+            storyStructureText.text = "结构状态\n结构正常\n\n入口与结束节点完整，\n所有剧情点均可到达。";
+            storyStructureText.color = Cyan;
+        }
+        else
+        {
+            storyStructureText.text = "结构状态\n需要处理\n\n" + string.Join("\n", warnings.Select(warning => "· " + warning));
+            storyStructureText.color = WarningColor;
+        }
+    }
+
+    private void RefreshNodeRelatedState()
+    {
+        if (connectionOverlay != null && connectionOverlay.gameObject.activeSelf)
+            RefreshConnections();
+        if (nodeManagerOverlay != null && nodeManagerOverlay.gameObject.activeSelf)
+            RefreshNodeManager();
+    }
+
+    private void RefreshNodeManager(bool focusSelected = false)
+    {
+        if (nodeManagerContent == null)
+            return;
+        if (!focusSelected)
+            CaptureNodeManagerScrollPosition();
+
+        ClearChildren(nodeManagerContent);
+        StoryNodeDocument[] allNodes = (controller.SelectedDocument?.nodes ?? Array.Empty<StoryNodeDocument>())
+            .Where(node => node != null)
+            .ToArray();
+        StoryNodeDocument[] visibleNodes = allNodes.Where(IsNodeVisibleInManager).ToArray();
+        for (int index = 0; index < visibleNodes.Length; index++)
+        {
+            StoryNodeDocument node = visibleNodes[index];
+            string nodeId = node.id;
+            CreateListButton(nodeManagerContent, GetNodeListLabel(node), node == controller.SelectedNode,
+                index, () => SelectNode(nodeId));
+        }
+
+        if (visibleNodes.Length == 0)
+            CreateHint(nodeManagerContent, allNodes.Length == 0 ? "当前剧本没有剧情点。" : "没有符合搜索条件的剧情点。");
+        else
+            nodeManagerContent.sizeDelta = new Vector2(0f, 12f + visibleNodes.Length * 42f);
+
+        if (nodeManagerCountText != null)
+            nodeManagerCountText.text = "显示 " + visibleNodes.Length + " / 共 " + allNodes.Length + " 个";
+        RefreshNodeManagerDetails();
+
+        Canvas.ForceUpdateCanvases();
+        if (focusSelected)
+            ScrollNodeManagerToSelected(visibleNodes);
+        else if (nodeManagerScroll != null)
+            nodeManagerScroll.verticalNormalizedPosition = nodeManagerScrollPosition;
+    }
+
+    private bool IsNodeVisibleInManager(StoryNodeDocument node)
+    {
+        if (node == null)
+            return false;
+
+        bool typeMatches = nodeManagerFilterIndex switch
+        {
+            1 => !node.isBranch,
+            2 => node.isBranch,
+            3 => string.Equals(node.id, controller.SelectedDocument?.entry, StringComparison.OrdinalIgnoreCase),
+            4 => node.isEnding,
+            _ => true,
+        };
+        if (!typeMatches)
+            return false;
+
+        string query = (nodeManagerSearchQuery ?? string.Empty).Trim();
+        return string.IsNullOrEmpty(query)
+            || (node.id ?? string.Empty).IndexOf(query, StringComparison.OrdinalIgnoreCase) >= 0
+            || (node.displayName ?? string.Empty).IndexOf(query, StringComparison.OrdinalIgnoreCase) >= 0;
+    }
+
+    private void CaptureNodeManagerScrollPosition()
+    {
+        if (nodeManagerScroll != null && nodeManagerScroll.gameObject.activeInHierarchy)
+            nodeManagerScrollPosition = nodeManagerScroll.verticalNormalizedPosition;
+    }
+
+    private void ScrollNodeManagerToSelected(StoryNodeDocument[] visibleNodes)
+    {
+        if (nodeManagerScroll == null || visibleNodes == null || visibleNodes.Length == 0)
+            return;
+
+        int index = Array.FindIndex(visibleNodes, node => node == controller.SelectedNode);
+        if (index < 0)
+        {
+            nodeManagerScroll.verticalNormalizedPosition = 1f;
+            nodeManagerScrollPosition = 1f;
+            return;
+        }
+
+        float viewportHeight = nodeManagerScroll.viewport.rect.height;
+        float contentHeight = nodeManagerContent.rect.height;
+        float maxScroll = Mathf.Max(0f, contentHeight - viewportHeight);
+        float targetScroll = Mathf.Clamp(index * 42f + 18f - viewportHeight * .5f, 0f, maxScroll);
+        nodeManagerScrollPosition = maxScroll <= 0f ? 1f : 1f - targetScroll / maxScroll;
+        nodeManagerScroll.verticalNormalizedPosition = nodeManagerScrollPosition;
+    }
+
+    private void RefreshNodeManagerDetails()
+    {
+        ApplyNodeDetails(nodeManagerDetailTitle, nodeManagerDetailBody, controller.SelectedNode,
+            "从左侧选择剧情点后，\n可在这里查看详细信息。\n\n支持按名称或 ID 搜索。\n筛选不会改变剧本中的节点顺序。");
+    }
+
+    private string GetNodeListLabel(StoryNodeDocument node)
+    {
+        string displayName = string.IsNullOrWhiteSpace(node?.displayName) ? node?.id : node.displayName;
+        string roles = (node != null && string.Equals(node.id, controller.SelectedDocument?.entry, StringComparison.OrdinalIgnoreCase)
+                ? "入口·"
+                : string.Empty)
+            + (node != null && node.isEnding ? "结束·" : string.Empty);
+        return roles + (node != null && node.isBranch ? "分支" : "顺序") + " - " + displayName;
+    }
+
+    private void ApplyNodeDetails(Text title, Text body, StoryNodeDocument node, string emptyText)
+    {
+        if (title == null || body == null)
+            return;
         if (node == null)
         {
-            nodeDetailTitle.text = "剧情点详情";
-            nodeDetailBody.text = "选中剧情点后，\n在这里查看结构和走向。";
+            title.text = "剧情点详情";
+            body.text = emptyText;
             return;
         }
 
@@ -809,8 +1160,8 @@ public class WorkshopStoryBrowserPanel : Panel
                     ? "含结束分支"
                     : "继续剧情";
 
-        nodeDetailTitle.text = GetNodeDisplayName(node);
-        nodeDetailBody.text = "类型：" + (node.isBranch ? "分支" : "顺序")
+        title.text = GetNodeDisplayName(node);
+        body.text = "类型：" + (node.isBranch ? "分支" : "顺序")
             + "  |  " + flowState
             + "\n场景：" + sceneCount + "    角色：" + actorCount
             + "\n内容：" + contentCount + "    分支规则：" + ruleCount
