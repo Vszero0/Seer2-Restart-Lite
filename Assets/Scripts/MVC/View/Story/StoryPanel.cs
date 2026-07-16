@@ -6,8 +6,23 @@ using UnityEngine;
 using UnityEngine.UI;
 using TMPro;
 
+public enum StoryPreviewScope
+{
+    Story,
+    Node,
+}
+
 public class StoryPanel : Panel
 {
+    private sealed class PreviewNodeInfo
+    {
+        public string id;
+        public string displayName;
+        public string role;
+        public int index;
+        public int total;
+    }
+
     private const string NarrationPrompt = "\u9009\u62E9\u56DE\u5E94";
     private const string NarratorName = "\u65C1\u767D";
     private const string ChoicePrompt = "\u8BF7\u9009\u62E9\u63A5\u4E0B\u6765\u7684\u56DE\u5E94\u3002";
@@ -18,6 +33,9 @@ public class StoryPanel : Panel
     private string pendingStoryId;
     private StoryScript pendingPreviewStory;
     private string pendingPreviewStartNodeId;
+    private StoryPreviewScope previewScope;
+    private Dictionary<string, PreviewNodeInfo> previewNodeInfos;
+    private bool isEmptyNodePreview;
     private Action previewClosedCallback;
     private int fallbackMapId;
     private int commandIndex;
@@ -42,6 +60,8 @@ public class StoryPanel : Panel
     private Image dialogTransitionSceneImage;
     private RectTransform actorLayer;
     private GameObject exitButton;
+    private GameObject previewIndicator;
+    private TextMeshProUGUI previewIndicatorText;
     private DialogInfo lastDialogInfo;
 
     public static StoryPanel Open(string storyId, int fallbackMapId = 0)
@@ -80,7 +100,8 @@ public class StoryPanel : Panel
     /// <summary>
     /// 用真实播放器预览内存中的剧情草稿；不写入文件，也不要求草稿通过发布校验。
     /// </summary>
-    public static StoryPanel OpenPreview(StoryDocument document, string startNodeId, Action onClosed = null)
+    public static StoryPanel OpenPreview(StoryDocument document, string startNodeId,
+        StoryPreviewScope scope, Action onClosed = null)
     {
         if (document == null)
             return null;
@@ -109,9 +130,43 @@ public class StoryPanel : Panel
         StoryPanel panel = obj.GetComponent<StoryPanel>();
         panel.pendingPreviewStory = document.ToScript();
         panel.pendingPreviewStartNodeId = startNodeId;
+        panel.previewScope = scope;
+        panel.previewNodeInfos = BuildPreviewNodeInfos(document);
+        StoryNodeDocument previewNode = (document.nodes ?? Array.Empty<StoryNodeDocument>())
+            .FirstOrDefault(node => node != null
+                && string.Equals(node.id, startNodeId, StringComparison.OrdinalIgnoreCase));
+        panel.isEmptyNodePreview = scope == StoryPreviewScope.Node
+            && !(previewNode?.commands ?? Array.Empty<StoryCommandDocument>()).Any(command => command != null);
         panel.previewClosedCallback = onClosed;
         panel.isPreviewMode = true;
         return panel;
+    }
+
+    private static Dictionary<string, PreviewNodeInfo> BuildPreviewNodeInfos(StoryDocument document)
+    {
+        StoryNodeDocument[] nodes = (document?.nodes ?? Array.Empty<StoryNodeDocument>())
+            .Where(node => node != null && !string.IsNullOrWhiteSpace(node.id))
+            .ToArray();
+        Dictionary<string, PreviewNodeInfo> infos = new Dictionary<string, PreviewNodeInfo>(StringComparer.OrdinalIgnoreCase);
+        for (int index = 0; index < nodes.Length; index++)
+        {
+            StoryNodeDocument node = nodes[index];
+            List<string> roles = new List<string>();
+            if (string.Equals(node.id, document.entry, StringComparison.OrdinalIgnoreCase))
+                roles.Add("入口");
+            if (node.isEnding)
+                roles.Add("结束");
+            roles.Add(node.isBranch ? "分支" : "顺序");
+            infos[node.id] = new PreviewNodeInfo
+            {
+                id = node.id,
+                displayName = string.IsNullOrWhiteSpace(node.displayName) ? node.id : node.displayName,
+                role = string.Join(" · ", roles),
+                index = index + 1,
+                total = nodes.Length,
+            };
+        }
+        return infos;
     }
 
     public override void Init()
@@ -143,6 +198,8 @@ public class StoryPanel : Panel
         DialogManager.instance?.CloseDialog();
         if (exitButton != null)
             Destroy(exitButton);
+        if (previewIndicator != null)
+            Destroy(previewIndicator);
 
         base.ClosePanel();
         onPreviewClosed?.Invoke();
@@ -180,6 +237,8 @@ public class StoryPanel : Panel
             RefreshOverlayLayering,
             path => story?.GetResourceSource(path) ?? "auto");
         CreateExitButton();
+        if (isPreviewMode)
+            CreatePreviewIndicator();
     }
 
     private void LoadStory(string storyId, int fallbackMapId)
@@ -216,6 +275,13 @@ public class StoryPanel : Panel
         ClearDialogHandlers();
         lastDialogInfo = null;
 
+        UpdatePreviewIndicator(initialPointId);
+        if (isEmptyNodePreview)
+        {
+            SetNarration("当前剧情点没有可预览内容。");
+            return;
+        }
+
         ShowNextCommand();
     }
 
@@ -242,6 +308,12 @@ public class StoryPanel : Panel
         while (commandIndex < story.commands.Count)
         {
             StoryCommand command = story.commands[commandIndex++];
+            if (ShouldFinishNodePreview(command))
+            {
+                ClosePanel();
+                return;
+            }
+            UpdatePreviewIndicator(command.pointId);
             switch (command.type)
             {
                 case StoryCommandType.Scene:
@@ -289,6 +361,34 @@ public class StoryPanel : Panel
         }
 
         ClosePanel();
+    }
+
+    private bool ShouldFinishNodePreview(StoryCommand command)
+    {
+        if (!isPreviewMode || previewScope != StoryPreviewScope.Node || command == null)
+            return false;
+        if (!string.Equals(command.pointId, pendingPreviewStartNodeId, StringComparison.OrdinalIgnoreCase))
+            return true;
+        return command.type == StoryCommandType.Jump || command.type == StoryCommandType.End;
+    }
+
+    private void UpdatePreviewIndicator(string pointId)
+    {
+        if (!isPreviewMode || previewIndicatorText == null || string.IsNullOrWhiteSpace(pointId))
+            return;
+
+        string mode = previewScope == StoryPreviewScope.Node ? "剧情点预览" : "剧本预览";
+        if (previewNodeInfos != null && previewNodeInfos.TryGetValue(pointId, out PreviewNodeInfo info))
+        {
+            string progress = previewScope == StoryPreviewScope.Story
+                ? info.index + "/" + info.total + " · "
+                : string.Empty;
+            previewIndicatorText.text = mode + "  |  当前剧情点："
+                + progress + info.role + " - " + info.displayName + "（" + info.id + "）";
+            return;
+        }
+
+        previewIndicatorText.text = mode + "  |  当前剧情点：" + pointId;
     }
 
     private bool ApplyScene(StoryCommand command)
@@ -1041,11 +1141,67 @@ public class StoryPanel : Panel
             text.fontSharedMaterial = textSample.fontSharedMaterial;
         }
 
-        text.text = "\u9000\u51FA\u4EFB\u52A1";
+        text.text = isPreviewMode ? "退出预览" : "\u9000\u51FA\u4EFB\u52A1";
         text.fontSize = 18f;
         text.alignment = TextAlignmentOptions.Center;
         text.color = new Color32(255, 238, 92, 255);
         text.raycastTarget = false;
+    }
+
+    private void CreatePreviewIndicator()
+    {
+        GameObject obj = new GameObject("Story Preview Indicator",
+            typeof(RectTransform), typeof(CanvasRenderer), typeof(Image), typeof(Outline));
+        previewIndicator = obj;
+
+        Transform parent = transform.parent != null ? transform.parent : transform;
+        obj.transform.SetParent(parent, false);
+        obj.transform.SetAsLastSibling();
+
+        RectTransform rect = obj.GetComponent<RectTransform>();
+        rect.anchorMin = new Vector2(0f, 1f);
+        rect.anchorMax = new Vector2(0f, 1f);
+        rect.pivot = new Vector2(0f, 1f);
+        rect.anchoredPosition = new Vector2(24f, -20f);
+        rect.sizeDelta = new Vector2(650f, 38f);
+
+        Image image = obj.GetComponent<Image>();
+        image.color = new Color32(0, 12, 18, 224);
+        image.raycastTarget = false;
+
+        Outline outline = obj.GetComponent<Outline>();
+        outline.effectColor = new Color32(44, 227, 255, 190);
+        outline.effectDistance = new Vector2(1.5f, -1.5f);
+
+        GameObject textObject = new GameObject("Text",
+            typeof(RectTransform), typeof(CanvasRenderer), typeof(TextMeshProUGUI));
+        textObject.transform.SetParent(obj.transform, false);
+        RectTransform textRect = textObject.GetComponent<RectTransform>();
+        textRect.anchorMin = Vector2.zero;
+        textRect.anchorMax = Vector2.one;
+        textRect.offsetMin = new Vector2(12f, 0f);
+        textRect.offsetMax = new Vector2(-12f, 0f);
+
+        previewIndicatorText = textObject.GetComponent<TextMeshProUGUI>();
+        TMP_FontAsset storyFont = StoryTextFontProvider.GetDefaultFont();
+        TMP_Text textSample = FindTextSample();
+        if (storyFont != null)
+        {
+            previewIndicatorText.font = storyFont;
+            previewIndicatorText.fontSharedMaterial = storyFont.material;
+        }
+        else if (textSample != null && textSample.font != null)
+        {
+            previewIndicatorText.font = textSample.font;
+            previewIndicatorText.fontSharedMaterial = textSample.fontSharedMaterial;
+        }
+
+        previewIndicatorText.fontSize = 16f;
+        previewIndicatorText.alignment = TextAlignmentOptions.MidlineLeft;
+        previewIndicatorText.color = new Color32(180, 235, 245, 255);
+        previewIndicatorText.overflowMode = TextOverflowModes.Ellipsis;
+        previewIndicatorText.raycastTarget = false;
+        BringExitButtonToFront();
     }
 
     private void BringExitButtonToFront()
@@ -1054,9 +1210,16 @@ public class StoryPanel : Panel
             exitButton.transform.SetAsLastSibling();
     }
 
+    private void BringPreviewIndicatorToFront()
+    {
+        if (previewIndicator != null)
+            previewIndicator.transform.SetAsLastSibling();
+    }
+
     private void RefreshOverlayLayering()
     {
         DialogManager.instance?.RefreshStoryOverlayLayering();
+        BringPreviewIndicatorToFront();
         BringExitButtonToFront();
     }
 

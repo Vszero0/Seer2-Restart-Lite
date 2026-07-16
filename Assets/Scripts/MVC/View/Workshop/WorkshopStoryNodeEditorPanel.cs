@@ -202,7 +202,7 @@ public class WorkshopStoryNodeEditorPanel : Panel
 
         CreateToolbarButton(toolbar, "返回", new Vector2(18f, -8f), new Vector2(96f, 28f), ClosePanel, false);
         CreateToolbarButton(toolbar, "保存", new Vector2(-18f, -8f), new Vector2(96f, 28f), SaveDraft, true);
-        CreateToolbarButton(toolbar, "预览", new Vector2(-122f, -8f), new Vector2(96f, 28f), PreviewDraft, true);
+        CreateToolbarButton(toolbar, "剧情点预览", new Vector2(-122f, -8f), new Vector2(96f, 28f), PreviewDraft, true);
         nodeTitleText = CreateText("Node Title", toolbar, "编辑剧情点 ·", 22, TextAnchor.MiddleRight, Cyan,
             new Vector2(.5f, 1f), new Vector2(.5f, 1f), new Vector2(-12f, -8f), new Vector2(250f, 28f));
         CreateNodeNameInput();
@@ -1490,7 +1490,7 @@ public class WorkshopStoryNodeEditorPanel : Panel
         resourcePicker?.Close();
         sceneMusicRequestVersion++;
         gameObject.SetActive(false);
-        StoryPanel preview = StoryPanel.OpenPreview(document, node.id, ResumeAfterPreview);
+        StoryPanel preview = StoryPanel.OpenPreview(document, node.id, StoryPreviewScope.Node, ResumeAfterPreview);
         if (preview == null)
         {
             gameObject.SetActive(true);

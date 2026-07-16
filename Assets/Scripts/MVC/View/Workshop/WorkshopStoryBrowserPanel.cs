@@ -141,7 +141,7 @@ public class WorkshopStoryBrowserPanel : Panel
         storySummaryInput = CreateInputField(petDescriptionInputFieldPrefab, infoSection, "Story Summary Input", "剧本简介", "暂无简介",
             new Vector2(70f, -84f), new Vector2(244f, 26f), OnStorySummaryEdited);
         CreateActionButton(infoSection, "查看结构", new Vector2(-220f, -84f), new Vector2(92f, 26f), OpenGraphViewer, TextAnchor.UpperRight);
-        CreateActionButton(infoSection, "预览剧本", new Vector2(-120f, -84f), new Vector2(96f, 26f), PreviewStory, TextAnchor.UpperRight);
+        CreateActionButton(infoSection, "剧本预览", new Vector2(-120f, -84f), new Vector2(96f, 26f), PreviewStory, TextAnchor.UpperRight);
         CreateActionButton(infoSection, "保存", new Vector2(-16f, -84f), new Vector2(96f, 26f), SaveStory, TextAnchor.UpperRight);
 
         CreateActionButton(nodeSection, "新建", new Vector2(16f, -50f), new Vector2(94f, 28f), CreateNode);
@@ -591,7 +591,7 @@ public class WorkshopStoryBrowserPanel : Panel
             return;
         }
 
-        if (StoryPanel.OpenPreview(document, document.entry) == null)
+        if (StoryPanel.OpenPreview(document, document.entry, StoryPreviewScope.Story) == null)
             Hintbox.OpenHintboxWithContent("无法打开剧本预览。", 16);
     }
 
