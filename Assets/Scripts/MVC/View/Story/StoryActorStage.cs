@@ -53,7 +53,7 @@ public sealed class StoryActorStage
         activeLayout = StoryActorPlacementCalculator.Resolve(sceneLayout, globalLayout);
     }
 
-    public void Show(StoryActorDocument actor)
+    public void Show(StoryActorDocument actor, bool fadeIn = true)
     {
         if (actor == null || string.IsNullOrEmpty(actor.id))
             return;
@@ -69,7 +69,10 @@ public sealed class StoryActorStage
             };
             runtime.canvasGroup = runtime.image.GetComponent<CanvasGroup>();
             actors[actor.id] = runtime;
-            PlayActorFade(runtime);
+            if (fadeIn)
+                PlayActorFade(runtime);
+            else if (runtime.canvasGroup != null)
+                runtime.canvasGroup.alpha = 1f;
         }
         else
         {
@@ -93,7 +96,10 @@ public sealed class StoryActorStage
             return;
 
         if (runtime.image != null)
+        {
+            runtime.image.gameObject.SetActive(false);
             UnityEngine.Object.Destroy(runtime.image.gameObject);
+        }
 
         actors.Remove(actorId);
         LayoutActors();
@@ -145,7 +151,10 @@ public sealed class StoryActorStage
                 coroutineHost.StopCoroutine(runtime.fadeCoroutine);
 
             if (runtime?.image != null)
+            {
+                runtime.image.gameObject.SetActive(false);
                 UnityEngine.Object.Destroy(runtime.image.gameObject);
+            }
         }
 
         actors.Clear();

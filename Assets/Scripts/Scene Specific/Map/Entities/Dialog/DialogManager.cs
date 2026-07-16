@@ -111,6 +111,7 @@ public class DialogManager : Manager<DialogManager>
         }
 
         SetStoryDialogLayerActive(true, playOpenAnimation);
+        SetStoryContentVisible(true);
         dialogStoryController.OpenDialog(info);
         RefreshStoryOverlayLayering();
     }
@@ -158,10 +159,12 @@ public class DialogManager : Manager<DialogManager>
         return storyTransitionBackground;
     }
 
-    public void SetStoryLayerAlpha(float alpha)
+    public void SetStoryContentVisible(bool visible)
     {
-        if (dialogStoryLayer != null)
-            GetCanvasGroup(dialogStoryLayer).alpha = Mathf.Clamp01(alpha);
+        if (storyTextBar != null)
+            storyTextBar.gameObject.SetActive(visible);
+        if (!visible)
+            ClearStoryChoices();
     }
 
     public void ResetStoryDialogBackground() {

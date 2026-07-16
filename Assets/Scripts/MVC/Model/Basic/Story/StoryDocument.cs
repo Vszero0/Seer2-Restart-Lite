@@ -321,7 +321,7 @@ public class StoryDocument
                 type = transition.isEnd ? StoryCommandType.End : StoryCommandType.Jump,
                 args = transition.isEnd ? null : transition.targetNodeId,
                 condition = transition.isDefault ? null : transition.condition,
-                transition = transition.transition,
+                transition = transition.isEnd ? null : transition.transition,
             });
         }
     }

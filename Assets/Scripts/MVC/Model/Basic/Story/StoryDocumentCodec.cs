@@ -76,7 +76,10 @@ public static class StoryDocumentCodec
                         ? "node"
                         : transition.targetType.Trim().ToLowerInvariant();
                     if (transition.isEnd)
+                    {
                         transition.targetNodeId = null;
+                        transition.transition = null;
+                    }
                 }
                 NormalizeTransition(transition?.transition, true);
                 NormalizeConditionGroup(transition?.condition);

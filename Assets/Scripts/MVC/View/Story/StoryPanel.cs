@@ -281,8 +281,6 @@ public class StoryPanel : Panel
                 case StoryCommandType.End:
                     if (StoryConditionEvaluator.Evaluate(story, command.condition))
                     {
-                        if (BeginEndTransition(command.transition))
-                            return;
                         ClosePanel();
                         return;
                     }
@@ -295,6 +293,7 @@ public class StoryPanel : Panel
 
     private bool ApplyScene(StoryCommand command)
     {
+        PrepareSceneBoundary();
         PlaySceneMusic(command.mapId, command.bgmResourcePath, ++sceneMusicRequestVersion);
         StoryTransitionDocument transition = ResolveSceneTransition(command.transition);
         pendingNodeTransition = null;
@@ -489,18 +488,18 @@ public class StoryPanel : Panel
         string type,
         float duration)
     {
-        bool actorsApplied = false;
+        bool revealsSameBackground = type == "radial"
+            && sceneImage != null
+            && sceneImage.sprite == sprite;
         PrepareTransitionImage(sprite);
         if (type == "fade")
         {
             SetTransitionImagesActive(false);
             float halfDuration = duration * .5f;
-            yield return Animate(halfDuration, progress => SetStoryVisualAlpha(1f - progress));
+            yield return Animate(halfDuration, progress => SetPrimaryImageAlpha(1f - progress));
             ApplySceneSprite(sprite);
-            ApplySceneActors(command);
-            actorsApplied = true;
-            SetStoryVisualAlpha(0f);
-            yield return Animate(halfDuration, SetStoryVisualAlpha);
+            SetPrimaryImageAlpha(0f);
+            yield return Animate(halfDuration, SetPrimaryImageAlpha);
         }
         else if (type == "crossfade")
         {
@@ -512,7 +511,15 @@ public class StoryPanel : Panel
         {
             ConfigureWipe(transitionSceneImage, type);
             ConfigureWipe(dialogTransitionSceneImage, type);
-            yield return Animate(duration, SetTransitionFillAmount);
+            float revealDuration = duration;
+            if (revealsSameBackground)
+            {
+                float dimDuration = Mathf.Min(.12f, duration * .2f);
+                revealDuration = Mathf.Max(.01f, duration - dimDuration);
+                yield return Animate(dimDuration, progress =>
+                    SetPrimaryImageBrightness(Mathf.Lerp(1f, .35f, progress)));
+            }
+            yield return Animate(revealDuration, SetTransitionFillAmount);
         }
         else if (type == "zoomcross")
         {
@@ -545,8 +552,7 @@ public class StoryPanel : Panel
         }
 
         ApplySceneSprite(sprite);
-        if (!actorsApplied)
-            ApplySceneActors(command);
+        ApplySceneActors(command);
         ResetTransitionImages();
         sceneTransitionCoroutine = null;
         isTransitioning = false;
@@ -575,8 +581,8 @@ public class StoryPanel : Panel
     private void ResetTransitionImages()
     {
         SetPrimaryPosition(Vector2.zero);
-        SetStoryVisualAlpha(1f);
         SetPrimaryImageAlpha(1f);
+        SetPrimaryImageBrightness(1f);
         SetPrimaryScale(Vector3.one);
         SetTransitionScale(Vector3.one);
         ResetTransitionImage(transitionSceneImage);
@@ -642,12 +648,6 @@ public class StoryPanel : Panel
             dialogTransitionSceneImage.gameObject.SetActive(active);
     }
 
-    private void SetStoryVisualAlpha(float alpha)
-    {
-        SetImageAlpha(sceneImage, alpha);
-        DialogManager.instance?.SetStoryLayerAlpha(alpha);
-    }
-
     private void SetTransitionImageAlpha(float alpha)
     {
         SetImageAlpha(transitionSceneImage, alpha);
@@ -658,6 +658,12 @@ public class StoryPanel : Panel
     {
         SetImageAlpha(sceneImage, alpha);
         SetImageAlpha(dialogSceneImage, alpha);
+    }
+
+    private void SetPrimaryImageBrightness(float brightness)
+    {
+        SetImageBrightness(sceneImage, brightness);
+        SetImageBrightness(dialogSceneImage, brightness);
     }
 
     private void SetPrimaryScale(Vector3 scale)
@@ -709,30 +715,32 @@ public class StoryPanel : Panel
         image.color = color;
     }
 
+    private static void SetImageBrightness(Image image, float brightness)
+    {
+        if (image == null)
+            return;
+        Color color = image.color;
+        color.r = brightness;
+        color.g = brightness;
+        color.b = brightness;
+        image.color = color;
+    }
+
     private void ApplySceneActors(StoryCommand command)
     {
         actorStage.ApplyScene(command.actorLayouts, command.layout);
         foreach (StoryActorDocument actor in command.sceneActors ?? Array.Empty<StoryActorDocument>())
-            actorStage.Show(actor);
+            actorStage.Show(actor, false);
     }
 
-    private bool BeginEndTransition(StoryTransitionDocument transition)
+    private void PrepareSceneBoundary()
     {
-        string type = transition?.normalizedType ?? "none";
-        if (type == "none" || type == "inherit" || sceneImage == null)
-            return false;
-
-        isTransitioning = true;
-        sceneTransitionCoroutine = StartCoroutine(EndTransitionCoroutine(transition.normalizedDuration));
-        return true;
-    }
-
-    private IEnumerator EndTransitionCoroutine(float duration)
-    {
-        yield return Animate(duration, progress => SetStoryVisualAlpha(1f - progress));
-        sceneTransitionCoroutine = null;
-        isTransitioning = false;
-        ClosePanel();
+        waitingForChoice = false;
+        lastDialogInfo = null;
+        DialogManager.instance?.SetStoryDialogBackgroundClickHandler(null);
+        DialogManager.instance?.SetStoryDialogReplyClickHandler(null);
+        DialogManager.instance?.SetStoryContentVisible(false);
+        actorStage?.Clear();
     }
 
     private void ApplySceneSprite(Sprite sprite)

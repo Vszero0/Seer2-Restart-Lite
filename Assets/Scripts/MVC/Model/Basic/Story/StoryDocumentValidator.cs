@@ -407,12 +407,8 @@ public static class StoryValidator
                 }
             }
             ValidateTransition(transition.transition, true, errors, location + ".transition");
-            if (transition.isEnd)
-            {
-                string effect = transition.transition?.normalizedType ?? "inherit";
-                if (effect != "inherit" && effect != "none" && effect != "fade")
-                    errors.Add(location + ".transition 结束连接只支持无转场或淡出结束");
-            }
+            if (transition.isEnd && transition.transition != null)
+                errors.Add(location + ".transition 结束连接不使用场景转场");
             if (transition.isDefault)
             {
                 defaultCount++;
