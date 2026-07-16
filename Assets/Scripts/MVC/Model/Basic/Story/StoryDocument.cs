@@ -60,8 +60,14 @@ public class StoryTransitionDocument
                 case "crossfade":
                 case "wipeleft":
                 case "wiperight":
+                case "wipeup":
+                case "wipedown":
                 case "pushleft":
                 case "pushright":
+                case "pushup":
+                case "pushdown":
+                case "zoomcross":
+                case "radial":
                     return value;
                 default:
                     return "none";

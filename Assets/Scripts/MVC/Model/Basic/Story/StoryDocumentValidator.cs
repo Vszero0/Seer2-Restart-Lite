@@ -449,7 +449,10 @@ public static class StoryValidator
         string type = (transition.type ?? string.Empty).Trim().ToLowerInvariant();
         bool supported = type == "none" || type == "fade" || type == "crossfade"
             || type == "wipeleft" || type == "wiperight"
+            || type == "wipeup" || type == "wipedown"
             || type == "pushleft" || type == "pushright"
+            || type == "pushup" || type == "pushdown"
+            || type == "zoomcross" || type == "radial"
             || (allowInherit && type == "inherit");
         if (!supported)
             errors.Add(location + ".type 使用了不支持的转场类型");

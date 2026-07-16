@@ -1420,10 +1420,22 @@ public class WorkshopStoryBrowserPanel : Panel
 
         string[] types = transition.isEnd
             ? new[] { "inherit", "none", "fade" }
-            : new[] { "inherit", "none", "fade", "crossfade", "wipeleft", "wiperight", "pushleft", "pushright" };
+            : new[]
+            {
+                "inherit", "none", "fade", "crossfade",
+                "wipeleft", "wiperight", "wipeup", "wipedown",
+                "pushleft", "pushright", "pushup", "pushdown",
+                "zoomcross", "radial",
+            };
         string[] labels = transition.isEnd
             ? new[] { "沿用（直接结束）", "无转场", "淡出结束" }
-            : new[] { "沿用目标场景", "无转场", "淡入淡出", "交叉溶解", "向左擦除", "向右擦除", "向左推入", "向右推入" };
+            : new[]
+            {
+                "沿用目标场景", "无转场", "淡入淡出", "交叉溶解",
+                "向左擦除", "向右擦除", "向上擦除", "向下擦除",
+                "向左推入", "向右推入", "向上推入", "向下推入",
+                "交叉缩放", "径向展开",
+            };
         Dropdown dropdown = CreateDropdown(card, new Vector2(72f, y), new Vector2(300f, 26f), optionIndex =>
         {
             if (optionIndex < 0 || optionIndex >= types.Length)

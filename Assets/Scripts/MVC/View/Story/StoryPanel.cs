@@ -61,7 +61,7 @@ public class StoryPanel : Panel
         rect.offsetMax = Vector2.zero;
 
         Image image = obj.GetComponent<Image>();
-        image.color = new Color(0, 0, 0, 0);
+        image.color = new Color32(8, 11, 18, 255);
         image.raycastTarget = true;
 
         Button button = obj.GetComponent<Button>();
@@ -100,7 +100,7 @@ public class StoryPanel : Panel
         rect.offsetMax = Vector2.zero;
 
         Image image = obj.GetComponent<Image>();
-        image.color = new Color(0, 0, 0, 0);
+        image.color = new Color32(8, 11, 18, 255);
         image.raycastTarget = true;
 
         Button button = obj.GetComponent<Button>();
@@ -493,7 +493,7 @@ public class StoryPanel : Panel
         PrepareTransitionImage(sprite);
         if (type == "fade")
         {
-            transitionSceneImage.gameObject.SetActive(false);
+            SetTransitionImagesActive(false);
             float halfDuration = duration * .5f;
             yield return Animate(halfDuration, progress => SetStoryVisualAlpha(1f - progress));
             ApplySceneSprite(sprite);
@@ -507,21 +507,40 @@ public class StoryPanel : Panel
             SetTransitionImageAlpha(0f);
             yield return Animate(duration, SetTransitionImageAlpha);
         }
-        else if (type == "wipeleft" || type == "wiperight")
+        else if (type == "wipeleft" || type == "wiperight"
+            || type == "wipeup" || type == "wipedown" || type == "radial")
         {
             ConfigureWipe(transitionSceneImage, type);
             ConfigureWipe(dialogTransitionSceneImage, type);
             yield return Animate(duration, SetTransitionFillAmount);
         }
+        else if (type == "zoomcross")
+        {
+            SetPrimaryImageAlpha(1f);
+            SetTransitionImageAlpha(0f);
+            SetPrimaryScale(Vector3.one);
+            SetTransitionScale(Vector3.one * .88f);
+            yield return Animate(duration, progress =>
+            {
+                SetPrimaryImageAlpha(1f - progress);
+                SetTransitionImageAlpha(progress);
+                SetPrimaryScale(Vector3.one * Mathf.Lerp(1f, 1.08f, progress));
+                SetTransitionScale(Vector3.one * Mathf.Lerp(.88f, 1f, progress));
+            });
+        }
         else
         {
             float width = Mathf.Max(1f, sceneImage.rectTransform.rect.width);
-            float direction = type == "pushright" ? -1f : 1f;
-            SetTransitionPosition(new Vector2(direction * width, 0f));
+            float height = Mathf.Max(1f, sceneImage.rectTransform.rect.height);
+            Vector2 offset = type == "pushright" ? new Vector2(-width, 0f)
+                : type == "pushup" ? new Vector2(0f, -height)
+                : type == "pushdown" ? new Vector2(0f, height)
+                : new Vector2(width, 0f);
+            SetTransitionPosition(offset);
             yield return Animate(duration, progress =>
             {
-                SetPrimaryPosition(new Vector2(-direction * width * progress, 0f));
-                SetTransitionPosition(new Vector2(direction * width * (1f - progress), 0f));
+                SetPrimaryPosition(-offset * progress);
+                SetTransitionPosition(offset * (1f - progress));
             });
         }
 
@@ -557,6 +576,9 @@ public class StoryPanel : Panel
     {
         SetPrimaryPosition(Vector2.zero);
         SetStoryVisualAlpha(1f);
+        SetPrimaryImageAlpha(1f);
+        SetPrimaryScale(Vector3.one);
+        SetTransitionScale(Vector3.one);
         ResetTransitionImage(transitionSceneImage);
         ResetTransitionImage(dialogTransitionSceneImage);
     }
@@ -569,7 +591,9 @@ public class StoryPanel : Panel
         image.color = Color.white;
         image.type = Image.Type.Simple;
         image.fillAmount = 1f;
+        image.fillClockwise = true;
         image.rectTransform.anchoredPosition = Vector2.zero;
+        image.rectTransform.localScale = Vector3.one;
         image.gameObject.SetActive(true);
     }
 
@@ -581,6 +605,8 @@ public class StoryPanel : Panel
         image.sprite = null;
         image.type = Image.Type.Simple;
         image.fillAmount = 1f;
+        image.fillClockwise = true;
+        image.rectTransform.localScale = Vector3.one;
         image.gameObject.SetActive(false);
     }
 
@@ -589,9 +615,31 @@ public class StoryPanel : Panel
         if (image == null)
             return;
         image.type = Image.Type.Filled;
-        image.fillMethod = Image.FillMethod.Horizontal;
-        image.fillOrigin = type == "wipeleft" ? 1 : 0;
+        if (type == "radial")
+        {
+            image.fillMethod = Image.FillMethod.Radial360;
+            image.fillOrigin = (int)Image.Origin360.Bottom;
+            image.fillClockwise = true;
+        }
+        else if (type == "wipeup" || type == "wipedown")
+        {
+            image.fillMethod = Image.FillMethod.Vertical;
+            image.fillOrigin = type == "wipedown" ? 1 : 0;
+        }
+        else
+        {
+            image.fillMethod = Image.FillMethod.Horizontal;
+            image.fillOrigin = type == "wipeleft" ? 1 : 0;
+        }
         image.fillAmount = 0f;
+    }
+
+    private void SetTransitionImagesActive(bool active)
+    {
+        if (transitionSceneImage != null)
+            transitionSceneImage.gameObject.SetActive(active);
+        if (dialogTransitionSceneImage != null)
+            dialogTransitionSceneImage.gameObject.SetActive(active);
     }
 
     private void SetStoryVisualAlpha(float alpha)
@@ -604,6 +652,28 @@ public class StoryPanel : Panel
     {
         SetImageAlpha(transitionSceneImage, alpha);
         SetImageAlpha(dialogTransitionSceneImage, alpha);
+    }
+
+    private void SetPrimaryImageAlpha(float alpha)
+    {
+        SetImageAlpha(sceneImage, alpha);
+        SetImageAlpha(dialogSceneImage, alpha);
+    }
+
+    private void SetPrimaryScale(Vector3 scale)
+    {
+        if (sceneImage != null)
+            sceneImage.rectTransform.localScale = scale;
+        if (dialogSceneImage != null)
+            dialogSceneImage.rectTransform.localScale = scale;
+    }
+
+    private void SetTransitionScale(Vector3 scale)
+    {
+        if (transitionSceneImage != null)
+            transitionSceneImage.rectTransform.localScale = scale;
+        if (dialogTransitionSceneImage != null)
+            dialogTransitionSceneImage.rectTransform.localScale = scale;
     }
 
     private void SetTransitionFillAmount(float amount)

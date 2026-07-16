@@ -94,7 +94,7 @@ public class WorkshopStoryNodeEditorPanel : Panel
         rect.offsetMax = Vector2.zero;
 
         Image rootImage = obj.GetComponent<Image>();
-        rootImage.color = Color.clear;
+        rootImage.color = StageFallbackColor;
         rootImage.raycastTarget = false;
 
         WorkshopStoryNodeEditorPanel panel = obj.GetComponent<WorkshopStoryNodeEditorPanel>();
@@ -1278,12 +1278,24 @@ public class WorkshopStoryNodeEditorPanel : Panel
 
     private static string[] GetSceneTransitionTypes()
     {
-        return new[] { "none", "fade", "crossfade", "wipeleft", "wiperight", "pushleft", "pushright" };
+        return new[]
+        {
+            "none", "fade", "crossfade",
+            "wipeleft", "wiperight", "wipeup", "wipedown",
+            "pushleft", "pushright", "pushup", "pushdown",
+            "zoomcross", "radial",
+        };
     }
 
     private static string[] GetSceneTransitionLabels()
     {
-        return new[] { "无转场", "淡入淡出", "交叉溶解", "向左擦除", "向右擦除", "向左推入", "向右推入" };
+        return new[]
+        {
+            "无转场", "淡入淡出", "交叉溶解",
+            "向左擦除", "向右擦除", "向上擦除", "向下擦除",
+            "向左推入", "向右推入", "向上推入", "向下推入",
+            "交叉缩放", "径向展开",
+        };
     }
 
     private void RefreshSceneActorSelector(StorySceneDocument scene)
