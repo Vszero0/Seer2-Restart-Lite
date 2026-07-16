@@ -49,13 +49,16 @@ public class WorkshopStoryNodeEditorPanel : Panel
     private Text dirtyStateText;
     private Text sceneStateText;
     private Dropdown sceneDropdown;
+    private Dropdown sceneTransitionDropdown;
     private Dropdown sceneActorDropdown;
     private Dropdown sceneContentDropdown;
     private Text sceneDropdownValueText;
+    private Text sceneTransitionDropdownValueText;
     private Text sceneActorDropdownValueText;
     private Text sceneContentDropdownValueText;
     private Text layoutModeButtonText;
     private Text restoreChoiceButtonText;
+    private Text sceneTransitionDurationText;
     private string activeSceneActorId;
     private bool isUpdatingSceneSelectors;
     private TextMeshProUGUI sourceDialogueText;
@@ -248,6 +251,12 @@ public class WorkshopStoryNodeEditorPanel : Panel
         CreateToolbarButton(editorActions, "+选项", new Vector2(46f, -87f), new Vector2(60f, 25f), ConvertActiveContentToChoice, false);
         restoreChoiceButtonText = CreateToolbarButton(editorActions, "还原内容", new Vector2(114f, -87f), new Vector2(76f, 25f),
             RestoreActiveChoiceToContent, false);
+        CreateText("Transition Group", editorActions, "转场", 13, TextAnchor.MiddleLeft, Cyan,
+            new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(202f, -89f), new Vector2(34f, 20f));
+        sceneTransitionDropdown = CreateDropdown(editorActions, new Vector2(240f, -87f), new Vector2(142f, 25f), OnSceneTransitionChanged);
+        sceneTransitionDropdownValueText = CreateSelectorValueText(sceneTransitionDropdown);
+        sceneTransitionDurationText = CreateToolbarButton(editorActions, "时长 0.35秒", new Vector2(390f, -87f),
+            new Vector2(104f, 25f), CycleSceneTransitionDuration, false);
         BuildChoiceEditor();
         toolbar.SetAsLastSibling();
         editorActions.SetAsLastSibling();
@@ -584,10 +593,12 @@ public class WorkshopStoryNodeEditorPanel : Panel
         renderedMapId = mapId;
 
         int requestVersion = ++sceneVisualRequestVersion;
-        sceneImage.sprite = null;
-        sceneImage.color = StageFallbackColor;
         if (scene == null || scene.mapId == 0)
+        {
+            sceneImage.sprite = null;
+            sceneImage.color = StageFallbackColor;
             return;
+        }
 
         Map.GetMap(scene.mapId, map =>
         {
@@ -1191,6 +1202,23 @@ public class WorkshopStoryNodeEditorPanel : Panel
                 SetSelectorValueText(sceneDropdownValueText, sceneDropdown, "未选择场景");
             }
 
+            if (sceneTransitionDropdown != null)
+            {
+                string[] types = GetSceneTransitionTypes();
+                sceneTransitionDropdown.ClearOptions();
+                sceneTransitionDropdown.AddOptions(GetSceneTransitionLabels().ToList());
+                string activeType = activeScene?.transition?.normalizedType ?? "none";
+                sceneTransitionDropdown.SetValueWithoutNotify(Mathf.Max(0, Array.IndexOf(types, activeType)));
+                sceneTransitionDropdown.interactable = activeScene != null;
+                SetSelectorValueText(sceneTransitionDropdownValueText, sceneTransitionDropdown, "无转场");
+            }
+            if (sceneTransitionDurationText != null)
+            {
+                float duration = activeScene?.transition?.normalizedDuration ?? .35f;
+                sceneTransitionDurationText.text = "时长 " + duration.ToString("0.00") + "秒";
+                sceneTransitionDurationText.transform.parent.gameObject.SetActive(activeScene != null);
+            }
+
         }
         finally
         {
@@ -1210,6 +1238,52 @@ public class WorkshopStoryNodeEditorPanel : Panel
         activeSceneId = sections[index].scene.id;
         activeDialogueCommand = null;
         RefreshCanvas();
+    }
+
+    private void OnSceneTransitionChanged(int index)
+    {
+        if (isUpdatingSceneSelectors)
+            return;
+
+        string[] types = GetSceneTransitionTypes();
+        if (index < 0 || index >= types.Length)
+            return;
+        StorySceneDocument scene = controller.DraftNode?.GetScene(activeSceneId);
+        float duration = scene?.transition?.normalizedDuration ?? .35f;
+        if (!controller.SetSceneTransition(activeSceneId, types[index], duration, out string error))
+        {
+            Hintbox.OpenHintboxWithContent(error, 16);
+            return;
+        }
+        RefreshCanvas();
+    }
+
+    private void CycleSceneTransitionDuration()
+    {
+        StorySceneDocument scene = controller.DraftNode?.GetScene(activeSceneId);
+        if (scene == null)
+            return;
+
+        float[] durations = { .25f, .35f, .5f, .75f, 1f };
+        float current = scene.transition?.normalizedDuration ?? .35f;
+        int currentIndex = Array.FindIndex(durations, value => Mathf.Abs(value - current) < .01f);
+        float next = durations[(currentIndex + 1 + durations.Length) % durations.Length];
+        if (!controller.SetSceneTransition(activeSceneId, scene.transition?.normalizedType ?? "none", next, out string error))
+        {
+            Hintbox.OpenHintboxWithContent(error, 16);
+            return;
+        }
+        RefreshCanvas();
+    }
+
+    private static string[] GetSceneTransitionTypes()
+    {
+        return new[] { "none", "fade", "crossfade", "wipeleft", "wiperight", "pushleft", "pushright" };
+    }
+
+    private static string[] GetSceneTransitionLabels()
+    {
+        return new[] { "无转场", "淡入淡出", "交叉溶解", "向左擦除", "向右擦除", "向左推入", "向右推入" };
     }
 
     private void RefreshSceneActorSelector(StorySceneDocument scene)

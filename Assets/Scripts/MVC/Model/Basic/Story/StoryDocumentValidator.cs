@@ -170,6 +170,7 @@ public static class StoryValidator
 
             StoryResourceValidator.ValidatePath("Maps/bg/" + scene.mapId, "mapBackground", "auto", errors, location + ".mapId");
             StoryResourceValidator.ValidatePath(scene.bgmResourcePath, "audio", "auto", errors, location + ".bgmResourcePath");
+            ValidateTransition(scene.transition, false, errors, location + ".transition");
 
             HashSet<string> sceneActorIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             foreach (StorySceneActorLayoutDocument actorLayout in scene.actors ?? Array.Empty<StorySceneActorLayoutDocument>())
@@ -405,6 +406,13 @@ public static class StoryValidator
                     errors.Add(location + " 默认后续不能重新进入当前剧情点");
                 }
             }
+            ValidateTransition(transition.transition, true, errors, location + ".transition");
+            if (transition.isEnd)
+            {
+                string effect = transition.transition?.normalizedType ?? "inherit";
+                if (effect != "inherit" && effect != "none" && effect != "fade")
+                    errors.Add(location + ".transition 结束连接只支持无转场或淡出结束");
+            }
             if (transition.isDefault)
             {
                 defaultCount++;
@@ -427,6 +435,26 @@ public static class StoryValidator
 
         if (defaultCount > 1)
             errors.Add("node[" + node.id + "].transitions 最多只能有一个默认连接");
+    }
+
+    private static void ValidateTransition(
+        StoryTransitionDocument transition,
+        bool allowInherit,
+        List<string> errors,
+        string location)
+    {
+        if (transition == null)
+            return;
+
+        string type = (transition.type ?? string.Empty).Trim().ToLowerInvariant();
+        bool supported = type == "none" || type == "fade" || type == "crossfade"
+            || type == "wipeleft" || type == "wiperight"
+            || type == "pushleft" || type == "pushright"
+            || (allowInherit && type == "inherit");
+        if (!supported)
+            errors.Add(location + ".type 使用了不支持的转场类型");
+        if (transition.duration < .1f || transition.duration > 2f)
+            errors.Add(location + ".duration 必须在 0.1 到 2 秒之间");
     }
 
     private static void ValidateConditionGroup(ConditionGroupDocument group, List<string> errors, string location)

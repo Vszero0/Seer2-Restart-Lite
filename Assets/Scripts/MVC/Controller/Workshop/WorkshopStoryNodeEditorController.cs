@@ -142,6 +142,11 @@ public sealed class WorkshopStoryNodeEditorController
         return model.SetSceneMap(sceneId, mapId, out error);
     }
 
+    public bool SetSceneTransition(string sceneId, string type, float duration, out string error)
+    {
+        return model.SetSceneTransition(sceneId, type, duration, out error);
+    }
+
     public bool AddPetActor(int petId, string sceneId, out StoryActorDocument actor, out string error)
     {
         return model.AddPetActor(petId, sceneId, out actor, out error);

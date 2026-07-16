@@ -25,6 +25,7 @@ public class DialogManager : Manager<DialogManager>
     private Coroutine dialogOpenAnimationCoroutine;
     private Coroutine dialogStoryOpenAnimationCoroutine;
     private Image storyDialogBackground;
+    private Image storyTransitionBackground;
     private Sprite storyDialogDefaultBackgroundSprite;
     private Color storyDialogDefaultBackgroundColor;
     private RectTransform storyActorLayer;
@@ -130,6 +131,39 @@ public class DialogManager : Manager<DialogManager>
         storyDialogBackground.color = color;
     }
 
+    public Image GetStoryDialogBackgroundImage()
+    {
+        return storyDialogBackground;
+    }
+
+    public Image GetStoryTransitionBackgroundImage()
+    {
+        if (storyTransitionBackground != null)
+            return storyTransitionBackground;
+        if (dialogStoryLayer == null || storyDialogBackground == null)
+            return null;
+
+        GameObject obj = new GameObject("Story Transition Background", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));
+        obj.transform.SetParent(dialogStoryLayer, false);
+        RectTransform rect = obj.GetComponent<RectTransform>();
+        rect.anchorMin = Vector2.zero;
+        rect.anchorMax = Vector2.one;
+        rect.offsetMin = Vector2.zero;
+        rect.offsetMax = Vector2.zero;
+        storyTransitionBackground = obj.GetComponent<Image>();
+        storyTransitionBackground.color = Color.clear;
+        storyTransitionBackground.raycastTarget = false;
+        storyTransitionBackground.gameObject.SetActive(false);
+        RefreshStoryOverlayLayering();
+        return storyTransitionBackground;
+    }
+
+    public void SetStoryLayerAlpha(float alpha)
+    {
+        if (dialogStoryLayer != null)
+            GetCanvasGroup(dialogStoryLayer).alpha = Mathf.Clamp01(alpha);
+    }
+
     public void ResetStoryDialogBackground() {
         if (storyDialogBackground == null)
             return;
@@ -227,6 +261,9 @@ public class DialogManager : Manager<DialogManager>
 
         if (storyDialogBackground != null)
             storyDialogBackground.transform.SetAsFirstSibling();
+
+        if (storyTransitionBackground != null)
+            storyTransitionBackground.transform.SetSiblingIndex(Mathf.Min(1, dialogStoryLayer.childCount - 1));
 
         if (storyActorLayer != null)
             storyActorLayer.SetSiblingIndex(GetStoryOverlayInsertIndex());
@@ -468,7 +505,10 @@ public class DialogManager : Manager<DialogManager>
         if (storyDialogBackground == null)
             return 0;
 
-        return Mathf.Min(storyDialogBackground.transform.GetSiblingIndex() + 1, dialogStoryLayer.childCount - 1);
+        int backgroundIndex = storyTransitionBackground != null
+            ? storyTransitionBackground.transform.GetSiblingIndex()
+            : storyDialogBackground.transform.GetSiblingIndex();
+        return Mathf.Min(backgroundIndex + 1, dialogStoryLayer.childCount - 1);
     }
 
     private Button CreateStoryChoiceButton(RectTransform parent, string label, Action onClick)

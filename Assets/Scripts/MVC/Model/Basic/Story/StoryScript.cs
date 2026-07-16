@@ -48,6 +48,7 @@ public class StoryCommand
     public StorySceneActorLayoutDocument[] actorLayouts;
     public int mapId;
     public string bgmResourcePath;
+    public StoryTransitionDocument transition;
     public List<StoryChoice> choices = new List<StoryChoice>();
     public ConditionGroupDocument condition;
     public ConditionGroupDocument displayCondition;

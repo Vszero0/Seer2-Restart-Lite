@@ -1,4 +1,5 @@
 using System;
+using System.Collections;
 using System.Linq;
 using System.Collections.Generic;
 using UnityEngine;
@@ -25,14 +26,20 @@ public class StoryPanel : Panel
     private bool isBuilt;
     private bool isClosing;
     private bool waitingForChoice;
+    private bool isTransitioning;
     private bool isPreviewMode;
     private bool suppressMusicRestore;
     private bool hasChangedMusicIdentity;
     private bool hasRestartedMusic;
     private string activeMusicIdentity;
     private AudioSystem.MusicPlaybackSnapshot musicSnapshot;
+    private StoryTransitionDocument pendingNodeTransition;
+    private Coroutine sceneTransitionCoroutine;
 
     private Image sceneImage;
+    private Image transitionSceneImage;
+    private Image dialogSceneImage;
+    private Image dialogTransitionSceneImage;
     private RectTransform actorLayer;
     private GameObject exitButton;
     private DialogInfo lastDialogInfo;
@@ -125,6 +132,11 @@ public class StoryPanel : Panel
         Action onPreviewClosed = previewClosedCallback;
         previewClosedCallback = null;
         sceneMusicRequestVersion++;
+        sceneVisualRequestVersion++;
+        if (sceneTransitionCoroutine != null)
+            StopCoroutine(sceneTransitionCoroutine);
+        sceneTransitionCoroutine = null;
+        ResetTransitionImages();
         RestoreMusicContext();
         ClearDialogHandlers();
         actorStage?.Clear();
@@ -154,6 +166,11 @@ public class StoryPanel : Panel
 
         sceneImage = CreateImage("Scene", transform, Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero, Vector2.zero, new Color32(8, 11, 18, 255));
         sceneImage.raycastTarget = false;
+        transitionSceneImage = CreateImage("Transition Scene", transform, Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero, Vector2.zero, Color.clear);
+        transitionSceneImage.raycastTarget = false;
+        transitionSceneImage.gameObject.SetActive(false);
+        dialogSceneImage = DialogManager.instance?.GetStoryDialogBackgroundImage();
+        dialogTransitionSceneImage = DialogManager.instance?.GetStoryTransitionBackgroundImage();
         actorLayer = DialogManager.instance != null
             ? DialogManager.instance.GetStoryActorLayer()
             : CreateRect("Story Actors", transform, Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero, Vector2.zero);
@@ -193,6 +210,8 @@ public class StoryPanel : Panel
         story.BeginPointVisit(initialPointId);
         isClosing = false;
         waitingForChoice = false;
+        isTransitioning = false;
+        pendingNodeTransition = null;
         actorStage.Reset(story.layout);
         ClearDialogHandlers();
         lastDialogInfo = null;
@@ -202,7 +221,7 @@ public class StoryPanel : Panel
 
     private void Advance()
     {
-        if (isClosing || waitingForChoice)
+        if (isClosing || waitingForChoice || isTransitioning)
             return;
 
         ShowNextCommand();
@@ -216,7 +235,7 @@ public class StoryPanel : Panel
 
     private void ShowNextCommand()
     {
-        if (story == null)
+        if (story == null || isTransitioning)
             return;
 
         ClearChoiceHandler();
@@ -226,7 +245,8 @@ public class StoryPanel : Panel
             switch (command.type)
             {
                 case StoryCommandType.Scene:
-                    ApplyScene(command);
+                    if (ApplyScene(command))
+                        return;
                     continue;
                 case StoryCommandType.Show:
                     RegisterActor(command);
@@ -245,7 +265,10 @@ public class StoryPanel : Panel
                     return;
                 case StoryCommandType.Jump:
                     if (StoryConditionEvaluator.Evaluate(story, command.condition))
+                    {
+                        pendingNodeTransition = command.transition;
                         JumpTo(command.args);
+                    }
                     continue;
                 case StoryCommandType.Mission:
                     ExecuteMission(command.args);
@@ -258,6 +281,8 @@ public class StoryPanel : Panel
                 case StoryCommandType.End:
                     if (StoryConditionEvaluator.Evaluate(story, command.condition))
                     {
+                        if (BeginEndTransition(command.transition))
+                            return;
                         ClosePanel();
                         return;
                     }
@@ -268,13 +293,12 @@ public class StoryPanel : Panel
         ClosePanel();
     }
 
-    private void ApplyScene(StoryCommand command)
+    private bool ApplyScene(StoryCommand command)
     {
-        SetScene(StoryCommandArguments.GetValue(command.args, "bg", command.args), command.mapId);
-        actorStage.ApplyScene(command.actorLayouts, command.layout);
-        foreach (StoryActorDocument actor in command.sceneActors ?? Array.Empty<StoryActorDocument>())
-            actorStage.Show(actor);
         PlaySceneMusic(command.mapId, command.bgmResourcePath, ++sceneMusicRequestVersion);
+        StoryTransitionDocument transition = ResolveSceneTransition(command.transition);
+        pendingNodeTransition = null;
+        return BeginSceneVisualChange(command, transition);
     }
 
     private void PlaySceneMusic(int mapId, string resourcePath, int requestVersion)
@@ -367,12 +391,8 @@ public class StoryPanel : Panel
             int.TryParse(mapIdText, out mapId);
 
         if (mapId == 0)
-        {
-            ApplySceneSprite(null);
             return;
-        }
 
-        ApplySceneSprite(null);
         Map.GetMap(mapId, map =>
         {
             if (requestVersion != sceneVisualRequestVersion)
@@ -387,6 +407,262 @@ public class StoryPanel : Panel
             }
             ApplySceneSprite(mapSprite);
         }, _ => { });
+    }
+
+    private StoryTransitionDocument ResolveSceneTransition(StoryTransitionDocument sceneTransition)
+    {
+        if (pendingNodeTransition != null && pendingNodeTransition.normalizedType != "inherit")
+            return pendingNodeTransition;
+        return sceneTransition;
+    }
+
+    private bool BeginSceneVisualChange(StoryCommand command, StoryTransitionDocument transition)
+    {
+        string path = StoryCommandArguments.GetValue(command.args, "bg", command.args);
+        int mapId = command.mapId;
+        int requestVersion = ++sceneVisualRequestVersion;
+        Sprite sprite = StorySpriteResolver.Load(path, story?.GetResourceSource(path));
+        if (sprite != null)
+            return StartSceneTransition(command, sprite, transition);
+
+        if (mapId == 0 && path.TryTrimStart("Maps/bg/", out string mapIdText))
+            int.TryParse(mapIdText, out mapId);
+        if (mapId == 0)
+        {
+            ApplySceneActors(command);
+            return false;
+        }
+
+        isTransitioning = true;
+        Map.GetMap(mapId, map =>
+        {
+            if (requestVersion != sceneVisualRequestVersion)
+                return;
+
+            Sprite mapSprite = map?.resources?.bg;
+            if (mapSprite == null)
+            {
+                int resourceId = map?.resId != 0 ? map.resId : mapId;
+                string fallbackPath = "Maps/bg/" + resourceId;
+                mapSprite = StorySpriteResolver.Load(fallbackPath, story?.GetResourceSource(fallbackPath));
+            }
+            ResumeLoadedScene(command, mapSprite, transition);
+        }, _ =>
+        {
+            if (requestVersion == sceneVisualRequestVersion)
+                ResumeLoadedScene(command, null, transition);
+        });
+        return true;
+    }
+
+    private void ResumeLoadedScene(StoryCommand command, Sprite sprite, StoryTransitionDocument transition)
+    {
+        if (StartSceneTransition(command, sprite, transition))
+            return;
+
+        isTransitioning = false;
+        ShowNextCommand();
+    }
+
+    private bool StartSceneTransition(StoryCommand command, Sprite sprite, StoryTransitionDocument transition)
+    {
+        string type = transition?.normalizedType ?? "none";
+        if (type == "inherit")
+            type = "none";
+        if (sprite == null || sceneImage == null || sceneImage.sprite == null || type == "none")
+        {
+            if (sprite != null)
+                ApplySceneSprite(sprite);
+            ApplySceneActors(command);
+            return false;
+        }
+
+        isTransitioning = true;
+        sceneTransitionCoroutine = StartCoroutine(SceneTransitionCoroutine(
+            command, sprite, type, transition.normalizedDuration));
+        return true;
+    }
+
+    private IEnumerator SceneTransitionCoroutine(
+        StoryCommand command,
+        Sprite sprite,
+        string type,
+        float duration)
+    {
+        bool actorsApplied = false;
+        PrepareTransitionImage(sprite);
+        if (type == "fade")
+        {
+            transitionSceneImage.gameObject.SetActive(false);
+            float halfDuration = duration * .5f;
+            yield return Animate(halfDuration, progress => SetStoryVisualAlpha(1f - progress));
+            ApplySceneSprite(sprite);
+            ApplySceneActors(command);
+            actorsApplied = true;
+            SetStoryVisualAlpha(0f);
+            yield return Animate(halfDuration, SetStoryVisualAlpha);
+        }
+        else if (type == "crossfade")
+        {
+            SetTransitionImageAlpha(0f);
+            yield return Animate(duration, SetTransitionImageAlpha);
+        }
+        else if (type == "wipeleft" || type == "wiperight")
+        {
+            ConfigureWipe(transitionSceneImage, type);
+            ConfigureWipe(dialogTransitionSceneImage, type);
+            yield return Animate(duration, SetTransitionFillAmount);
+        }
+        else
+        {
+            float width = Mathf.Max(1f, sceneImage.rectTransform.rect.width);
+            float direction = type == "pushright" ? -1f : 1f;
+            SetTransitionPosition(new Vector2(direction * width, 0f));
+            yield return Animate(duration, progress =>
+            {
+                SetPrimaryPosition(new Vector2(-direction * width * progress, 0f));
+                SetTransitionPosition(new Vector2(direction * width * (1f - progress), 0f));
+            });
+        }
+
+        ApplySceneSprite(sprite);
+        if (!actorsApplied)
+            ApplySceneActors(command);
+        ResetTransitionImages();
+        sceneTransitionCoroutine = null;
+        isTransitioning = false;
+        ShowNextCommand();
+    }
+
+    private IEnumerator Animate(float duration, Action<float> update)
+    {
+        float elapsed = 0f;
+        update?.Invoke(0f);
+        while (elapsed < duration)
+        {
+            elapsed += Time.unscaledDeltaTime;
+            update?.Invoke(Mathf.Clamp01(elapsed / duration));
+            yield return null;
+        }
+        update?.Invoke(1f);
+    }
+
+    private void PrepareTransitionImage(Sprite sprite)
+    {
+        PrepareTransitionImage(transitionSceneImage, sprite);
+        PrepareTransitionImage(dialogTransitionSceneImage, sprite);
+    }
+
+    private void ResetTransitionImages()
+    {
+        SetPrimaryPosition(Vector2.zero);
+        SetStoryVisualAlpha(1f);
+        ResetTransitionImage(transitionSceneImage);
+        ResetTransitionImage(dialogTransitionSceneImage);
+    }
+
+    private static void PrepareTransitionImage(Image image, Sprite sprite)
+    {
+        if (image == null)
+            return;
+        image.sprite = sprite;
+        image.color = Color.white;
+        image.type = Image.Type.Simple;
+        image.fillAmount = 1f;
+        image.rectTransform.anchoredPosition = Vector2.zero;
+        image.gameObject.SetActive(true);
+    }
+
+    private static void ResetTransitionImage(Image image)
+    {
+        if (image == null)
+            return;
+        image.rectTransform.anchoredPosition = Vector2.zero;
+        image.sprite = null;
+        image.type = Image.Type.Simple;
+        image.fillAmount = 1f;
+        image.gameObject.SetActive(false);
+    }
+
+    private static void ConfigureWipe(Image image, string type)
+    {
+        if (image == null)
+            return;
+        image.type = Image.Type.Filled;
+        image.fillMethod = Image.FillMethod.Horizontal;
+        image.fillOrigin = type == "wipeleft" ? 1 : 0;
+        image.fillAmount = 0f;
+    }
+
+    private void SetStoryVisualAlpha(float alpha)
+    {
+        SetImageAlpha(sceneImage, alpha);
+        DialogManager.instance?.SetStoryLayerAlpha(alpha);
+    }
+
+    private void SetTransitionImageAlpha(float alpha)
+    {
+        SetImageAlpha(transitionSceneImage, alpha);
+        SetImageAlpha(dialogTransitionSceneImage, alpha);
+    }
+
+    private void SetTransitionFillAmount(float amount)
+    {
+        if (transitionSceneImage != null)
+            transitionSceneImage.fillAmount = amount;
+        if (dialogTransitionSceneImage != null)
+            dialogTransitionSceneImage.fillAmount = amount;
+    }
+
+    private void SetPrimaryPosition(Vector2 position)
+    {
+        if (sceneImage != null)
+            sceneImage.rectTransform.anchoredPosition = position;
+        if (dialogSceneImage != null)
+            dialogSceneImage.rectTransform.anchoredPosition = position;
+    }
+
+    private void SetTransitionPosition(Vector2 position)
+    {
+        if (transitionSceneImage != null)
+            transitionSceneImage.rectTransform.anchoredPosition = position;
+        if (dialogTransitionSceneImage != null)
+            dialogTransitionSceneImage.rectTransform.anchoredPosition = position;
+    }
+
+    private static void SetImageAlpha(Image image, float alpha)
+    {
+        if (image == null)
+            return;
+        Color color = image.color;
+        color.a = alpha;
+        image.color = color;
+    }
+
+    private void ApplySceneActors(StoryCommand command)
+    {
+        actorStage.ApplyScene(command.actorLayouts, command.layout);
+        foreach (StoryActorDocument actor in command.sceneActors ?? Array.Empty<StoryActorDocument>())
+            actorStage.Show(actor);
+    }
+
+    private bool BeginEndTransition(StoryTransitionDocument transition)
+    {
+        string type = transition?.normalizedType ?? "none";
+        if (type == "none" || type == "inherit" || sceneImage == null)
+            return false;
+
+        isTransitioning = true;
+        sceneTransitionCoroutine = StartCoroutine(EndTransitionCoroutine(transition.normalizedDuration));
+        return true;
+    }
+
+    private IEnumerator EndTransitionCoroutine(float duration)
+    {
+        yield return Animate(duration, progress => SetStoryVisualAlpha(1f - progress));
+        sceneTransitionCoroutine = null;
+        isTransitioning = false;
+        ClosePanel();
     }
 
     private void ApplySceneSprite(Sprite sprite)

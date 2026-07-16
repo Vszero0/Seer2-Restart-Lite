@@ -57,13 +57,16 @@ public static class StoryDocumentCodec
             return;
 
         int sourceVersion = document.schemaVersion;
-        document.schemaVersion = Math.Max(4, document.schemaVersion);
+        document.schemaVersion = Math.Max(5, document.schemaVersion);
         foreach (StoryNodeDocument node in document.nodes ?? Array.Empty<StoryNodeDocument>())
         {
             if (node != null && string.IsNullOrWhiteSpace(node.flowRole))
                 node.flowRole = "sequence";
 
             NormalizeStableIds(node);
+
+            foreach (StorySceneDocument scene in node?.scenes ?? Array.Empty<StorySceneDocument>())
+                NormalizeTransition(scene?.transition, false);
 
             foreach (StoryNodeTransitionDocument transition in node?.transitions ?? Array.Empty<StoryNodeTransitionDocument>())
             {
@@ -75,6 +78,7 @@ public static class StoryDocumentCodec
                     if (transition.isEnd)
                         transition.targetNodeId = null;
                 }
+                NormalizeTransition(transition?.transition, true);
                 NormalizeConditionGroup(transition?.condition);
                 if (transition != null
                     && transition.isDefault
@@ -93,6 +97,16 @@ public static class StoryDocumentCodec
 
         if (sourceVersion < 4)
             EnsureAutoEnding(document);
+    }
+
+    private static void NormalizeTransition(StoryTransitionDocument transition, bool allowInherit)
+    {
+        if (transition == null)
+            return;
+
+        string normalizedType = transition.normalizedType;
+        transition.type = !allowInherit && normalizedType == "inherit" ? "none" : normalizedType;
+        transition.duration = transition.normalizedDuration;
     }
 
     private static void EnsureAutoEnding(StoryDocument document)

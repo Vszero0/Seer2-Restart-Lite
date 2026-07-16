@@ -671,6 +671,31 @@ public sealed class WorkshopStoryNodeEditorModel
         return true;
     }
 
+    public bool SetSceneTransition(string sceneId, string type, float duration, out string error)
+    {
+        StorySceneDocument scene = DraftNode?.GetScene(sceneId);
+        if (scene == null)
+        {
+            error = "当前场景无效。";
+            return false;
+        }
+
+        StoryTransitionDocument value = new StoryTransitionDocument { type = type, duration = duration };
+        string normalizedType = value.normalizedType;
+        if (normalizedType == "inherit" || normalizedType != (type ?? string.Empty).Trim().ToLowerInvariant())
+        {
+            error = "请选择有效的场景转场效果。";
+            return false;
+        }
+
+        value.type = normalizedType;
+        value.duration = value.normalizedDuration;
+        scene.transition = value;
+        HasUnsavedChanges = true;
+        error = string.Empty;
+        return true;
+    }
+
     public bool AddScene(Map map, out StorySceneDocument scene, out string error)
     {
         scene = null;

@@ -85,6 +85,11 @@ public sealed class WorkshopStoryBrowserController
         return model.UpdateSelectedNodeTransitionTarget(transitionId, targetType, targetNodeId, out error);
     }
 
+    public bool UpdateSelectedNodeTransitionEffect(string transitionId, string type, float duration, out string error)
+    {
+        return model.UpdateSelectedNodeTransitionEffect(transitionId, type, duration, out error);
+    }
+
     public bool UpdateSelectedNodeTransitionChoice(string transitionId, string commandId, string choiceId, string optionId, out string error)
     {
         return model.UpdateSelectedNodeTransitionChoice(transitionId, commandId, choiceId, optionId, out error);
