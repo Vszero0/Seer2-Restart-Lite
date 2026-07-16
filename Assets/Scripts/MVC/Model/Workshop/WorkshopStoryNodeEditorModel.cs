@@ -392,6 +392,12 @@ public sealed class WorkshopStoryNodeEditorModel
             return false;
         }
 
+        if (IsChoiceCommandReferenced(target))
+        {
+            error = "该选择内容已用于剧情点后续规则，请先在入口页的“编辑连接”中处理。";
+            return false;
+        }
+
         List<StoryCommandDocument> commands = DraftNode.commands.ToList();
         commands.RemoveAt(commandIndex);
         DraftNode.commands = commands.ToArray();
@@ -496,6 +502,12 @@ public sealed class WorkshopStoryNodeEditorModel
         if (!TryGetChoiceCommand(sceneId, commandId, out StoryCommandDocument target, out error))
             return false;
 
+        if (IsChoiceCommandReferenced(target))
+        {
+            error = "该选择内容已用于剧情点后续规则，请先在入口页的“编辑连接”中处理。";
+            return false;
+        }
+
         string originalType = (target.choiceOriginalType ?? string.Empty).Trim().ToLowerInvariant();
         if (originalType != "say" && originalType != "narrate")
             originalType = string.IsNullOrWhiteSpace(target.actor) ? "narrate" : "say";
@@ -573,6 +585,12 @@ public sealed class WorkshopStoryNodeEditorModel
         if (!TryGetChoiceCommand(sceneId, commandId, out StoryCommandDocument command, out error))
             return false;
 
+        if (IsChoiceOptionReferenced(optionId))
+        {
+            error = "该选项已用于剧情点后续规则，请先在入口页的“编辑连接”中处理。";
+            return false;
+        }
+
         List<StoryChoiceDocument> options = (command.choices ?? Array.Empty<StoryChoiceDocument>())
             .Where(value => value != null).ToList();
         if (options.Count <= 2)
@@ -609,6 +627,15 @@ public sealed class WorkshopStoryNodeEditorModel
         if (section != null && section.contentCount > 0 && !removeSectionContent)
         {
             error = "该场景包含 " + section.contentCount + " 条剧情内容，需要确认后一起删除。";
+            return false;
+        }
+
+        if (section != null && (DraftNode.commands ?? Array.Empty<StoryCommandDocument>())
+            .Skip(section.commandStartIndex + 1)
+            .Take(section.contentCount)
+            .Any(IsChoiceCommandReferenced))
+        {
+            error = "该场景包含已用于剧情点后续规则的选择内容，请先在入口页的“编辑连接”中处理。";
             return false;
         }
 
@@ -1301,6 +1328,58 @@ public sealed class WorkshopStoryNodeEditorModel
         return command != null && (string.Equals(command.type, "say", StringComparison.OrdinalIgnoreCase)
             || string.Equals(command.type, "narrate", StringComparison.OrdinalIgnoreCase)
             || string.Equals(command.type, "choice", StringComparison.OrdinalIgnoreCase));
+    }
+
+    private bool IsChoiceCommandReferenced(StoryCommandDocument command)
+    {
+        if (command == null || !string.Equals(command.type, "choice", StringComparison.OrdinalIgnoreCase))
+            return false;
+
+        return (command.choices ?? Array.Empty<StoryChoiceDocument>())
+            .Any(option => option != null && IsChoiceOptionReferenced(option.optionId));
+    }
+
+    private bool IsChoiceOptionReferenced(string optionId)
+    {
+        if (string.IsNullOrWhiteSpace(optionId))
+            return false;
+
+        foreach (StoryNodeDocument node in DraftDocument?.nodes ?? Array.Empty<StoryNodeDocument>())
+        {
+            foreach (StoryNodeTransitionDocument transition in node?.transitions ?? Array.Empty<StoryNodeTransitionDocument>())
+            {
+                if (ConditionReferencesOption(transition?.condition, optionId))
+                    return true;
+            }
+
+            foreach (StoryCommandDocument command in node?.commands ?? Array.Empty<StoryCommandDocument>())
+            {
+                if (ConditionReferencesOption(command?.condition, optionId)
+                    || ConditionReferencesOption(command?.displayCondition, optionId))
+                {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    private static bool ConditionReferencesOption(ConditionGroupDocument group, string optionId)
+    {
+        foreach (StoryConditionClauseDocument clause in group?.clauses ?? Array.Empty<StoryConditionClauseDocument>())
+        {
+            if ((clause?.conditions ?? Array.Empty<StoryConditionDocument>())
+                .Any(condition => condition != null
+                    && string.Equals(condition.optionId, optionId, StringComparison.OrdinalIgnoreCase)))
+            {
+                return true;
+            }
+        }
+
+        return (group?.conditions ?? Array.Empty<StoryConditionDocument>())
+            .Any(condition => condition != null
+                && string.Equals(condition.optionId, optionId, StringComparison.OrdinalIgnoreCase));
     }
 
     private static void EnsurePointResources(StoryDocument document)

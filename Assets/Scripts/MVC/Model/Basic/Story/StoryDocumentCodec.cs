@@ -55,22 +55,126 @@ public static class StoryDocumentCodec
         if (document == null)
             return;
 
+        document.schemaVersion = Math.Max(3, document.schemaVersion);
         foreach (StoryNodeDocument node in document.nodes ?? Array.Empty<StoryNodeDocument>())
         {
             if (node != null && string.IsNullOrWhiteSpace(node.flowRole))
                 node.flowRole = "sequence";
 
+            NormalizeStableIds(node);
+
             foreach (StoryNodeTransitionDocument transition in node?.transitions ?? Array.Empty<StoryNodeTransitionDocument>())
             {
+                if (transition != null)
+                {
+                    transition.targetType = string.IsNullOrWhiteSpace(transition.targetType)
+                        ? "node"
+                        : transition.targetType.Trim().ToLowerInvariant();
+                    if (transition.isEnd)
+                        transition.targetNodeId = null;
+                }
+                NormalizeConditionGroup(transition?.condition);
                 if (transition != null
                     && transition.isDefault
-                    && (transition.condition == null
-                        || transition.condition.conditions == null
-                        || transition.condition.conditions.Length == 0))
+                    && (transition.condition == null || !transition.condition.hasConditions))
                 {
                     transition.condition = null;
                 }
             }
+
+            foreach (StoryCommandDocument command in node?.commands ?? Array.Empty<StoryCommandDocument>())
+            {
+                NormalizeConditionGroup(command?.condition);
+                NormalizeConditionGroup(command?.displayCondition);
+            }
         }
+    }
+
+    private static void NormalizeStableIds(StoryNodeDocument node)
+    {
+        if (node == null)
+            return;
+
+        StoryCommandDocument[] commands = node.commands ?? Array.Empty<StoryCommandDocument>();
+        var commandIds = new System.Collections.Generic.HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var choiceIds = new System.Collections.Generic.HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var optionIds = new System.Collections.Generic.HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (StoryCommandDocument existingCommand in commands)
+        {
+            if (!string.IsNullOrWhiteSpace(existingCommand?.commandId))
+                commandIds.Add(existingCommand.commandId);
+            if (!string.IsNullOrWhiteSpace(existingCommand?.choiceId))
+                choiceIds.Add(existingCommand.choiceId);
+            foreach (StoryChoiceDocument existingOption in existingCommand?.choices ?? Array.Empty<StoryChoiceDocument>())
+            {
+                if (!string.IsNullOrWhiteSpace(existingOption?.optionId))
+                    optionIds.Add(existingOption.optionId);
+            }
+        }
+
+        for (int commandIndex = 0; commandIndex < commands.Length; commandIndex++)
+        {
+            StoryCommandDocument command = commands[commandIndex];
+            if (command == null)
+                continue;
+
+            if (string.IsNullOrWhiteSpace(command.commandId))
+            {
+                string commandId = node.id + ":command:" + (commandIndex + 1);
+                int suffix = 2;
+                while (!commandIds.Add(commandId))
+                    commandId = node.id + ":command:" + (commandIndex + 1) + ":" + suffix++;
+                command.commandId = commandId;
+            }
+            if (!string.Equals(command.type, "choice", StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            if (string.IsNullOrWhiteSpace(command.choiceId))
+            {
+                string choiceId = command.commandId + ":choice";
+                int suffix = 2;
+                while (!choiceIds.Add(choiceId))
+                    choiceId = command.commandId + ":choice:" + suffix++;
+                command.choiceId = choiceId;
+            }
+            StoryChoiceDocument[] options = command.choices ?? Array.Empty<StoryChoiceDocument>();
+            for (int optionIndex = 0; optionIndex < options.Length; optionIndex++)
+            {
+                StoryChoiceDocument option = options[optionIndex];
+                if (option == null)
+                    continue;
+
+                option.choiceId = command.choiceId;
+                if (string.IsNullOrWhiteSpace(option.optionId))
+                {
+                    string optionId = command.choiceId + ":" + (optionIndex + 1);
+                    int suffix = 2;
+                    while (!optionIds.Add(optionId))
+                        optionId = command.choiceId + ":" + (optionIndex + 1) + ":" + suffix++;
+                    option.optionId = optionId;
+                }
+            }
+        }
+    }
+
+    private static void NormalizeConditionGroup(ConditionGroupDocument group)
+    {
+        if (group == null || (group.clauses != null && group.clauses.Length > 0)
+            || group.conditions == null || group.conditions.Length == 0)
+        {
+            return;
+        }
+
+        StoryConditionDocument[] conditions = group.conditions;
+        group.clauses = string.Equals(group.operatorType, "OR", StringComparison.OrdinalIgnoreCase)
+            ? Array.ConvertAll(conditions, condition => new StoryConditionClauseDocument
+            {
+                conditions = new[] { condition },
+            })
+            : new[]
+            {
+                new StoryConditionClauseDocument { conditions = conditions },
+            };
+        group.conditions = null;
     }
 }

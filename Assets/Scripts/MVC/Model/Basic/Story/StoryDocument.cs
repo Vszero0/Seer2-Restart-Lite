@@ -62,6 +62,7 @@ public class StorySceneActorLayoutDocument
 public class StoryConditionDocument
 {
     public string type;
+    public bool negated;
     public string pointId;
     public string commandId;
     public string choiceId;
@@ -78,6 +79,17 @@ public class ConditionGroupDocument
 {
     public string operatorType = "AND";
     public StoryConditionDocument[] conditions;
+    public StoryConditionClauseDocument[] clauses;
+
+    public bool hasConditions => (clauses ?? Array.Empty<StoryConditionClauseDocument>())
+            .Any(clause => clause?.conditions != null && clause.conditions.Length > 0)
+        || (conditions != null && conditions.Length > 0);
+}
+
+[Serializable]
+public class StoryConditionClauseDocument
+{
+    public StoryConditionDocument[] conditions;
 }
 
 /// <summary>
@@ -87,9 +99,12 @@ public class ConditionGroupDocument
 public class StoryNodeTransitionDocument
 {
     public string transitionId;
+    public string targetType = "node";
     public string targetNodeId;
     public bool isDefault;
     public ConditionGroupDocument condition;
+
+    public bool isEnd => string.Equals(targetType?.Trim(), "end", StringComparison.OrdinalIgnoreCase);
 }
 
 [Serializable]
@@ -106,7 +121,7 @@ public class StoryTextStyleDocument
 [Serializable]
 public class StoryDocument
 {
-    public int schemaVersion = 1;
+    public int schemaVersion = 3;
     public string status = "published";
     public string id;
     public string title;
@@ -189,6 +204,7 @@ public class StoryDocument
                 StoryCommand parsed = nodeCommands[commandIndex]?.ToCommand(this, node);
                 if (parsed != null)
                 {
+                    parsed.pointId = node.id;
                     if (parsed.type == StoryCommandType.Scene)
                     {
                         isSceneOpening = true;
@@ -252,18 +268,19 @@ public class StoryDocument
                      .Where(value => value != null && !value.isDefault)
                      .Concat(transitions.Where(value => value != null && value.isDefault)))
         {
-            if (string.IsNullOrWhiteSpace(transition.targetNodeId))
+            if (!transition.isEnd && string.IsNullOrWhiteSpace(transition.targetNodeId))
                 continue;
 
             // 条件分支不允许以空条件组退化为无条件跳转。
-            if (!transition.isDefault && (transition.condition?.conditions == null || transition.condition.conditions.Length == 0))
+            if (!transition.isDefault && (transition.condition == null || !transition.condition.hasConditions))
                 continue;
 
             script.commands.Add(new StoryCommand
             {
                 commandId = node.id + ":transition:" + (transition.transitionId ?? transition.targetNodeId),
-                type = StoryCommandType.Jump,
-                args = transition.targetNodeId,
+                pointId = node.id,
+                type = transition.isEnd ? StoryCommandType.End : StoryCommandType.Jump,
+                args = transition.isEnd ? null : transition.targetNodeId,
                 condition = transition.isDefault ? null : transition.condition,
             });
         }
@@ -274,7 +291,7 @@ public class StoryDocument
         return (node?.transitions ?? Array.Empty<StoryNodeTransitionDocument>())
             .Any(transition => transition != null
                 && transition.isDefault
-                && !string.IsNullOrWhiteSpace(transition.targetNodeId));
+                && (transition.isEnd || !string.IsNullOrWhiteSpace(transition.targetNodeId)));
     }
 
     private static string GetDefaultFlowTarget(StoryNodeDocument node, List<StoryNodeDocument> sequenceNodes)
@@ -302,6 +319,7 @@ public class StoryDocument
             script.commands.Add(new StoryCommand
             {
                 commandId = node.id + ":flow",
+                pointId = node.id,
                 type = StoryCommandType.Jump,
                 args = fallbackNodeId,
             });
@@ -311,6 +329,7 @@ public class StoryDocument
         script.commands.Add(new StoryCommand
         {
             commandId = node.id + ":flow:end",
+            pointId = node.id,
             type = StoryCommandType.End,
         });
     }

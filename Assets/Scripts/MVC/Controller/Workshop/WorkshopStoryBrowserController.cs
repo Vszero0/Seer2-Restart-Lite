@@ -76,9 +76,59 @@ public sealed class WorkshopStoryBrowserController
         return model.UpdateSelectedNodeTransitionTarget(transitionId, targetNodeId, out error);
     }
 
+    public bool UpdateSelectedNodeTransitionTarget(
+        string transitionId,
+        string targetType,
+        string targetNodeId,
+        out string error)
+    {
+        return model.UpdateSelectedNodeTransitionTarget(transitionId, targetType, targetNodeId, out error);
+    }
+
     public bool UpdateSelectedNodeTransitionChoice(string transitionId, string commandId, string choiceId, string optionId, out string error)
     {
         return model.UpdateSelectedNodeTransitionChoice(transitionId, commandId, choiceId, optionId, out error);
+    }
+
+    public bool AddSelectedNodeTransitionCondition(string transitionId, string connector, out string error)
+    {
+        return model.AddSelectedNodeTransitionCondition(transitionId, connector, out error);
+    }
+
+    public bool UpdateSelectedNodeTransitionCondition(
+        string transitionId,
+        int clauseIndex,
+        int conditionIndex,
+        string commandId,
+        string choiceId,
+        string optionId,
+        out string error)
+    {
+        return model.UpdateSelectedNodeTransitionCondition(
+            transitionId, clauseIndex, conditionIndex, commandId, choiceId, optionId, out error);
+    }
+
+    public bool ToggleSelectedNodeTransitionConditionNegated(
+        string transitionId,
+        int clauseIndex,
+        int conditionIndex,
+        out string error)
+    {
+        return model.ToggleSelectedNodeTransitionConditionNegated(transitionId, clauseIndex, conditionIndex, out error);
+    }
+
+    public bool RemoveSelectedNodeTransitionCondition(
+        string transitionId,
+        int clauseIndex,
+        int conditionIndex,
+        out string error)
+    {
+        return model.RemoveSelectedNodeTransitionCondition(transitionId, clauseIndex, conditionIndex, out error);
+    }
+
+    public string GetSelectedNodeDefaultFlowTarget()
+    {
+        return model.GetSelectedNodeDefaultFlowTarget();
     }
 
     public bool MoveSelectedNodeTransition(string transitionId, bool moveDown, out string error)

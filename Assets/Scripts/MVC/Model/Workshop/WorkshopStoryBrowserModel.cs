@@ -217,12 +217,17 @@ public sealed class WorkshopStoryBrowserModel
             return false;
         }
 
-        if (HasNodeReference(SelectedNode.id))
+        string nodeId = SelectedNode.id;
+        List<string> blockingReferences = GetBlockingNodeReferences(nodeId);
+        if (blockingReferences.Count > 0)
         {
-            error = "已有跳转或选项引用该剧情点，不能删除。";
+            error = "以下显式分支仍指向该剧情点，请先在对应剧情点中处理：\n"
+                + string.Join("\n", blockingReferences);
             return false;
         }
 
+        string successorNodeId = GetDefaultFlowTargetForRemoval(SelectedNode);
+        RewireAutomaticReferences(nodeId, successorNodeId);
         SelectedDocument.nodes = nodes.Where(node => node != SelectedNode).ToArray();
         SelectedNode = SelectedDocument.nodes.FirstOrDefault(node => node != null && node.id == SelectedDocument.entry)
             ?? SelectedDocument.nodes.FirstOrDefault(node => node != null);
@@ -243,17 +248,17 @@ public sealed class WorkshopStoryBrowserModel
             return false;
         }
 
-        StoryNodeDocument target = GetSuggestedTransitionTarget();
-        if (target == null)
-        {
-            error = "请先选择有效的剧情点。";
-            return false;
-        }
+        string defaultTargetId = GetDefaultFlowTargetForCopy(SelectedNode);
+        StoryNodeDocument target = (SelectedDocument.nodes ?? Array.Empty<StoryNodeDocument>())
+            .FirstOrDefault(node => node != null
+                && !string.Equals(node.id, SelectedNode.id, StringComparison.OrdinalIgnoreCase)
+                && string.Equals(node.id, defaultTargetId, StringComparison.OrdinalIgnoreCase));
 
         StoryNodeTransitionDocument transition = new StoryNodeTransitionDocument
         {
             transitionId = CreateAvailableTransitionId(),
-            targetNodeId = target.id,
+            targetType = target == null ? "end" : "node",
+            targetNodeId = target?.id,
             isDefault = true,
         };
         AppendTransition(transition);
@@ -285,18 +290,15 @@ public sealed class WorkshopStoryBrowserModel
         StoryNodeTransitionDocument transition = new StoryNodeTransitionDocument
         {
             transitionId = CreateAvailableTransitionId(),
+            targetType = "node",
             targetNodeId = target.id,
             condition = new ConditionGroupDocument
             {
-                operatorType = "AND",
-                conditions = new[]
+                clauses = new[]
                 {
-                    new StoryConditionDocument
+                    new StoryConditionClauseDocument
                     {
-                        type = "choiceSelected",
-                        commandId = choice.commandId,
-                        choiceId = choice.choiceId,
-                        optionId = choice.optionId,
+                        conditions = new[] { CreateChoiceCondition(choice) },
                     },
                 },
             },
@@ -309,8 +311,32 @@ public sealed class WorkshopStoryBrowserModel
 
     public bool UpdateSelectedNodeTransitionTarget(string transitionId, string targetNodeId, out string error)
     {
+        return UpdateSelectedNodeTransitionTarget(transitionId, "node", targetNodeId, out error);
+    }
+
+    public bool UpdateSelectedNodeTransitionTarget(
+        string transitionId,
+        string targetType,
+        string targetNodeId,
+        out string error)
+    {
         if (!TryGetSelectedTransition(transitionId, out StoryNodeTransitionDocument transition, out error))
             return false;
+
+        if (string.Equals(targetType, "end", StringComparison.OrdinalIgnoreCase))
+        {
+            transition.targetType = "end";
+            transition.targetNodeId = null;
+            MarkUnsaved();
+            error = string.Empty;
+            return true;
+        }
+
+        if (!string.Equals(targetType, "node", StringComparison.OrdinalIgnoreCase))
+        {
+            error = "连接目标类型只支持剧情点或结束剧情。";
+            return false;
+        }
 
         if (!(SelectedDocument.nodes ?? Array.Empty<StoryNodeDocument>())
             .Any(node => node != null && string.Equals(node.id, targetNodeId, StringComparison.OrdinalIgnoreCase)))
@@ -319,6 +345,14 @@ public sealed class WorkshopStoryBrowserModel
             return false;
         }
 
+        if (transition.isDefault
+            && string.Equals(SelectedNode?.id, targetNodeId, StringComparison.OrdinalIgnoreCase))
+        {
+            error = "默认后续不能重新进入当前剧情点；请改用条件分支或结束剧情。";
+            return false;
+        }
+
+        transition.targetType = "node";
         transition.targetNodeId = targetNodeId;
         MarkUnsaved();
         error = string.Empty;
@@ -348,21 +382,150 @@ public sealed class WorkshopStoryBrowserModel
 
         transition.condition = new ConditionGroupDocument
         {
-            operatorType = transition.condition?.operatorType == "OR" ? "OR" : "AND",
-            conditions = new[]
+            clauses = new[]
             {
-                new StoryConditionDocument
+                new StoryConditionClauseDocument
                 {
-                    type = "choiceSelected",
-                    commandId = selected.commandId,
-                    choiceId = selected.choiceId,
-                    optionId = selected.optionId,
+                    conditions = new[] { CreateChoiceCondition(selected) },
                 },
             },
         };
         MarkUnsaved();
         error = string.Empty;
         return true;
+    }
+
+    public bool AddSelectedNodeTransitionCondition(string transitionId, string connector, out string error)
+    {
+        if (!TryGetSelectedTransition(transitionId, out StoryNodeTransitionDocument transition, out error))
+            return false;
+        if (transition.isDefault)
+        {
+            error = "默认后续不需要条件。";
+            return false;
+        }
+
+        WorkshopStoryChoiceOption[] choices = GetSelectedNodeChoiceOptions();
+        if (choices.Length == 0)
+        {
+            error = "当前剧情点没有可用选项。";
+            return false;
+        }
+
+        List<StoryConditionClauseDocument> clauses = GetConditionClauses(transition.condition);
+        bool addOrClause = clauses.Count == 0 || string.Equals(connector, "OR", StringComparison.OrdinalIgnoreCase);
+        StoryConditionClauseDocument targetClause = addOrClause ? null : clauses[clauses.Count - 1];
+        HashSet<string> usedChoiceIds = new HashSet<string>(
+            (targetClause?.conditions ?? Array.Empty<StoryConditionDocument>())
+                .Where(condition => condition != null && !condition.negated)
+                .Select(condition => condition.choiceId),
+            StringComparer.OrdinalIgnoreCase);
+        WorkshopStoryChoiceOption choice = choices.FirstOrDefault(option => !usedChoiceIds.Contains(option.choiceId))
+            ?? choices[0];
+        StoryConditionDocument condition = CreateChoiceCondition(choice);
+        if (addOrClause)
+        {
+            clauses.Add(new StoryConditionClauseDocument { conditions = new[] { condition } });
+        }
+        else
+        {
+            StoryConditionClauseDocument clause = clauses[clauses.Count - 1];
+            clause.conditions = (clause.conditions ?? Array.Empty<StoryConditionDocument>()).Append(condition).ToArray();
+        }
+
+        transition.condition = new ConditionGroupDocument { clauses = clauses.ToArray() };
+        MarkUnsaved();
+        error = string.Empty;
+        return true;
+    }
+
+    public bool UpdateSelectedNodeTransitionCondition(
+        string transitionId,
+        int clauseIndex,
+        int conditionIndex,
+        string commandId,
+        string choiceId,
+        string optionId,
+        out string error)
+    {
+        if (!TryGetSelectedTransitionCondition(transitionId, clauseIndex, conditionIndex,
+                out StoryNodeTransitionDocument transition, out StoryConditionDocument condition, out error))
+        {
+            return false;
+        }
+
+        WorkshopStoryChoiceOption option = GetSelectedNodeChoiceOptions().FirstOrDefault(value => value != null
+            && string.Equals(value.commandId, commandId, StringComparison.OrdinalIgnoreCase)
+            && string.Equals(value.choiceId, choiceId, StringComparison.OrdinalIgnoreCase)
+            && string.Equals(value.optionId, optionId, StringComparison.OrdinalIgnoreCase));
+        if (option == null)
+        {
+            error = "请选择当前剧情点中的有效选项。";
+            return false;
+        }
+
+        bool negated = condition.negated;
+        StoryConditionDocument replacement = CreateChoiceCondition(option);
+        replacement.negated = negated;
+        transition.condition.clauses[clauseIndex].conditions[conditionIndex] = replacement;
+        MarkUnsaved();
+        error = string.Empty;
+        return true;
+    }
+
+    public bool ToggleSelectedNodeTransitionConditionNegated(
+        string transitionId,
+        int clauseIndex,
+        int conditionIndex,
+        out string error)
+    {
+        if (!TryGetSelectedTransitionCondition(transitionId, clauseIndex, conditionIndex,
+                out _, out StoryConditionDocument condition, out error))
+        {
+            return false;
+        }
+
+        condition.negated = !condition.negated;
+        MarkUnsaved();
+        error = string.Empty;
+        return true;
+    }
+
+    public bool RemoveSelectedNodeTransitionCondition(
+        string transitionId,
+        int clauseIndex,
+        int conditionIndex,
+        out string error)
+    {
+        if (!TryGetSelectedTransitionCondition(transitionId, clauseIndex, conditionIndex,
+                out StoryNodeTransitionDocument transition, out _, out error))
+        {
+            return false;
+        }
+
+        List<StoryConditionClauseDocument> clauses = GetConditionClauses(transition.condition);
+        int totalConditions = clauses.Sum(clause => clause?.conditions?.Length ?? 0);
+        if (totalConditions <= 1)
+        {
+            error = "一条分支规则至少需要保留一个条件。";
+            return false;
+        }
+
+        List<StoryConditionDocument> conditions = clauses[clauseIndex].conditions.ToList();
+        conditions.RemoveAt(conditionIndex);
+        if (conditions.Count == 0)
+            clauses.RemoveAt(clauseIndex);
+        else
+            clauses[clauseIndex].conditions = conditions.ToArray();
+        transition.condition.clauses = clauses.ToArray();
+        MarkUnsaved();
+        error = string.Empty;
+        return true;
+    }
+
+    public string GetSelectedNodeDefaultFlowTarget()
+    {
+        return GetDefaultFlowTargetForCopy(SelectedNode);
     }
 
     public bool MoveSelectedNodeTransition(string transitionId, bool moveDown, out string error)
@@ -522,9 +685,11 @@ public sealed class WorkshopStoryBrowserModel
                 .Where(choice => choice != null && !string.IsNullOrWhiteSpace(choice.optionId))
                 .Select(choice => new WorkshopStoryChoiceOption
                 {
+                    pointId = SelectedNode.id,
                     commandId = command.commandId,
                     choiceId = command.choiceId,
                     optionId = choice.optionId,
+                    question = command.text,
                     text = choice.text,
                 }))
             .ToArray();
@@ -591,18 +756,26 @@ public sealed class WorkshopStoryBrowserModel
         StoryNodeTransitionDocument explicitDefault = (source?.transitions ?? Array.Empty<StoryNodeTransitionDocument>())
             .FirstOrDefault(transition => transition != null
                 && transition.isDefault
-                && !string.IsNullOrWhiteSpace(transition.targetNodeId));
+                && (transition.isEnd || !string.IsNullOrWhiteSpace(transition.targetNodeId)));
         if (explicitDefault != null)
-            return explicitDefault.targetNodeId;
+            return explicitDefault.isEnd ? string.Empty : explicitDefault.targetNodeId;
 
         if (source != null && source.isBranch)
             return source.fallbackNodeId;
 
-        StoryNodeDocument[] sequenceNodes = (SelectedDocument?.nodes ?? Array.Empty<StoryNodeDocument>())
+        List<StoryNodeDocument> sequenceNodes = (SelectedDocument?.nodes ?? Array.Empty<StoryNodeDocument>())
             .Where(node => node != null && !node.isBranch)
-            .ToArray();
-        int sourceIndex = Array.IndexOf(sequenceNodes, source);
-        return sourceIndex >= 0 && sourceIndex + 1 < sequenceNodes.Length
+            .ToList();
+        StoryNodeDocument entryNode = sequenceNodes.FirstOrDefault(node => string.Equals(
+            node.id, SelectedDocument?.entry, StringComparison.OrdinalIgnoreCase));
+        if (entryNode != null)
+        {
+            sequenceNodes.Remove(entryNode);
+            sequenceNodes.Insert(0, entryNode);
+        }
+
+        int sourceIndex = sequenceNodes.IndexOf(source);
+        return sourceIndex >= 0 && sourceIndex + 1 < sequenceNodes.Count
             ? sequenceNodes[sourceIndex + 1].id
             : string.Empty;
     }
@@ -733,7 +906,8 @@ public sealed class WorkshopStoryBrowserModel
                 continue;
 
             transition.transitionId = newNodeId + ":transition:" + (++copiedIndex);
-            transition.targetNodeId = RemapSelfTarget(transition.targetNodeId, source?.id, newNodeId);
+            if (!transition.isEnd)
+                transition.targetNodeId = RemapSelfTarget(transition.targetNodeId, source?.id, newNodeId);
             transition.condition = RemapConditionGroup(transition.condition, source?.id, newNodeId, commandIdMap, choiceIdMap, optionIdMap);
             transitions.Add(transition);
         }
@@ -757,6 +931,14 @@ public sealed class WorkshopStoryBrowserModel
             conditions = (source.conditions ?? Array.Empty<StoryConditionDocument>())
                 .Select(condition => RemapCondition(condition, oldNodeId, newNodeId, commandIdMap, choiceIdMap, optionIdMap))
                 .ToArray(),
+            clauses = (source.clauses ?? Array.Empty<StoryConditionClauseDocument>())
+                .Select(clause => new StoryConditionClauseDocument
+                {
+                    conditions = (clause?.conditions ?? Array.Empty<StoryConditionDocument>())
+                        .Select(condition => RemapCondition(condition, oldNodeId, newNodeId, commandIdMap, choiceIdMap, optionIdMap))
+                        .ToArray(),
+                })
+                .ToArray(),
         };
     }
 
@@ -774,6 +956,7 @@ public sealed class WorkshopStoryBrowserModel
         return new StoryConditionDocument
         {
             type = source.type,
+            negated = source.negated,
             pointId = !string.IsNullOrWhiteSpace(oldNodeId)
                 && string.Equals(source.pointId, oldNodeId, StringComparison.OrdinalIgnoreCase)
                 ? newNodeId
@@ -807,44 +990,197 @@ public sealed class WorkshopStoryBrowserModel
             : value;
     }
 
-    private bool HasNodeReference(string nodeId)
+    private string GetDefaultFlowTargetForRemoval(StoryNodeDocument node)
     {
+        string targetNodeId = GetDefaultFlowTargetForCopy(node);
+        return string.Equals(targetNodeId, node?.id, StringComparison.OrdinalIgnoreCase)
+            ? string.Empty
+            : targetNodeId;
+    }
+
+    private List<string> GetBlockingNodeReferences(string nodeId)
+    {
+        List<string> references = new List<string>();
         foreach (StoryNodeDocument node in SelectedDocument.nodes ?? Array.Empty<StoryNodeDocument>())
         {
+            if (node == null || string.Equals(node.id, nodeId, StringComparison.OrdinalIgnoreCase))
+                continue;
+
             foreach (StoryCommandDocument command in node?.commands ?? Array.Empty<StoryCommandDocument>())
             {
                 if (command == null)
                     continue;
 
                 if (string.Equals(command.type, "jump", StringComparison.OrdinalIgnoreCase)
-                    && string.Equals(command.target, nodeId, StringComparison.OrdinalIgnoreCase))
-                    return true;
+                    && string.Equals(command.target, nodeId, StringComparison.OrdinalIgnoreCase)
+                    && command.condition != null
+                    && command.condition.hasConditions)
+                {
+                    references.Add(FormatReference(node, "条件跳转 " + command.commandId));
+                }
 
-                if ((command.choices ?? Array.Empty<StoryChoiceDocument>())
-                    .Any(choice => choice != null && string.Equals(choice.target, nodeId, StringComparison.OrdinalIgnoreCase)))
-                    return true;
+                foreach (StoryChoiceDocument choice in command.choices ?? Array.Empty<StoryChoiceDocument>())
+                {
+                    if (choice != null && string.Equals(choice.target, nodeId, StringComparison.OrdinalIgnoreCase))
+                        references.Add(FormatReference(node, "选项直达目标 " + choice.optionId));
+                }
             }
 
-            if ((node?.transitions ?? Array.Empty<StoryNodeTransitionDocument>())
-                .Any(transition => transition != null && string.Equals(transition.targetNodeId, nodeId, StringComparison.OrdinalIgnoreCase)))
-                return true;
-
-            if (string.Equals(node?.fallbackNodeId, nodeId, StringComparison.OrdinalIgnoreCase))
-                return true;
+            foreach (StoryNodeTransitionDocument transition in node.transitions ?? Array.Empty<StoryNodeTransitionDocument>())
+            {
+                if (transition != null
+                    && !transition.isDefault
+                    && string.Equals(transition.targetNodeId, nodeId, StringComparison.OrdinalIgnoreCase))
+                {
+                    references.Add(FormatReference(node, "条件连接 " + transition.transitionId));
+                }
+            }
         }
 
-        return false;
+        return references;
+    }
+
+    private void RewireAutomaticReferences(string deletedNodeId, string successorNodeId)
+    {
+        foreach (StoryNodeDocument node in SelectedDocument.nodes ?? Array.Empty<StoryNodeDocument>())
+        {
+            if (node == null || string.Equals(node.id, deletedNodeId, StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            if (string.Equals(node.fallbackNodeId, deletedNodeId, StringComparison.OrdinalIgnoreCase))
+                node.fallbackNodeId = successorNodeId;
+
+            List<StoryNodeTransitionDocument> transitions = (node.transitions ?? Array.Empty<StoryNodeTransitionDocument>())
+                .Where(transition => transition != null)
+                .ToList();
+            for (int index = transitions.Count - 1; index >= 0; index--)
+            {
+                StoryNodeTransitionDocument transition = transitions[index];
+                if (!transition.isDefault
+                    || !string.Equals(transition.targetNodeId, deletedNodeId, StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                if (string.IsNullOrWhiteSpace(successorNodeId))
+                {
+                    transition.targetType = "end";
+                    transition.targetNodeId = null;
+                }
+                else
+                {
+                    transition.targetType = "node";
+                    transition.targetNodeId = successorNodeId;
+                }
+            }
+            node.transitions = transitions.ToArray();
+
+            foreach (StoryCommandDocument command in node.commands ?? Array.Empty<StoryCommandDocument>())
+            {
+                if (command == null
+                    || !string.Equals(command.type, "jump", StringComparison.OrdinalIgnoreCase)
+                    || !string.Equals(command.target, deletedNodeId, StringComparison.OrdinalIgnoreCase)
+                    || (command.condition != null && command.condition.hasConditions))
+                {
+                    continue;
+                }
+
+                if (string.IsNullOrWhiteSpace(successorNodeId))
+                {
+                    command.type = "end";
+                    command.target = null;
+                }
+                else
+                {
+                    command.target = successorNodeId;
+                }
+            }
+        }
+    }
+
+    private static string FormatReference(StoryNodeDocument node, string referenceType)
+    {
+        string displayName = string.IsNullOrWhiteSpace(node?.displayName) ? node?.id : node.displayName;
+        return "• " + displayName + "（" + node?.id + "）：" + referenceType;
+    }
+
+    private static StoryConditionDocument CreateChoiceCondition(WorkshopStoryChoiceOption choice)
+    {
+        return new StoryConditionDocument
+        {
+            type = "choiceSelected",
+            pointId = choice?.pointId,
+            commandId = choice?.commandId,
+            choiceId = choice?.choiceId,
+            optionId = choice?.optionId,
+        };
+    }
+
+    private static List<StoryConditionClauseDocument> GetConditionClauses(ConditionGroupDocument group)
+    {
+        if (group?.clauses != null && group.clauses.Length > 0)
+            return group.clauses.Where(clause => clause != null).ToList();
+
+        StoryConditionDocument[] legacyConditions = group?.conditions ?? Array.Empty<StoryConditionDocument>();
+        if (legacyConditions.Length == 0)
+            return new List<StoryConditionClauseDocument>();
+
+        return string.Equals(group.operatorType, "OR", StringComparison.OrdinalIgnoreCase)
+            ? legacyConditions.Select(condition => new StoryConditionClauseDocument { conditions = new[] { condition } }).ToList()
+            : new List<StoryConditionClauseDocument>
+            {
+                new StoryConditionClauseDocument { conditions = legacyConditions },
+            };
+    }
+
+    private bool TryGetSelectedTransitionCondition(
+        string transitionId,
+        int clauseIndex,
+        int conditionIndex,
+        out StoryNodeTransitionDocument transition,
+        out StoryConditionDocument condition,
+        out string error)
+    {
+        condition = null;
+        if (!TryGetSelectedTransition(transitionId, out transition, out error))
+            return false;
+
+        StoryConditionClauseDocument[] clauses = transition.condition?.clauses ?? Array.Empty<StoryConditionClauseDocument>();
+        if (clauseIndex < 0 || clauseIndex >= clauses.Length
+            || conditionIndex < 0 || conditionIndex >= (clauses[clauseIndex]?.conditions?.Length ?? 0))
+        {
+            error = "找不到要编辑的分支条件。";
+            return false;
+        }
+
+        condition = clauses[clauseIndex].conditions[conditionIndex];
+        if (condition == null)
+        {
+            error = "找不到要编辑的分支条件。";
+            return false;
+        }
+
+        error = string.Empty;
+        return true;
     }
 }
 
 public sealed class WorkshopStoryChoiceOption
 {
+    public string pointId;
     public string commandId;
     public string choiceId;
     public string optionId;
+    public string question;
     public string text;
 
-    public string displayName => string.IsNullOrWhiteSpace(text)
-        ? optionId
-        : optionId + " | " + text;
+    public string displayName
+    {
+        get
+        {
+            string questionText = string.IsNullOrWhiteSpace(question) ? "未填写选择问题" : question;
+            string optionText = string.IsNullOrWhiteSpace(text) ? "未填写选项" : text;
+            return questionText + "  →  " + optionText;
+        }
+    }
 }

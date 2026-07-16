@@ -98,11 +98,43 @@ public static class StoryValidator
         foreach (StoryNodeDocument node in document.nodes ?? Array.Empty<StoryNodeDocument>())
         {
             ValidateNodeFlow(node, nodeDict, document.entry, errors);
+            ValidateDraftStableIds(node, errors);
             ValidateNodeTransitions(node, nodeDict, errors);
         }
 
         error = string.Join("\n", errors);
         return errors.Count == 0;
+    }
+
+    private static void ValidateDraftStableIds(StoryNodeDocument node, List<string> errors)
+    {
+        if (node == null)
+            return;
+
+        HashSet<string> commandIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        HashSet<string> choiceIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        HashSet<string> optionIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (StoryCommandDocument command in node.commands ?? Array.Empty<StoryCommandDocument>())
+        {
+            if (command == null)
+                continue;
+            if (string.IsNullOrWhiteSpace(command.commandId) || !commandIds.Add(command.commandId))
+                errors.Add("node[" + node.id + "] 的 commandId 不能为空且不能重复");
+            if (!string.Equals(command.type, "choice", StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            if (string.IsNullOrWhiteSpace(command.choiceId) || !choiceIds.Add(command.choiceId))
+                errors.Add("node[" + node.id + "] 的 choiceId 不能为空且不能重复");
+            foreach (StoryChoiceDocument option in command.choices ?? Array.Empty<StoryChoiceDocument>())
+            {
+                if (option == null)
+                    continue;
+                if (string.IsNullOrWhiteSpace(option.optionId) || !optionIds.Add(option.optionId))
+                    errors.Add("node[" + node.id + "] 的 optionId 不能为空且不能重复");
+                if (!string.Equals(option.choiceId, command.choiceId, StringComparison.OrdinalIgnoreCase))
+                    errors.Add("node[" + node.id + "] 的选项 choiceId 与所属选择命令不一致");
+            }
+        }
     }
 
     private static void ValidateNodeScenes(StoryNodeDocument node, Dictionary<string, StoryActorDocument> actorDict, List<string> errors)
@@ -207,7 +239,11 @@ public static class StoryValidator
         if (flowRole == "branch")
         {
             if (!string.IsNullOrWhiteSpace(node.fallbackNodeId))
+            {
                 ValidateTarget(node.fallbackNodeId, nodeDict, errors, location + ".fallbackNodeId");
+                if (string.Equals(node.fallbackNodeId, node.id, StringComparison.OrdinalIgnoreCase))
+                    errors.Add(location + ".fallbackNodeId 不能重新进入当前剧情点");
+            }
         }
         else if (!string.IsNullOrWhiteSpace(node.fallbackNodeId))
         {
@@ -224,6 +260,9 @@ public static class StoryValidator
         if (node == null || node.commands == null)
             return;
 
+        HashSet<string> commandIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        HashSet<string> choiceIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        HashSet<string> optionIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         for (int i = 0; i < node.commands.Length; i++)
         {
             StoryCommandDocument command = node.commands[i];
@@ -233,6 +272,9 @@ public static class StoryValidator
                 errors.Add(location + " 不能为空");
                 continue;
             }
+
+            if (string.IsNullOrWhiteSpace(command.commandId) || !commandIds.Add(command.commandId))
+                errors.Add(location + ".commandId 不能为空且在剧情点内不能重复");
 
             string type = (command.type ?? string.Empty).Trim().ToLower();
             if (string.IsNullOrEmpty(type))
@@ -283,7 +325,9 @@ public static class StoryValidator
                         errors.Add(location + ".text 不能为空");
                     break;
                 case "choice":
-                    ValidateChoices(command, nodeDict, errors, location);
+                    if (string.IsNullOrWhiteSpace(command.choiceId) || !choiceIds.Add(command.choiceId))
+                        errors.Add(location + ".choiceId 不能为空且在剧情点内不能重复");
+                    ValidateChoices(command, nodeDict, optionIds, errors, location);
                     if (!string.IsNullOrWhiteSpace(command.actor))
                         ValidateActorReference(command, actorDict, errors, location, false);
                     ValidateConditionGroup(command.condition, errors, location + ".condition");
@@ -327,24 +371,45 @@ public static class StoryValidator
             if (string.IsNullOrWhiteSpace(transition.transitionId) || !transitionIds.Add(transition.transitionId))
                 errors.Add(location + ".transitionId 不能为空且不能重复");
 
-            ValidateTarget(transition.targetNodeId, nodeDict, errors, location);
+            string targetType = string.IsNullOrWhiteSpace(transition.targetType)
+                ? "node"
+                : transition.targetType.Trim().ToLowerInvariant();
+            if (targetType != "node" && targetType != "end")
+            {
+                errors.Add(location + ".targetType 只支持 node 或 end");
+            }
+            else if (targetType == "end")
+            {
+                if (!string.IsNullOrWhiteSpace(transition.targetNodeId))
+                    errors.Add(location + " 结束连接不能配置 targetNodeId");
+            }
+            else
+            {
+                ValidateTarget(transition.targetNodeId, nodeDict, errors, location);
+                if (transition.isDefault
+                    && string.Equals(transition.targetNodeId, node.id, StringComparison.OrdinalIgnoreCase))
+                {
+                    errors.Add(location + " 默认后续不能重新进入当前剧情点");
+                }
+            }
             if (transition.isDefault)
             {
                 defaultCount++;
-                if (transition.condition?.conditions != null && transition.condition.conditions.Length > 0)
+                if (transition.condition != null && transition.condition.hasConditions)
                     errors.Add(location + " 默认连接不能配置 condition");
                 if (i != node.transitions.Length - 1)
                     errors.Add(location + " 默认连接必须位于 transitions 的最后");
                 continue;
             }
 
-            if (transition.condition == null || transition.condition.conditions == null || transition.condition.conditions.Length == 0)
+            if (transition.condition == null || !transition.condition.hasConditions)
             {
                 errors.Add(location + " 条件分支必须至少配置一个条件");
                 continue;
             }
 
             ValidateConditionGroup(transition.condition, errors, location + ".condition");
+            ValidateChoiceConditionReferences(node, transition.condition, nodeDict, errors, location + ".condition");
         }
 
         if (defaultCount > 1)
@@ -356,15 +421,117 @@ public static class StoryValidator
         if (group == null)
             return;
 
-        string op = string.IsNullOrWhiteSpace(group.operatorType) ? string.Empty : group.operatorType.Trim().ToUpper();
-        if (op != "AND" && op != "OR")
-            errors.Add(location + ".operatorType 必须是 AND 或 OR");
+        StoryConditionClauseDocument[] clauses = group.clauses ?? Array.Empty<StoryConditionClauseDocument>();
+        if (clauses.Length == 0)
+        {
+            string op = string.IsNullOrWhiteSpace(group.operatorType) ? string.Empty : group.operatorType.Trim().ToUpper();
+            if (op != "AND" && op != "OR")
+                errors.Add(location + ".operatorType 必须是 AND 或 OR");
+        }
 
-        foreach (StoryConditionDocument condition in group.conditions ?? Array.Empty<StoryConditionDocument>())
+        for (int clauseIndex = 0; clauseIndex < clauses.Length; clauseIndex++)
+        {
+            if (clauses[clauseIndex]?.conditions == null || clauses[clauseIndex].conditions.Length == 0)
+            {
+                errors.Add(location + ".clauses[" + clauseIndex + "] 至少需要一个条件");
+                continue;
+            }
+
+            Dictionary<string, string> positiveChoices = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            HashSet<string> signedConditions = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (StoryConditionDocument condition in clauses[clauseIndex].conditions)
+            {
+                if (condition == null || !string.Equals(condition.type, "choiceSelected", StringComparison.OrdinalIgnoreCase))
+                    continue;
+
+                string conditionKey = (condition.choiceId ?? string.Empty) + "|" + (condition.optionId ?? string.Empty);
+                string signedKey = (condition.negated ? "!" : string.Empty) + conditionKey;
+                if (!signedConditions.Add(signedKey))
+                    errors.Add(location + ".clauses[" + clauseIndex + "] 包含重复条件：" + condition.optionId);
+                if (signedConditions.Contains((condition.negated ? string.Empty : "!") + conditionKey))
+                    errors.Add(location + ".clauses[" + clauseIndex + "] 同时要求选择和不选择同一选项：" + condition.optionId);
+
+                if (!condition.negated && !string.IsNullOrWhiteSpace(condition.choiceId))
+                {
+                    if (positiveChoices.TryGetValue(condition.choiceId, out string selectedOptionId)
+                        && !string.Equals(selectedOptionId, condition.optionId, StringComparison.OrdinalIgnoreCase))
+                    {
+                        errors.Add(location + ".clauses[" + clauseIndex + "] 要求同一选择题同时选择多个选项");
+                    }
+                    else
+                    {
+                        positiveChoices[condition.choiceId] = condition.optionId;
+                    }
+                }
+            }
+        }
+
+        foreach (StoryConditionDocument condition in EnumerateConditions(group))
         {
             if (condition == null || string.IsNullOrWhiteSpace(condition.type))
-                errors.Add(location + ".conditions 中存在无效条件");
+                errors.Add(location + " 中存在无效条件");
         }
+    }
+
+    private static void ValidateChoiceConditionReferences(
+        StoryNodeDocument ownerNode,
+        ConditionGroupDocument group,
+        Dictionary<string, StoryNodeDocument> nodeDict,
+        List<string> errors,
+        string location)
+    {
+        foreach (StoryConditionDocument condition in EnumerateConditions(group))
+        {
+            if (condition == null || !string.Equals(condition.type, "choiceSelected", StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            StoryNodeDocument choiceNode = ownerNode;
+            if (!string.IsNullOrWhiteSpace(condition.pointId)
+                && !nodeDict.TryGetValue(condition.pointId, out choiceNode))
+            {
+                errors.Add(location + " 引用了不存在的剧情点：" + condition.pointId);
+                continue;
+            }
+
+            StoryCommandDocument choiceCommand = null;
+            foreach (StoryCommandDocument command in choiceNode?.commands ?? Array.Empty<StoryCommandDocument>())
+            {
+                if (command != null
+                    && string.Equals(command.commandId, condition.commandId, StringComparison.OrdinalIgnoreCase)
+                    && string.Equals(command.choiceId, condition.choiceId, StringComparison.OrdinalIgnoreCase))
+                {
+                    choiceCommand = command;
+                    break;
+                }
+            }
+
+            bool optionExists = false;
+            foreach (StoryChoiceDocument option in choiceCommand?.choices ?? Array.Empty<StoryChoiceDocument>())
+            {
+                if (option != null && string.Equals(option.optionId, condition.optionId, StringComparison.OrdinalIgnoreCase))
+                {
+                    optionExists = true;
+                    break;
+                }
+            }
+
+            if (!optionExists)
+                errors.Add(location + " 引用了不存在的选择项：" + condition.optionId);
+        }
+    }
+
+    private static IEnumerable<StoryConditionDocument> EnumerateConditions(ConditionGroupDocument group)
+    {
+        if (group?.clauses != null && group.clauses.Length > 0)
+        {
+            foreach (StoryConditionClauseDocument clause in group.clauses)
+            foreach (StoryConditionDocument condition in clause?.conditions ?? Array.Empty<StoryConditionDocument>())
+                yield return condition;
+            yield break;
+        }
+
+        foreach (StoryConditionDocument condition in group?.conditions ?? Array.Empty<StoryConditionDocument>())
+            yield return condition;
     }
 
     private static void ValidateActorReference(
@@ -393,6 +560,7 @@ public static class StoryValidator
     private static void ValidateChoices(
         StoryCommandDocument command,
         Dictionary<string, StoryNodeDocument> nodeDict,
+        HashSet<string> optionIds,
         List<string> errors,
         string location)
     {
@@ -414,6 +582,12 @@ public static class StoryValidator
 
             if (string.IsNullOrWhiteSpace(choice.text))
                 errors.Add(choiceLocation + ".text 不能为空");
+
+            if (string.IsNullOrWhiteSpace(choice.optionId) || !optionIds.Add(choice.optionId))
+                errors.Add(choiceLocation + ".optionId 不能为空且在剧情点内不能重复");
+
+            if (!string.Equals(choice.choiceId, command.choiceId, StringComparison.OrdinalIgnoreCase))
+                errors.Add(choiceLocation + ".choiceId 必须与所属选择命令一致");
 
             if (!string.IsNullOrWhiteSpace(choice.target))
                 ValidateTarget(choice.target, nodeDict, errors, choiceLocation);

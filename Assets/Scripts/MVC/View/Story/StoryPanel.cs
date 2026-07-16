@@ -181,6 +181,8 @@ public class StoryPanel : Panel
             ? story.GetLabelIndex(startNodeId)
             : 0;
         commandIndex = Mathf.Max(0, startIndex);
+        string initialPointId = commandIndex < story.commands.Count ? story.commands[commandIndex]?.pointId : startNodeId;
+        story.BeginPointVisit(initialPointId);
         isClosing = false;
         waitingForChoice = false;
         actorStage.Reset(story.layout);
@@ -246,8 +248,12 @@ public class StoryPanel : Panel
                     Teleport(command.args);
                     return;
                 case StoryCommandType.End:
-                    ClosePanel();
-                    return;
+                    if (StoryConditionEvaluator.Evaluate(story, command.condition))
+                    {
+                        ClosePanel();
+                        return;
+                    }
+                    continue;
             }
         }
 
@@ -423,6 +429,7 @@ public class StoryPanel : Panel
             StoryCommand choiceCommand = GetCurrentChoiceCommand();
             story.choiceHistory.Add(new StoryChoiceHistoryEntry
             {
+                pointId = story.currentPointId,
                 commandId = choiceCommand?.commandId,
                 choiceId = choiceCommand?.choiceId,
                 optionId = choice.optionId,
@@ -478,7 +485,10 @@ public class StoryPanel : Panel
     {
         int labelIndex = story.GetLabelIndex(label.Trim());
         if (labelIndex >= 0)
+        {
             commandIndex = labelIndex;
+            story.BeginPointVisit(label);
+        }
     }
 
     private void ExecuteMission(string args)

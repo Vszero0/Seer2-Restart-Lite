@@ -9,6 +9,8 @@ public class StoryScript
     public List<StoryChoiceHistoryEntry> choiceHistory = new List<StoryChoiceHistoryEntry>();
     public StoryLayoutDocument layout;
     public StoryTextStyleDocument textStyle;
+    public string currentPointId;
+    public int currentPointVisitStartIndex;
 
     public int GetLabelIndex(string label)
     {
@@ -22,11 +24,18 @@ public class StoryScript
 
         return source;
     }
+
+    public void BeginPointVisit(string pointId)
+    {
+        currentPointId = pointId;
+        currentPointVisitStartIndex = choiceHistory.Count;
+    }
 }
 
 public class StoryCommand
 {
     public string commandId;
+    public string pointId;
     public StoryCommandType type;
     public string args;
     public string actorId;
