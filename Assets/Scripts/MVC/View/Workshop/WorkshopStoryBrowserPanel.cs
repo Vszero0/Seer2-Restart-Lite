@@ -53,6 +53,7 @@ public class WorkshopStoryBrowserPanel : Panel
 
     private RectTransform storyContent;
     private RectTransform nodeContent;
+    private RectTransform modalLayer;
     private RectTransform connectionOverlay;
     private RectTransform transitionContent;
     private RectTransform graphOverlay;
@@ -89,6 +90,22 @@ public class WorkshopStoryBrowserPanel : Panel
         background = GetComponent<Image>();
         BuildLayout();
         Reload();
+    }
+
+    public override void ClosePanel()
+    {
+        if (graphOverlay != null && graphOverlay.gameObject.activeSelf)
+        {
+            CloseGraphViewer();
+            return;
+        }
+        if (connectionOverlay != null && connectionOverlay.gameObject.activeSelf)
+        {
+            CloseConnectionEditor();
+            return;
+        }
+
+        base.ClosePanel();
     }
 
     private void BuildLayout()
@@ -135,8 +152,28 @@ public class WorkshopStoryBrowserPanel : Panel
         CreateActionButton(nodeSection, "复制并新增", new Vector2(16f, -84f), new Vector2(112f, 28f), CopyNode);
         nodeContent = CreateScrollContent(nodeSection, new Vector2(14f, 14f), new Vector2(-246f, -118f));
         BuildNodeDetailPanel(nodeSection);
-        BuildConnectionEditor(root);
-        BuildGraphViewer(root);
+        BuildModalLayer(root);
+        BuildConnectionEditor(modalLayer);
+        BuildGraphViewer(modalLayer);
+        modalLayer.gameObject.SetActive(false);
+    }
+
+    private void BuildModalLayer(RectTransform root)
+    {
+        GameObject layerObject = new GameObject("Story Browser Modal Layer",
+            typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));
+        layerObject.transform.SetParent(root, false);
+        layerObject.transform.SetAsLastSibling();
+
+        modalLayer = layerObject.GetComponent<RectTransform>();
+        modalLayer.anchorMin = Vector2.zero;
+        modalLayer.anchorMax = Vector2.one;
+        modalLayer.offsetMin = Vector2.zero;
+        modalLayer.offsetMax = Vector2.zero;
+
+        Image dimmer = layerObject.GetComponent<Image>();
+        dimmer.color = new Color32(0, 0, 0, 172);
+        dimmer.raycastTarget = true;
     }
 
     private void BuildNodeDetailPanel(RectTransform nodeSection)
@@ -171,8 +208,8 @@ public class WorkshopStoryBrowserPanel : Panel
         connectionOverlay.anchorMin = new Vector2(.5f, .5f);
         connectionOverlay.anchorMax = new Vector2(.5f, .5f);
         connectionOverlay.pivot = new Vector2(.5f, .5f);
-        connectionOverlay.anchoredPosition = new Vector2(0f, -12f);
-        connectionOverlay.sizeDelta = new Vector2(872f, 420f);
+        connectionOverlay.anchoredPosition = Vector2.zero;
+        connectionOverlay.sizeDelta = new Vector2(892f, 472f);
 
         Image overlay = overlayObject.GetComponent<Image>();
         overlay.color = new Color32(0, 8, 12, 252);
@@ -185,8 +222,8 @@ public class WorkshopStoryBrowserPanel : Panel
         connectionNodeTitle = CreateText("Transition Node", connectionOverlay, string.Empty, 15, TextAnchor.MiddleLeft, HintColor,
             new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(18f, -50f), new Vector2(560f, 24f));
         CreateActionButton(connectionOverlay, "添加分支规则", new Vector2(18f, -78f), new Vector2(126f, 28f), AddChoiceTransition);
-        CreateActionButton(connectionOverlay, "保存", new Vector2(-112f, -78f), new Vector2(88f, 28f), SaveStory, TextAnchor.UpperRight);
-        CreateActionButton(connectionOverlay, "返回列表", new Vector2(-16f, -78f), new Vector2(88f, 28f), CloseConnectionEditor, TextAnchor.UpperRight);
+        CreateActionButton(connectionOverlay, "保存", new Vector2(-18f, -78f), new Vector2(88f, 28f), SaveStory, TextAnchor.UpperRight);
+        CreateModalCloseButton(connectionOverlay, CloseConnectionEditor);
 
         transitionContent = CreateScrollContent(connectionOverlay, new Vector2(16f, 14f), new Vector2(-16f, -112f));
         overlayObject.SetActive(false);
@@ -200,8 +237,8 @@ public class WorkshopStoryBrowserPanel : Panel
         graphOverlay.anchorMin = new Vector2(.5f, .5f);
         graphOverlay.anchorMax = new Vector2(.5f, .5f);
         graphOverlay.pivot = new Vector2(.5f, .5f);
-        graphOverlay.anchoredPosition = new Vector2(0f, -12f);
-        graphOverlay.sizeDelta = new Vector2(872f, 420f);
+        graphOverlay.anchoredPosition = Vector2.zero;
+        graphOverlay.sizeDelta = new Vector2(892f, 472f);
 
         Image overlay = overlayObject.GetComponent<Image>();
         overlay.color = new Color32(0, 8, 12, 252);
@@ -214,7 +251,7 @@ public class WorkshopStoryBrowserPanel : Panel
         CreateText("Graph Legend", graphOverlay, "只读视图  ·  青色：顺序/默认  ·  黄色：条件分支  ·  灰色：入口不可达",
             13, TextAnchor.MiddleLeft, HintColor,
             new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(18f, -52f), new Vector2(680f, 24f));
-        CreateActionButton(graphOverlay, "返回列表", new Vector2(-16f, -46f), new Vector2(88f, 28f), CloseGraphViewer, TextAnchor.UpperRight);
+        CreateModalCloseButton(graphOverlay, CloseGraphViewer);
         graphContent = CreateGraphScrollContent(graphOverlay);
         overlayObject.SetActive(false);
     }
@@ -319,6 +356,29 @@ public class WorkshopStoryBrowserPanel : Panel
 
         ESCButton = closeObject.GetComponent<IButton>();
         ESCButton.onPointerClickEvent.SetListener(ClosePanel);
+    }
+
+    private void CreateModalCloseButton(RectTransform parent, Action callback)
+    {
+        GameObject workshopPrefab = ResourceManager.instance.GetPanel("Workshop");
+        IButton source = workshopPrefab == null
+            ? null
+            : workshopPrefab.GetComponentsInChildren<IButton>(true)
+                .FirstOrDefault(button => button.gameObject.name == "ESC Button");
+        if (source == null)
+            return;
+
+        GameObject closeObject = Instantiate(source.gameObject, parent);
+        closeObject.name = "Modal ESC Button";
+        RectTransform rect = closeObject.GetComponent<RectTransform>();
+        rect.anchorMin = Vector2.one;
+        rect.anchorMax = Vector2.one;
+        rect.pivot = Vector2.one;
+        rect.anchoredPosition = new Vector2(-10f, -10f);
+        rect.sizeDelta = new Vector2(40f, 40f);
+
+        IButton button = closeObject.GetComponent<IButton>();
+        button.onPointerClickEvent.SetListener(callback.Invoke);
     }
 
     private RectTransform CreateSection(string title, Vector2 position, Vector2 dimensions)
@@ -543,7 +603,7 @@ public class WorkshopStoryBrowserPanel : Panel
             return;
         }
 
-        graphOverlay.gameObject.SetActive(true);
+        OpenModal(graphOverlay);
         RefreshGraphViewer();
     }
 
@@ -551,6 +611,7 @@ public class WorkshopStoryBrowserPanel : Panel
     {
         if (graphOverlay != null)
             graphOverlay.gameObject.SetActive(false);
+        HideModalLayer();
     }
 
     private void OpenConnectionEditor()
@@ -561,7 +622,7 @@ public class WorkshopStoryBrowserPanel : Panel
             return;
         }
 
-        connectionOverlay.gameObject.SetActive(true);
+        OpenModal(connectionOverlay);
         RefreshConnections();
     }
 
@@ -569,8 +630,31 @@ public class WorkshopStoryBrowserPanel : Panel
     {
         if (connectionOverlay != null)
             connectionOverlay.gameObject.SetActive(false);
+        HideModalLayer();
         RefreshStoryInfo();
         RefreshNodes();
+    }
+
+    private void OpenModal(RectTransform overlay)
+    {
+        if (modalLayer == null || overlay == null)
+            return;
+
+        if (connectionOverlay != null)
+            connectionOverlay.gameObject.SetActive(connectionOverlay == overlay);
+        if (graphOverlay != null)
+            graphOverlay.gameObject.SetActive(graphOverlay == overlay);
+        modalLayer.gameObject.SetActive(true);
+        modalLayer.transform.SetAsLastSibling();
+        overlay.transform.SetAsLastSibling();
+    }
+
+    private void HideModalLayer()
+    {
+        bool hasOpenModal = (connectionOverlay != null && connectionOverlay.gameObject.activeSelf)
+            || (graphOverlay != null && graphOverlay.gameObject.activeSelf);
+        if (!hasOpenModal && modalLayer != null)
+            modalLayer.gameObject.SetActive(false);
     }
 
     private void AddChoiceTransition()
