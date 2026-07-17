@@ -78,12 +78,92 @@ public static class StoryResourceValidator
             }
 
             actorDict[actor.id] = actor;
-            ValidatePath(actor.sprite, "actorSprite", "auto", errors, "actors[" + actor.id + "].sprite");
             ValidatePath(actor.icon, "actorIcon", "auto", errors, "actors[" + actor.id + "].icon");
-            ValidatePath(actor.battleSprite, "actorSprite", "auto", errors, "actors[" + actor.id + "].battleSprite");
+            if (string.Equals(actor.actorType, "pet", StringComparison.OrdinalIgnoreCase))
+            {
+                bool hasIdleSprite = ResourceExists(actor.sprite, "actorSprite", "auto");
+                bool hasBattleSprite = ResourceExists(actor.battleSprite, "actorSprite", "auto");
+                if (!hasIdleSprite && !hasBattleSprite)
+                {
+                    errors.Add("actors[" + actor.id + "] 缺少可用立绘：待机图与 battle 静态图均不存在"
+                        + "（sprite=" + (actor.sprite ?? string.Empty)
+                        + "，battleSprite=" + (actor.battleSprite ?? string.Empty) + "）");
+                }
+            }
+            else
+            {
+                ValidatePath(actor.sprite, "actorSprite", "auto", errors, "actors[" + actor.id + "].sprite");
+                ValidatePath(actor.battleSprite, "actorSprite", "auto", errors, "actors[" + actor.id + "].battleSprite");
+            }
         }
 
         return actorDict;
+    }
+
+    /// <summary>
+    /// 地图 ID 指向地图配置，而不一定直接对应背景文件。
+    /// 与 ResourceManager.LoadMapResources 保持一致：优先使用 XML 的 resId，
+    /// resId 为空时才使用地图自身 ID，并据此判断资源来自本体还是 Mod。
+    /// </summary>
+    public static void ValidateMap(int mapId, List<string> errors, string location)
+    {
+        if (mapId == 0)
+            return;
+
+        if (!TryLoadMapDefinition(mapId, out Map map, out string mapError))
+        {
+            errors.Add(location + " 引用的地图配置不存在或无法读取：" + mapId
+                + (string.IsNullOrWhiteSpace(mapError) ? string.Empty : "（" + mapError + "）"));
+            return;
+        }
+
+        int resourceId = map.resId == 0 ? map.id : map.resId;
+        string source = Map.IsMod(resourceId) ? "mod" : "builtin";
+        ValidatePath("Maps/bg/" + resourceId, "mapBackground", source, errors, location);
+    }
+
+    private static bool TryLoadMapDefinition(int mapId, out Map map, out string error)
+    {
+        map = null;
+        error = string.Empty;
+        try
+        {
+            string xml;
+            if (Map.IsMod(mapId))
+            {
+                string path = Application.persistentDataPath + "/Mod/Maps/" + mapId + ".xml";
+                if (!File.Exists(path))
+                {
+                    error = "找不到 Mod 地图 XML";
+                    return false;
+                }
+                xml = File.ReadAllText(path);
+            }
+            else
+            {
+                TextAsset asset = Resources.Load<TextAsset>("Data/Maps/" + mapId);
+                if (asset == null)
+                {
+                    error = "找不到本体地图 XML";
+                    return false;
+                }
+                xml = asset.text;
+            }
+
+            map = ResourceManager.GetXML<Map>(xml);
+            if (map == null)
+            {
+                error = "地图 XML 内容为空";
+                return false;
+            }
+            return true;
+        }
+        catch (Exception exception)
+        {
+            error = exception.Message;
+            map = null;
+            return false;
+        }
     }
 
     public static void ValidatePath(string path, string kind, string source, List<string> errors, string location)
@@ -91,7 +171,21 @@ public static class StoryResourceValidator
         if (string.IsNullOrWhiteSpace(path) || string.Equals(kind, "map", StringComparison.OrdinalIgnoreCase))
             return;
 
+        if (!ResourceExists(path, kind, source))
+            errors.Add(location + " 引用的资源不存在：" + path + "，source=" + source);
+    }
+
+    private static bool ResourceExists(string path, string kind, string source)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+            return false;
+
         string normalizedPath = path.Replace('\\', '/').TrimStart('/');
+        if (normalizedPath.StartsWith("Mod/", StringComparison.OrdinalIgnoreCase))
+        {
+            normalizedPath = normalizedPath.Substring("Mod/".Length);
+            source = "mod";
+        }
         string[] roots = source == "mod"
             ? new[] { Application.persistentDataPath + "/Mod/" }
             : source == "builtin"
@@ -103,9 +197,7 @@ public static class StoryResourceValidator
                 };
 
         string[] extensions = GetExtensions(kind, normalizedPath);
-        bool exists = roots.Any(root => extensions.Any(extension => File.Exists(root + normalizedPath + extension)));
-        if (!exists)
-            errors.Add(location + " 引用的资源不存在：" + path + "，source=" + source);
+        return roots.Any(root => extensions.Any(extension => File.Exists(root + normalizedPath + extension)));
     }
 
     private static string[] GetExtensions(string kind, string path)

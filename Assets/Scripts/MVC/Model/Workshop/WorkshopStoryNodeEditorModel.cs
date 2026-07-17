@@ -775,13 +775,14 @@ public sealed class WorkshopStoryNodeEditorModel
         int skinId = pet.ui == null || pet.ui.defaultSkinId == 0 ? pet.id : pet.ui.defaultSkinId;
         if (actor == null)
         {
+            string stageSpritePath = GetPreferredPetStageSpritePath(pet, skinId);
             actor = new StoryActorDocument
             {
                 id = actorId,
                 actorType = "pet",
                 petId = pet.id.ToString(),
                 name = pet.name,
-                sprite = "Pets/pet/" + skinId,
+                sprite = stageSpritePath,
                 icon = "Pets/icon/" + skinId,
                 battleSprite = "Pets/battle/" + skinId,
             };
@@ -847,13 +848,14 @@ public sealed class WorkshopStoryNodeEditorModel
         if (actor == null)
         {
             int skinId = pet.ui == null || pet.ui.defaultSkinId == 0 ? pet.id : pet.ui.defaultSkinId;
+            string stageSpritePath = GetPreferredPetStageSpritePath(pet, skinId);
             actor = new StoryActorDocument
             {
                 id = actorId,
                 actorType = "pet",
                 petId = pet.id.ToString(),
                 name = pet.name,
-                sprite = "Pets/pet/" + skinId,
+                sprite = stageSpritePath,
                 icon = "Pets/icon/" + skinId,
                 battleSprite = "Pets/battle/" + skinId,
             };
@@ -872,6 +874,18 @@ public sealed class WorkshopStoryNodeEditorModel
 
         error = string.Empty;
         return true;
+    }
+
+    private static string GetPreferredPetStageSpritePath(PetInfo pet, int skinId)
+    {
+        string idlePath = "Pets/pet/" + skinId;
+        Sprite idleSprite = pet?.ui?.idleImage;
+        if (idleSprite != null)
+            return idlePath;
+
+        string battlePath = "Pets/battle/" + skinId;
+        Sprite battleSprite = pet?.ui?.battleImage;
+        return battleSprite != null ? battlePath : idlePath;
     }
 
     public bool SetActorVisible(string actorId, string sceneId, bool visible, out string error)

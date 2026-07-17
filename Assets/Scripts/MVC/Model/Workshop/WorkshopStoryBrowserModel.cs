@@ -674,6 +674,40 @@ public sealed class WorkshopStoryBrowserModel
         return reloaded;
     }
 
+    public bool SaveSelectedForRuntime(out bool runtimeReady, out string message)
+    {
+        runtimeReady = false;
+        if (SelectedStory == null || SelectedDocument == null)
+        {
+            message = "请先选择要保存的剧本。";
+            return false;
+        }
+
+        string selectedNodeId = SelectedNode?.id;
+        if (!repository.TrySaveForRuntime(
+                SelectedStory.path, SelectedDocument, out runtimeReady, out string saveMessage))
+        {
+            message = saveMessage;
+            return false;
+        }
+
+        if (runtimeReady && Database.instance != null)
+        {
+            Database.instance.ReloadStoryMod();
+            if (Player.instance != null)
+                Mission.VersionUpdate();
+        }
+
+        if (!Reload(out message))
+            return false;
+
+        if (!string.IsNullOrWhiteSpace(selectedNodeId))
+            SelectNode(selectedNodeId);
+        HasUnsavedChanges = false;
+        message = saveMessage;
+        return true;
+    }
+
     public bool DeleteSelected(out string error)
     {
         if (SelectedStory == null)
@@ -682,8 +716,18 @@ public sealed class WorkshopStoryBrowserModel
             return false;
         }
 
+        int deletedMissionId = SelectedDocument?.mission?.id ?? SelectedStory.missionId;
         if (!repository.TryDelete(SelectedStory.path, out error))
             return false;
+
+        if (Database.instance != null)
+            Database.instance.ReloadStoryMod();
+        if (deletedMissionId < 0 && Player.instance != null)
+        {
+            Player.instance.gameData?.missionStorage?.RemoveAll(mission => mission?.id == deletedMissionId);
+            if (Player.instance.currentMissionId == deletedMissionId)
+                Player.instance.currentMissionId = 0;
+        }
 
         SelectedStory = null;
         SelectedDocument = null;

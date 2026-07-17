@@ -161,6 +161,11 @@ public sealed class WorkshopStoryBrowserController
         return model.SaveSelected(out error);
     }
 
+    public bool SaveSelectedForRuntime(out bool runtimeReady, out string message)
+    {
+        return model.SaveSelectedForRuntime(out runtimeReady, out message);
+    }
+
     public bool DeleteSelected(out string error)
     {
         return model.DeleteSelected(out error);

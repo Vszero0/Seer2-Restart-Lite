@@ -640,8 +640,13 @@ public class WorkshopStoryBrowserPanel : Panel
 
     private void SaveStory()
     {
-        if (!controller.SaveSelected(out string error) && !string.IsNullOrEmpty(error))
-            Hintbox.OpenHintboxWithContent(error, 16);
+        bool success = controller.SaveSelectedForRuntime(out bool runtimeReady, out string message);
+        if (!string.IsNullOrEmpty(message))
+        {
+            Hintbox hintbox = Hintbox.OpenHintboxWithContent(message, runtimeReady ? 16 : 14);
+            if (!runtimeReady || !success)
+                hintbox.SetSize(720, 360);
+        }
         RefreshView();
     }
 
@@ -954,7 +959,7 @@ public class WorkshopStoryBrowserPanel : Panel
             return;
         }
 
-        string status = (document.isDraft ? "草稿" : "已发布")
+        string status = (document.isDraft ? "暂未载入 Mod" : "已载入 Mod")
             + " · " + (controller.HasUnsavedChanges ? "未保存" : "已保存");
         SetInputFieldValue(storyTitleInput, document.title, true);
         SetInputFieldValue(storySummaryInput, document.summary, true);

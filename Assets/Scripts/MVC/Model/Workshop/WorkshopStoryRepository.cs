@@ -84,7 +84,7 @@ public sealed class WorkshopStoryRepository
 
             string storyId = CreateAvailableStoryId(directory);
             string path = Path.Combine(directory, storyId + StoryFileExtension);
-            StoryDocument document = StoryDocumentFactory.CreateDraft(storyId);
+            StoryDocument document = StoryDocumentFactory.CreateDraft(storyId, CreateAvailableMissionId(null));
             if (!TrySave(path, document, out error))
                 return false;
 
@@ -146,6 +146,57 @@ public sealed class WorkshopStoryRepository
             error = "保存剧本失败：" + exception.Message;
             return false;
         }
+    }
+
+    /// <summary>
+    /// 保存入口页确认的剧本。完整校验通过时直接作为 Mod 剧情生效；
+    /// 尚未完成的草稿仍会保存编辑进度，但不会进入运行时数据库。
+    /// </summary>
+    public bool TrySaveForRuntime(
+        string path,
+        StoryDocument document,
+        out bool runtimeReady,
+        out string message)
+    {
+        runtimeReady = false;
+        message = string.Empty;
+        if (document == null)
+        {
+            message = "剧本文档不能为空。";
+            return false;
+        }
+
+        string originalStatus = document.normalizedStatus;
+        EnsureRuntimeMetadata(path, document);
+        document.status = "published";
+        if (StoryValidator.Validate(document, out string validationError))
+        {
+            if (!TrySave(path, document, out message))
+            {
+                document.status = originalStatus;
+                return false;
+            }
+
+            runtimeReady = true;
+            message = "剧本已保存并载入 Mod。";
+            return true;
+        }
+
+        document.status = originalStatus;
+        if (!string.Equals(originalStatus, "draft", StringComparison.OrdinalIgnoreCase))
+        {
+            message = "剧本存在运行问题，本次修改尚未保存：\n" + validationError;
+            return false;
+        }
+
+        if (!TrySave(path, document, out string saveError))
+        {
+            message = saveError;
+            return false;
+        }
+
+        message = "编辑进度已保存，但剧本暂未载入 Mod：\n" + validationError;
+        return true;
     }
 
     public bool TryDelete(string path, out string error)
@@ -245,6 +296,61 @@ public sealed class WorkshopStoryRepository
             missionId = document.mission?.id ?? 0,
             status = document.normalizedStatus,
         };
+    }
+
+    private void EnsureRuntimeMetadata(string path, StoryDocument document)
+    {
+        HashSet<int> usedMissionIds = GetUsedMissionIds(path);
+        if (document.mission == null)
+            document.mission = new StoryMissionDocument();
+        if (document.mission.id >= 0 || usedMissionIds.Contains(document.mission.id))
+            document.mission.id = CreateAvailableMissionId(path);
+
+        document.mission.title = document.title ?? string.Empty;
+        document.mission.summary = document.summary ?? string.Empty;
+        document.mission.replayable = document.replayable;
+        document.mission.mapId = 0;
+    }
+
+    private int CreateAvailableMissionId(string excludedPath)
+    {
+        HashSet<int> usedMissionIds = GetUsedMissionIds(excludedPath);
+        int missionId = -1;
+        while (usedMissionIds.Contains(missionId))
+            missionId--;
+        return missionId;
+    }
+
+    private HashSet<int> GetUsedMissionIds(string excludedPath)
+    {
+        HashSet<int> usedMissionIds = new HashSet<int>();
+        string directory = GetStoryDirectory();
+        if (!Directory.Exists(directory))
+            return usedMissionIds;
+
+        foreach (string storyPath in Directory.GetFiles(directory, "*.json"))
+        {
+            if (!string.IsNullOrWhiteSpace(excludedPath)
+                && string.Equals(Path.GetFullPath(storyPath), Path.GetFullPath(excludedPath), StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            try
+            {
+                if (TryReadDocument(storyPath, out StoryDocument document, out _)
+                    && document?.mission != null
+                    && document.mission.id < 0)
+                {
+                    usedMissionIds.Add(document.mission.id);
+                }
+            }
+            catch (Exception)
+            {
+                // 损坏文件会由列表读取和正式校验报告，不阻塞其他剧本分配内部任务 ID。
+            }
+        }
+        return usedMissionIds;
     }
 
     private string CreateAvailableStoryId(string directory)

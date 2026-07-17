@@ -47,8 +47,8 @@ public static class StoryValidator
             if (document.mission.id >= 0)
                 errors.Add("mission.id 必须是负数，避免和官方任务 ID 冲突");
 
-            if (document.mission.mapId <= 0)
-                errors.Add("mission.mapId 必须是有效地图 ID");
+            if (document.mission.mapId < 0)
+                errors.Add("mission.mapId 不能小于 0");
 
             if (string.IsNullOrWhiteSpace(document.mission.title) && string.IsNullOrWhiteSpace(document.title))
                 errors.Add("mission.title 或 story.title 至少需要填写一个");
@@ -165,10 +165,10 @@ public static class StoryValidator
             if (string.IsNullOrWhiteSpace(scene.id) || !sceneIds.Add(scene.id))
                 errors.Add(location + " 存在重复或为空的场景 id");
 
-            if (scene.mapId <= 0)
+            if (scene.mapId == 0)
                 errors.Add(location + ".mapId 必须是有效地图 ID");
-
-            StoryResourceValidator.ValidatePath("Maps/bg/" + scene.mapId, "mapBackground", "auto", errors, location + ".mapId");
+            else
+                StoryResourceValidator.ValidateMap(scene.mapId, errors, location + ".mapId");
             StoryResourceValidator.ValidatePath(scene.bgmResourcePath, "audio", "auto", errors, location + ".bgmResourcePath");
             ValidateTransition(scene.transition, false, errors, location + ".transition");
 
@@ -307,17 +307,15 @@ public static class StoryValidator
             {
                 case "scene":
                     if (string.IsNullOrWhiteSpace(command.sceneId)
-                        && command.mapId <= 0
+                        && command.mapId == 0
                         && string.IsNullOrWhiteSpace(command.bg)
                         && string.IsNullOrWhiteSpace(command.args))
                     {
                         errors.Add(location + " 需要 sceneId、mapId、bg 或 args");
                     }
 
-                    if (command.mapId < 0)
-                        errors.Add(location + ".mapId 不能小于 0");
-                    if (command.mapId > 0)
-                        StoryResourceValidator.ValidatePath("Maps/bg/" + command.mapId, "mapBackground", "auto", errors, location + ".mapId");
+                    if (command.mapId != 0)
+                        StoryResourceValidator.ValidateMap(command.mapId, errors, location + ".mapId");
                     StoryResourceValidator.ValidatePath(command.bgmResourcePath, "audio", "auto", errors, location + ".bgmResourcePath");
                     ValidateConditionGroup(command.condition, errors, location + ".condition");
                     ValidateConditionGroup(command.displayCondition, errors, location + ".displayCondition");

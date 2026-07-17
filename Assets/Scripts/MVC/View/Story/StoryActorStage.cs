@@ -216,7 +216,9 @@ public sealed class StoryActorStage
     {
         Sprite sprite = StorySpriteResolver.Load(actor.displaySprite, getResourceSource?.Invoke(actor.displaySprite));
         if (sprite != null && sprite != SpriteSet.Empty)
-            return sprite;
+            return StorySpriteResolver.IsBattleSpritePath(actor.displaySprite)
+                ? StorySpriteResolver.PrepareBattleStageSprite(sprite)
+                : sprite;
 
         // 精灵立绘不能只依赖故事文本中的路径。宠物数据本身已经封装了
         // 本体 / Mod 与默认皮肤的取图规则；路径资源尚未同步可用时，以它为准。
@@ -226,6 +228,12 @@ public sealed class StoryActorStage
             sprite = petId == 0 ? null : PetUISystem.GetPetIdleImage(petId);
             if (sprite != null && sprite != SpriteSet.Empty)
                 return sprite;
+
+            sprite = StorySpriteResolver.Load(actor.battleSprite, getResourceSource?.Invoke(actor.battleSprite));
+            if (sprite == null || sprite == SpriteSet.Empty)
+                sprite = petId == 0 ? null : PetUISystem.GetPetBattleImage(petId);
+            if (sprite != null && sprite != SpriteSet.Empty)
+                return StorySpriteResolver.PrepareBattleStageSprite(sprite);
         }
 
         // 舞台只能显示立绘；头像是对话栏专用资源，不能作为立绘回退，
@@ -236,10 +244,15 @@ public sealed class StoryActorStage
     private static int GetPetSkinId(StoryActorDocument actor)
     {
         string path = StorySpriteResolver.Normalize(actor?.displaySprite);
-        const string prefix = "Pets/pet/";
-        if (!string.IsNullOrWhiteSpace(path) && path.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)
-            && int.TryParse(path.Substring(prefix.Length), out int skinId))
-            return skinId;
+        string[] prefixes = { "Pets/pet/", "Pets/battle/", "Pets/icon/" };
+        foreach (string prefix in prefixes)
+        {
+            if (!string.IsNullOrWhiteSpace(path) && path.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)
+                && int.TryParse(path.Substring(prefix.Length), out int skinId))
+            {
+                return skinId;
+            }
+        }
 
         return int.TryParse(actor?.petId, out int petId) ? petId : 0;
     }

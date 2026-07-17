@@ -5,7 +5,7 @@ using System;
 /// </summary>
 public static class StoryDocumentFactory
 {
-    public static StoryDocument CreateDraft(string storyId)
+    public static StoryDocument CreateDraft(string storyId, int missionId = 0)
     {
         return new StoryDocument
         {
@@ -15,6 +15,14 @@ public static class StoryDocumentFactory
             summary = string.Empty,
             entry = "point_1",
             replayable = true,
+            mission = new StoryMissionDocument
+            {
+                id = missionId,
+                mapId = 0,
+                replayable = true,
+                title = "未命名剧本",
+                summary = string.Empty,
+            },
             resourceDefinitions = Array.Empty<StoryResourceDefinition>(),
             actors = Array.Empty<StoryActorDocument>(),
             nodes = new[]
