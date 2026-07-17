@@ -62,6 +62,11 @@ public sealed class WorkshopStoryNodeEditorController
         return model.GetPetOptions(filter);
     }
 
+    public List<WorkshopStoryPointAddActorOption> GetAddActorOptions(string filter)
+    {
+        return model.GetAddActorOptions(filter);
+    }
+
     public bool AddScene(Map map, out StorySceneDocument scene, out string error)
     {
         return model.AddScene(map, out scene, out error);
@@ -160,6 +165,11 @@ public sealed class WorkshopStoryNodeEditorController
     public bool AddPetActor(int petId, out StoryActorDocument actor, out string error)
     {
         return model.AddPetActor(petId, out actor, out error);
+    }
+
+    public bool AddStoryActor(string actorId, string sceneId, out StoryActorDocument actor, out string error)
+    {
+        return model.AddStoryActor(actorId, sceneId, out actor, out error);
     }
 
     public bool SetActorVisible(string actorId, string sceneId, bool visible, out string error)

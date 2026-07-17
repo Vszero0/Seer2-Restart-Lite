@@ -61,6 +61,29 @@ public sealed class WorkshopStoryPointResourcePicker
         }, null, null, true, canUseModResources);
     }
 
+    public void OpenAddActors(Func<string, List<WorkshopStoryPointAddActorOption>> getOptions,
+        Action<WorkshopStoryPointAddActorOption> onSelected)
+    {
+        bool canUseModResources = (getOptions?.Invoke(string.Empty) ?? new List<WorkshopStoryPointAddActorOption>())
+            .Any(option => option != null && option.isMod);
+        Open("添加角色", "输入角色名称或 ID", query =>
+        {
+            IEnumerable<WorkshopStoryPointAddActorOption> options = getOptions?.Invoke(query)
+                ?? Enumerable.Empty<WorkshopStoryPointAddActorOption>();
+            ClearList();
+            int index = 0;
+            foreach (WorkshopStoryPointAddActorOption option in options.Where(value => value != null
+                         && value.isMod == showModResources))
+            {
+                WorkshopStoryPointAddActorOption captured = option;
+                CreateListButton(option.displayName, index++, () => onSelected?.Invoke(captured));
+            }
+            FinishList(index, showModResources
+                ? "当前 Mod 中没有匹配的角色资源。"
+                : "没有匹配的本体精灵或剧本角色。");
+        }, null, null, true, canUseModResources);
+    }
+
     public void OpenActors(IReadOnlyList<WorkshopStoryPointActorOption> options, Action<string> onSelected)
     {
         Open("选择说话角色", "筛选已添加的角色", query =>
@@ -94,7 +117,7 @@ public sealed class WorkshopStoryPointResourcePicker
     public void OpenActorLibrary(Func<List<WorkshopStoryPointActorOption>> getOptions, Action onAdd,
         Action<string> onRemove)
     {
-        Open("剧情点精灵资源", "筛选已选精灵", query =>
+        Open("剧情点角色资源", "筛选已选角色", query =>
         {
             string filter = (query ?? string.Empty).Trim();
             IEnumerable<WorkshopStoryPointActorOption> options = getOptions?.Invoke()
@@ -102,13 +125,13 @@ public sealed class WorkshopStoryPointResourcePicker
             if (!string.IsNullOrEmpty(filter))
                 options = options.Where(option => option != null && option.displayName.IndexOf(filter, StringComparison.OrdinalIgnoreCase) >= 0);
             BuildManagedActorItems(options, option => onRemove?.Invoke(option.actorId));
-        }, "添加精灵", onAdd);
+        }, "添加角色", onAdd);
     }
 
     public void OpenSceneActors(IReadOnlyList<WorkshopStoryPointActorOption> available,
         IReadOnlyList<WorkshopStoryPointActorOption> visible, Action<string> onAdd, Action<string> onRemove)
     {
-        Open("当前场景角色", "筛选剧情点精灵资源", query =>
+        Open("当前场景角色", "筛选剧情点角色资源", query =>
         {
             string filter = (query ?? string.Empty).Trim();
             HashSet<string> visibleIds = new HashSet<string>((visible ?? Array.Empty<WorkshopStoryPointActorOption>())
@@ -129,7 +152,7 @@ public sealed class WorkshopStoryPointResourcePicker
                 CreateSceneActorItem(option.displayName, index++, isVisible,
                     () => onAdd?.Invoke(captured.actorId), () => onRemove?.Invoke(captured.actorId));
             }
-            FinishList(index, "请先通过“精灵资源”把角色加入剧情点。");
+            FinishList(index, "请先通过“角色资源”把角色加入剧情点。");
         }, null, null);
     }
 
@@ -262,7 +285,7 @@ public sealed class WorkshopStoryPointResourcePicker
             CreateListButton(option.displayName, index++, () => onClick?.Invoke(captured));
         }
 
-        FinishList(index, "请先通过“添加精灵”将角色加入本剧情点。");
+        FinishList(index, "请先通过“添加角色”将角色加入本剧情点。");
     }
 
     private void BuildManagedResourceItems(IEnumerable<WorkshopStoryPointResourceOption> options,
@@ -294,7 +317,7 @@ public sealed class WorkshopStoryPointResourcePicker
             WorkshopStoryPointActorOption captured = option;
             CreateManagedListItem(option.displayName, index++, () => onRemove?.Invoke(captured));
         }
-        FinishList(index, "还没有精灵资源。请点击“添加精灵”。");
+        FinishList(index, "还没有角色资源。请点击“添加角色”。");
     }
 
     private void FinishList(int count, string emptyHint)

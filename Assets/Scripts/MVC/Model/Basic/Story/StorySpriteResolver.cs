@@ -11,6 +11,7 @@ public static class StorySpriteResolver
     private const byte VisibleAlphaThreshold = 8;
     private const int BattleSpritePadding = 3;
     private static readonly Dictionary<Sprite, Sprite> CroppedBattleSpriteCache = new Dictionary<Sprite, Sprite>();
+    private static readonly Dictionary<string, Sprite> CroppedIconSpriteCache = new Dictionary<string, Sprite>();
 
     public static Sprite Load(string path, string source = "auto")
     {
@@ -19,8 +20,9 @@ public static class StorySpriteResolver
             return null;
 
         bool isExplicitModPath = path.TryTrimStart("Mod/", out string modPath);
-        string resourcePath = isExplicitModPath ? modPath : path;
-        source = NormalizeSource(isExplicitModPath ? "mod" : source);
+        bool isExplicitBuiltinPath = path.TryTrimStart("Builtin/", out string builtinPath);
+        string resourcePath = isExplicitModPath ? modPath : isExplicitBuiltinPath ? builtinPath : path;
+        source = NormalizeSource(isExplicitModPath ? "mod" : isExplicitBuiltinPath ? "builtin" : source);
 
         if (source != "builtin")
         {
@@ -36,7 +38,7 @@ public static class StorySpriteResolver
         if (IsUsable(sprite))
             return sprite;
 
-        sprite = ResourceManager.instance.Get<Sprite>(path);
+        sprite = ResourceManager.instance.Get<Sprite>(resourcePath);
         if (IsUsable(sprite))
             return sprite;
 
@@ -79,6 +81,63 @@ public static class StorySpriteResolver
 
         Sprite result = CropToVisibleBounds(source);
         CroppedBattleSpriteCache[source] = result;
+        return result;
+    }
+
+    public static Rect NormalizeCrop(float x, float y, float width, float height)
+    {
+        if (width <= 0f || height <= 0f)
+            return new Rect(0f, 0f, 1f, 1f);
+
+        width = Mathf.Clamp(width, .05f, 1f);
+        height = Mathf.Clamp(height, .05f, 1f);
+        return new Rect(
+            Mathf.Clamp(x, 0f, 1f - width),
+            Mathf.Clamp(y, 0f, 1f - height),
+            width,
+            height);
+    }
+
+    public static Rect GetDefaultIconCrop(Sprite source)
+    {
+        if (source == null || source.rect.width <= 0f || source.rect.height <= 0f)
+            return new Rect(0f, 0f, 1f, 1f);
+
+        if (source.rect.width > source.rect.height)
+        {
+            float width = source.rect.height / source.rect.width;
+            return new Rect((1f - width) * .5f, 0f, width, 1f);
+        }
+
+        float height = source.rect.width / source.rect.height;
+        return new Rect(0f, 1f - height, 1f, height);
+    }
+
+    public static Sprite PrepareIconSprite(Sprite source, Rect normalizedCrop)
+    {
+        if (!IsUsable(source))
+            return source;
+
+        Rect crop = NormalizeCrop(normalizedCrop.x, normalizedCrop.y, normalizedCrop.width, normalizedCrop.height);
+        if (crop.x <= .001f && crop.y <= .001f && crop.width >= .999f && crop.height >= .999f)
+            return source;
+
+        string key = source.GetInstanceID() + "|" + crop.x.ToString("F4") + "|" + crop.y.ToString("F4")
+            + "|" + crop.width.ToString("F4") + "|" + crop.height.ToString("F4");
+        if (CroppedIconSpriteCache.TryGetValue(key, out Sprite cached) && cached != null)
+            return cached;
+
+        Rect sourceRect = source.rect;
+        Rect croppedRect = new Rect(
+            sourceRect.x + sourceRect.width * crop.x,
+            sourceRect.y + sourceRect.height * crop.y,
+            sourceRect.width * crop.width,
+            sourceRect.height * crop.height);
+        Sprite result = Sprite.Create(source.texture, croppedRect, new Vector2(.5f, .5f),
+            source.pixelsPerUnit, 0, SpriteMeshType.FullRect);
+        result.name = source.name + " (Story Icon Crop)";
+        result.hideFlags = HideFlags.DontSave;
+        CroppedIconSpriteCache[key] = result;
         return result;
     }
 

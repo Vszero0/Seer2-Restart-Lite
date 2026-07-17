@@ -59,7 +59,30 @@ public static class StoryDocumentCodec
         int sourceVersion = document.schemaVersion;
         if (sourceVersion < 6)
             MigrateConnectionTransitionsToScenes(document);
-        document.schemaVersion = Math.Max(7, document.schemaVersion);
+        document.schemaVersion = Math.Max(8, document.schemaVersion);
+        foreach (StoryActorDocument actor in document.actors ?? Array.Empty<StoryActorDocument>())
+        {
+            if (actor == null)
+                continue;
+
+            actor.sourceFacing = actor.sourceFacesLeft ? "left" : "right";
+            actor.iconMode = actor.usesPortraitIcon ? "crop" : "separate";
+            if (sourceVersion < 8 && string.IsNullOrWhiteSpace(actor.independentIcon))
+                actor.independentIcon = actor.icon;
+            if (actor.usesPortraitIcon)
+            {
+                actor.icon = actor.sprite;
+                Rect crop = actor.normalizedIconCrop;
+                actor.iconCropX = crop.x;
+                actor.iconCropY = crop.y;
+                actor.iconCropWidth = crop.width;
+                actor.iconCropHeight = crop.height;
+            }
+            else if (!string.IsNullOrWhiteSpace(actor.independentIcon))
+            {
+                actor.icon = actor.independentIcon;
+            }
+        }
         foreach (StoryNodeDocument node in document.nodes ?? Array.Empty<StoryNodeDocument>())
         {
             if (node != null && string.IsNullOrWhiteSpace(node.flowRole))

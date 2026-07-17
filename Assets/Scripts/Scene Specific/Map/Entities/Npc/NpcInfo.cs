@@ -69,8 +69,9 @@ public class NpcInfo
         if (int.TryParse(resId, out _))
             return ResourceManager.instance.GetLocalAddressables<Sprite>("Npc/" + resId, IsMod(resId));
         
-        bool isMod = IsMod(resId);
-        var iconId = isMod ? resId.TrimStart("Mod/") : resId;
+        bool isBuiltin = resId.TryTrimStart("Builtin/", out string builtinResId);
+        bool isMod = !isBuiltin && IsMod(resId);
+        var iconId = isBuiltin ? builtinResId : isMod ? resId.TrimStart("Mod/") : resId;
         return ResourceManager.instance.GetLocalAddressables<Sprite>(iconId, isMod);
     }
 

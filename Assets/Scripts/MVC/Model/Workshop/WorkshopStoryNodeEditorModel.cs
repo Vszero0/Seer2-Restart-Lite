@@ -36,6 +36,25 @@ public sealed class WorkshopStoryPointActorOption
     public string displayName => string.IsNullOrWhiteSpace(name) ? actorId : name;
 }
 
+public sealed class WorkshopStoryPointAddActorOption
+{
+    public string actorId;
+    public int petId;
+    public string name;
+    public bool isPet;
+    public bool isMod;
+
+    public string displayName
+    {
+        get
+        {
+            string id = isPet ? petId.ToString() : actorId;
+            string label = string.IsNullOrWhiteSpace(name) ? id : name + "  " + id;
+            return (isPet ? "[精灵] " : "[剧本角色] ") + label;
+        }
+    }
+}
+
 /// <summary>
 /// 由场景命令切分出的剧情点时间线区段。场景数据描述静态舞台，
 /// 区段描述该舞台内依次发生的对白、旁白与其他演出命令。
@@ -278,6 +297,40 @@ public sealed class WorkshopStoryNodeEditorModel
                 isMod = PetInfo.IsMod(pet.id),
             });
         return FilterOptions(options, filter);
+    }
+
+    public List<WorkshopStoryPointAddActorOption> GetAddActorOptions(string filter)
+    {
+        string query = (filter ?? string.Empty).Trim();
+        IEnumerable<WorkshopStoryPointAddActorOption> pets = Database.instance == null
+            ? Enumerable.Empty<WorkshopStoryPointAddActorOption>()
+            : Database.instance.petInfoDict.Values
+                .Where(pet => pet != null)
+                .Select(pet => new WorkshopStoryPointAddActorOption
+                {
+                    petId = pet.id,
+                    name = pet.name,
+                    isPet = true,
+                    isMod = PetInfo.IsMod(pet.id),
+                });
+        IEnumerable<WorkshopStoryPointAddActorOption> storyActors = (DraftDocument?.actors ?? Array.Empty<StoryActorDocument>())
+            .Where(actor => actor != null && !string.Equals(actor.actorType, "pet", StringComparison.OrdinalIgnoreCase))
+            .Select(actor => new WorkshopStoryPointAddActorOption
+            {
+                actorId = actor.id,
+                name = actor.displayName,
+                isPet = false,
+                isMod = (actor.sprite ?? string.Empty).StartsWith("Mod/", StringComparison.OrdinalIgnoreCase),
+            });
+
+        return storyActors.Concat(pets)
+            .Where(option => string.IsNullOrWhiteSpace(query)
+                || option.displayName.IndexOf(query, StringComparison.OrdinalIgnoreCase) >= 0
+                || (option.isPet ? option.petId.ToString() : option.actorId ?? string.Empty)
+                    .IndexOf(query, StringComparison.OrdinalIgnoreCase) >= 0)
+            .OrderBy(option => option.isPet ? 1 : 0)
+            .ThenBy(option => option.name, StringComparer.OrdinalIgnoreCase)
+            .ToList();
     }
 
     /// <summary>
@@ -947,6 +1000,38 @@ public sealed class WorkshopStoryNodeEditorModel
         return true;
     }
 
+    public bool AddStoryActor(string actorId, string sceneId, out StoryActorDocument actor, out string error)
+    {
+        actor = DraftDocument?.GetActor(actorId);
+        StorySceneDocument scene = DraftNode?.GetScene(sceneId);
+        if (actor == null || scene == null)
+        {
+            error = "剧本角色或当前场景无效。";
+            return false;
+        }
+
+        string resolvedActorId = actor.id;
+        if (!(DraftNode.actorReferences ?? Array.Empty<StoryActorReferenceDocument>())
+            .Any(reference => reference != null && string.Equals(reference.actorId, resolvedActorId, StringComparison.OrdinalIgnoreCase)))
+        {
+            DraftNode.actorReferences = (DraftNode.actorReferences ?? Array.Empty<StoryActorReferenceDocument>())
+                .Append(new StoryActorReferenceDocument { actorId = resolvedActorId })
+                .ToArray();
+        }
+
+        if (scene.GetActorLayout(resolvedActorId) == null)
+        {
+            scene.actors = (scene.actors ?? Array.Empty<StorySceneActorLayoutDocument>())
+                .Append(CreateDefaultActorLayout(scene, resolvedActorId))
+                .ToArray();
+            NormalizeAutoLayoutOrders(scene);
+        }
+
+        HasUnsavedChanges = true;
+        error = string.Empty;
+        return true;
+    }
+
     private static string GetPreferredPetStageSpritePath(PetInfo pet, int skinId)
     {
         string resourcePrefix = PetInfo.IsMod(skinId) ? "Mod/" : string.Empty;
@@ -994,7 +1079,7 @@ public sealed class WorkshopStoryNodeEditorModel
     {
         if (DraftNode == null || string.IsNullOrWhiteSpace(actorId))
         {
-            error = "没有可删除的精灵资源。";
+            error = "没有可删除的角色资源。";
             return false;
         }
 

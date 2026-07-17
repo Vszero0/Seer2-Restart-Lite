@@ -259,6 +259,8 @@ public class DialogView : Module
         string speakerText = info.name ?? string.Empty;
         bool hasSpeaker = !string.IsNullOrEmpty(speakerText);
         Sprite speakerIcon = GetStorySpeakerIcon(info);
+        if (info.storyUseIconCrop)
+            speakerIcon = StorySpriteResolver.PrepareIconSprite(speakerIcon, info.storyIconCrop);
         bool hasSpeakerIcon = speakerIcon != null && speakerIcon != SpriteSet.Empty;
         bool speakerOnRight = string.Equals(info.storySpeakerSide, "right", StringComparison.OrdinalIgnoreCase);
 

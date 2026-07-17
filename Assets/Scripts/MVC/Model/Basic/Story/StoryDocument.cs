@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using UnityEngine;
 
 [Serializable]
 public class StoryResourceDefinition
@@ -162,7 +163,7 @@ public class StoryTextStyleDocument
 [Serializable]
 public class StoryDocument
 {
-    public int schemaVersion = 7;
+    public int schemaVersion = 8;
     public string status = "published";
     public string id;
     public string title;
@@ -398,12 +399,23 @@ public class StoryActorDocument
     public string sprite;
     public string icon;
     public string battleSprite;
+    public string sourceFacing = "right";
+    public string iconMode = "separate";
+    public string independentIcon;
+    public float iconCropX;
+    public float iconCropY;
+    public float iconCropWidth;
+    public float iconCropHeight;
     public float defaultScale = 1f;
     public bool defaultFaceLeft = true;
     public bool defaultFlipIcon;
 
     public string displayName => string.IsNullOrEmpty(name) ? id : name;
     public string displaySprite => string.IsNullOrEmpty(sprite) ? icon : sprite;
+    public bool sourceFacesLeft => string.Equals(sourceFacing, "left", StringComparison.OrdinalIgnoreCase);
+    public bool usesPortraitIcon => string.Equals(iconMode, "crop", StringComparison.OrdinalIgnoreCase);
+    public Rect normalizedIconCrop => StorySpriteResolver.NormalizeCrop(
+        iconCropX, iconCropY, iconCropWidth, iconCropHeight);
 }
 
 [Serializable]

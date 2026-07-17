@@ -186,6 +186,11 @@ public static class StoryResourceValidator
             normalizedPath = normalizedPath.Substring("Mod/".Length);
             source = "mod";
         }
+        else if (normalizedPath.StartsWith("Builtin/", StringComparison.OrdinalIgnoreCase))
+        {
+            normalizedPath = normalizedPath.Substring("Builtin/".Length);
+            source = "builtin";
+        }
         string[] roots = source == "mod"
             ? new[] { Application.persistentDataPath + "/Mod/" }
             : source == "builtin"

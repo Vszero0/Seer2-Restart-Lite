@@ -389,7 +389,7 @@ public sealed class StoryActorStage
             rect.pivot = StoryActorPlacementCalculator.GetVisibleBottomPivot(runtime.image.sprite);
             rect.anchoredPosition = new Vector2(isRight ? sideOffset : -sideOffset, activeLayout.actorBottom + yOffset);
             rect.sizeDelta = new Vector2(originalSize.x * scale, originalSize.y * scale);
-            rect.localScale = new Vector3(runtime.placement.faceLeft ? -1f : 1f, 1f, 1f);
+            rect.localScale = new Vector3(ShouldFlip(runtime) ? -1f : 1f, 1f, 1f);
             runtime.basePosition = rect.anchoredPosition;
             runtime.baseScale = rect.localScale;
         }
@@ -407,7 +407,7 @@ public sealed class StoryActorStage
             rect.pivot = StoryActorPlacementCalculator.GetVisibleBottomPivot(runtime.image.sprite);
             rect.anchoredPosition = new Vector2(runtime.placement.x, runtime.placement.y);
             rect.sizeDelta = new Vector2(originalSize.x * scale, originalSize.y * scale);
-            rect.localScale = new Vector3(runtime.placement.faceLeft ? -1f : 1f, 1f, 1f);
+            rect.localScale = new Vector3(ShouldFlip(runtime) ? -1f : 1f, 1f, 1f);
             runtime.basePosition = rect.anchoredPosition;
             runtime.baseScale = rect.localScale;
         }
@@ -423,6 +423,12 @@ public sealed class StoryActorStage
         {
             runtime.image.transform.SetAsLastSibling();
         }
+    }
+
+    private static bool ShouldFlip(StoryActorRuntime runtime)
+    {
+        return runtime != null && runtime.placement != null
+            && runtime.placement.faceLeft != (runtime.document?.sourceFacesLeft ?? false);
     }
 
     private sealed class StoryActorRuntime

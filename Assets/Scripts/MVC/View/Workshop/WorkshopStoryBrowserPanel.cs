@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
+using SimpleFileBrowser;
 using TMPro;
 using UnityEngine;
 using UnityEngine.Events;
@@ -36,6 +38,13 @@ public class WorkshopStoryBrowserPanel : Panel
         public Vector2 position;
     }
 
+    private sealed class NpcImageOption
+    {
+        public string path;
+        public string name;
+        public bool isMod;
+    }
+
     private const string StoryEndGraphNodeId = "__story_end__";
     private const float GraphNodeWidth = 180f;
     private const float GraphNodeHeight = 76f;
@@ -61,6 +70,24 @@ public class WorkshopStoryBrowserPanel : Panel
     private RectTransform transitionContent;
     private RectTransform graphOverlay;
     private RectTransform graphContent;
+    private RectTransform actorManagerOverlay;
+    private RectTransform actorManagerContent;
+    private RectTransform actorResourceOverlay;
+    private RectTransform actorResourceContent;
+    private RectTransform actorIndependentIconControls;
+    private RectTransform actorCropControls;
+    private IInputField actorNameInput;
+    private IInputField actorResourceSearchInput;
+    private Dropdown actorFacingDropdown;
+    private Dropdown actorIconModeDropdown;
+    private Text actorFacingValueText;
+    private Text actorIconModeValueText;
+    private Text actorResourceSourceText;
+    private Text actorResourcePageText;
+    private Text actorPathText;
+    private Text actorIconPathText;
+    private Image actorPortraitPreview;
+    private Image actorIconPreview;
     private Text connectionNodeTitle;
     private Text connectionDefaultText;
     private Text nodeManagerCountText;
@@ -86,6 +113,10 @@ public class WorkshopStoryBrowserPanel : Panel
     private int nodeManagerFilterIndex;
     private float nodeManagerScrollPosition = 1f;
     private bool returnToNodeManagerAfterConnection;
+    private string selectedActorId;
+    private bool actorResourceIsMod;
+    private bool selectingActorIcon;
+    private int actorResourcePage;
     private bool hasBuilt;
 
     public override void Init()
@@ -110,6 +141,16 @@ public class WorkshopStoryBrowserPanel : Panel
         if (graphOverlay != null && graphOverlay.gameObject.activeSelf)
         {
             CloseGraphViewer();
+            return;
+        }
+        if (actorResourceOverlay != null && actorResourceOverlay.gameObject.activeSelf)
+        {
+            CloseActorResourcePicker();
+            return;
+        }
+        if (actorManagerOverlay != null && actorManagerOverlay.gameObject.activeSelf)
+        {
+            CloseActorManager();
             return;
         }
         if (connectionOverlay != null && connectionOverlay.gameObject.activeSelf)
@@ -160,6 +201,8 @@ public class WorkshopStoryBrowserPanel : Panel
         IButton manageButton = CreateActionButton(infoSection, "管理剧情点", new Vector2(18f, -126f),
             new Vector2(164f, 36f), OpenNodeManager);
         EmphasizePrimaryAction(manageButton);
+        CreateActionButton(infoSection, "管理角色", new Vector2(190f, -126f),
+            new Vector2(112f, 36f), OpenActorManager);
         CreateActionButton(infoSection, "查看结构", new Vector2(-222f, -130f), new Vector2(92f, 28f), OpenGraphViewer, TextAnchor.UpperRight);
         CreateActionButton(infoSection, "剧本预览", new Vector2(-118f, -130f), new Vector2(96f, 28f), PreviewStory, TextAnchor.UpperRight);
         CreateActionButton(infoSection, "保存", new Vector2(-14f, -130f), new Vector2(96f, 28f), SaveStory, TextAnchor.UpperRight);
@@ -190,6 +233,8 @@ public class WorkshopStoryBrowserPanel : Panel
         BuildNodeManager(modalLayer);
         BuildConnectionEditor(modalLayer);
         BuildGraphViewer(modalLayer);
+        BuildActorManager(modalLayer);
+        BuildActorResourcePicker(modalLayer);
         modalLayer.gameObject.SetActive(false);
     }
 
@@ -372,6 +417,199 @@ public class WorkshopStoryBrowserPanel : Panel
         CreateModalCloseButton(graphOverlay, CloseGraphViewer);
         graphContent = CreateGraphScrollContent(graphOverlay);
         overlayObject.SetActive(false);
+    }
+
+    private void BuildActorManager(RectTransform root)
+    {
+        GameObject overlayObject = new GameObject("Story Actor Manager",
+            typeof(RectTransform), typeof(CanvasRenderer), typeof(Image), typeof(Outline));
+        overlayObject.transform.SetParent(root, false);
+        actorManagerOverlay = overlayObject.GetComponent<RectTransform>();
+        actorManagerOverlay.anchorMin = new Vector2(.5f, .5f);
+        actorManagerOverlay.anchorMax = new Vector2(.5f, .5f);
+        actorManagerOverlay.pivot = new Vector2(.5f, .5f);
+        actorManagerOverlay.anchoredPosition = Vector2.zero;
+        actorManagerOverlay.sizeDelta = new Vector2(892f, 472f);
+        overlayObject.GetComponent<Image>().color = new Color32(0, 8, 12, 252);
+        Outline outline = overlayObject.GetComponent<Outline>();
+        outline.effectColor = new Color(Cyan.r, Cyan.g, Cyan.b, .86f);
+        outline.effectDistance = new Vector2(2f, -2f);
+
+        CreateText("Actor Manager Heading", actorManagerOverlay, "剧本角色管理", 22, TextAnchor.MiddleCenter, Cyan,
+            new Vector2(.5f, 1f), new Vector2(.5f, 1f), new Vector2(0f, -18f), new Vector2(260f, 30f));
+        CreateActionButton(actorManagerOverlay, "新建 NPC 角色", new Vector2(18f, -52f),
+            new Vector2(126f, 28f), CreateNpcActor);
+        CreateActionButton(actorManagerOverlay, "删除角色", new Vector2(152f, -52f),
+            new Vector2(92f, 28f), DeleteNpcActor);
+        CreateActionButton(actorManagerOverlay, "保存", new Vector2(-58f, -52f),
+            new Vector2(88f, 28f), SaveStory, TextAnchor.UpperRight);
+        CreateModalCloseButton(actorManagerOverlay, CloseActorManager);
+
+        actorManagerContent = CreateScrollContent(actorManagerOverlay,
+            new Vector2(16f, 16f), new Vector2(-620f, -90f));
+
+        CreateText("Actor Name Label", actorManagerOverlay, "角色名称：", 14, TextAnchor.MiddleLeft, Cyan,
+            new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(292f, -92f), new Vector2(76f, 28f));
+        actorNameInput = CreateInputField(petNameInputFieldPrefab, actorManagerOverlay,
+            "Actor Name Input", "角色名称", string.Empty,
+            new Vector2(370f, -92f), new Vector2(210f, 28f), OnActorNameEdited);
+
+        CreateText("Actor Facing Label", actorManagerOverlay, "原始朝向：", 14, TextAnchor.MiddleLeft, Cyan,
+            new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(592f, -92f), new Vector2(76f, 28f));
+        actorFacingDropdown = CreateDropdown(actorManagerOverlay, new Vector2(670f, -92f),
+            new Vector2(128f, 28f), OnActorFacingChanged);
+        if (actorFacingDropdown != null)
+        {
+            actorFacingDropdown.ClearOptions();
+            actorFacingDropdown.AddOptions(new List<string> { "原始朝右", "原始朝左" });
+            actorFacingDropdown.SetValueWithoutNotify(0);
+            actorFacingDropdown.RefreshShownValue();
+        }
+        actorFacingValueText = CreateSelectorValueText(actorFacingDropdown);
+
+        actorPortraitPreview = CreateActorPreview("Actor Portrait Preview", actorManagerOverlay,
+            new Vector2(292f, -132f), new Vector2(226f, 218f));
+        actorIconPreview = CreateActorPreview("Actor Icon Preview", actorManagerOverlay,
+            new Vector2(538f, -132f), new Vector2(128f, 128f));
+
+        CreateText("Actor Portrait Label", actorManagerOverlay, "立绘", 15, TextAnchor.MiddleCenter, Cyan,
+            new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(292f, -354f), new Vector2(226f, 24f));
+        CreateText("Actor Icon Label", actorManagerOverlay, "头像预览", 15, TextAnchor.MiddleCenter, Cyan,
+            new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(538f, -264f), new Vector2(128f, 24f));
+
+        CreateActionButton(actorManagerOverlay, "选择 NPC 立绘", new Vector2(292f, -384f),
+            new Vector2(108f, 28f), () => OpenActorResourcePicker(false));
+        CreateActionButton(actorManagerOverlay, "导入立绘", new Vector2(408f, -384f),
+            new Vector2(88f, 28f), () => ImportActorImage(false));
+
+        actorPathText = CreateText("Actor Portrait Path", actorManagerOverlay, string.Empty, 12,
+            TextAnchor.MiddleLeft, HintColor, new Vector2(0f, 1f), new Vector2(0f, 1f),
+            new Vector2(292f, -416f), new Vector2(226f, 22f));
+
+        CreateText("Actor Icon Mode Label", actorManagerOverlay, "头像方式：", 14, TextAnchor.MiddleLeft, Cyan,
+            new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(684f, -132f), new Vector2(72f, 28f));
+        actorIconModeDropdown = CreateDropdown(actorManagerOverlay, new Vector2(684f, -162f),
+            new Vector2(180f, 28f), OnActorIconModeChanged);
+        if (actorIconModeDropdown != null)
+        {
+            actorIconModeDropdown.ClearOptions();
+            actorIconModeDropdown.AddOptions(new List<string> { "从立绘裁剪", "使用独立头像" });
+            actorIconModeDropdown.SetValueWithoutNotify(0);
+            actorIconModeDropdown.RefreshShownValue();
+        }
+        actorIconModeValueText = CreateSelectorValueText(actorIconModeDropdown);
+
+        actorIndependentIconControls = CreateActorControlLayer("Independent Icon Controls", actorManagerOverlay);
+        CreateActionButton(actorIndependentIconControls, "选择头像", new Vector2(684f, -200f),
+            new Vector2(88f, 28f), () => OpenActorResourcePicker(true));
+        CreateActionButton(actorIndependentIconControls, "导入头像", new Vector2(780f, -200f),
+            new Vector2(88f, 28f), () => ImportActorImage(true));
+        actorIconPathText = CreateText("Actor Icon Path", actorIndependentIconControls, string.Empty, 12,
+            TextAnchor.MiddleLeft, HintColor, new Vector2(0f, 1f), new Vector2(0f, 1f),
+            new Vector2(684f, -232f), new Vector2(180f, 22f));
+
+        actorCropControls = CreateActorControlLayer("Portrait Crop Controls", actorManagerOverlay);
+        CreateText("Actor Crop Hint", actorCropControls, "裁剪范围微调", 13, TextAnchor.MiddleLeft, HintColor,
+            new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(684f, -200f), new Vector2(160f, 24f));
+        CreateActionButton(actorCropControls, "左", new Vector2(684f, -230f), new Vector2(40f, 26f),
+            () => AdjustActorCrop(-.08f, 0f, 0f));
+        CreateActionButton(actorCropControls, "右", new Vector2(730f, -230f), new Vector2(40f, 26f),
+            () => AdjustActorCrop(.08f, 0f, 0f));
+        CreateActionButton(actorCropControls, "上", new Vector2(776f, -230f), new Vector2(40f, 26f),
+            () => AdjustActorCrop(0f, .08f, 0f));
+        CreateActionButton(actorCropControls, "下", new Vector2(822f, -230f), new Vector2(40f, 26f),
+            () => AdjustActorCrop(0f, -.08f, 0f));
+        CreateActionButton(actorCropControls, "放大", new Vector2(684f, -264f), new Vector2(82f, 26f),
+            () => AdjustActorCrop(0f, 0f, -.12f));
+        CreateActionButton(actorCropControls, "缩小", new Vector2(774f, -264f), new Vector2(82f, 26f),
+            () => AdjustActorCrop(0f, 0f, .12f));
+
+        overlayObject.SetActive(false);
+    }
+
+    private static RectTransform CreateActorControlLayer(string name, RectTransform parent)
+    {
+        GameObject layerObject = new GameObject(name, typeof(RectTransform));
+        layerObject.transform.SetParent(parent, false);
+        RectTransform layer = layerObject.GetComponent<RectTransform>();
+        layer.anchorMin = Vector2.zero;
+        layer.anchorMax = Vector2.one;
+        layer.offsetMin = Vector2.zero;
+        layer.offsetMax = Vector2.zero;
+        return layer;
+    }
+
+    private void BuildActorResourcePicker(RectTransform root)
+    {
+        GameObject overlayObject = new GameObject("Story NPC Image Picker",
+            typeof(RectTransform), typeof(CanvasRenderer), typeof(Image), typeof(Outline));
+        overlayObject.transform.SetParent(root, false);
+        actorResourceOverlay = overlayObject.GetComponent<RectTransform>();
+        actorResourceOverlay.anchorMin = new Vector2(.5f, .5f);
+        actorResourceOverlay.anchorMax = new Vector2(.5f, .5f);
+        actorResourceOverlay.pivot = new Vector2(.5f, .5f);
+        actorResourceOverlay.anchoredPosition = Vector2.zero;
+        actorResourceOverlay.sizeDelta = new Vector2(700f, 430f);
+        overlayObject.GetComponent<Image>().color = new Color32(0, 8, 12, 255);
+        Outline outline = overlayObject.GetComponent<Outline>();
+        outline.effectColor = Cyan;
+        outline.effectDistance = new Vector2(2f, -2f);
+
+        CreateText("NPC Picker Heading", actorResourceOverlay, "选择 NPC 图片", 22, TextAnchor.MiddleCenter, Cyan,
+            new Vector2(.5f, 1f), new Vector2(.5f, 1f), new Vector2(0f, -18f), new Vector2(260f, 30f));
+        actorResourceSearchInput = CreateInputField(petNameInputFieldPrefab, actorResourceOverlay,
+            "NPC Resource Search", "输入文件名", string.Empty,
+            new Vector2(18f, -56f), new Vector2(300f, 28f), _ => { actorResourcePage = 0; RefreshActorResourcePicker(); });
+        InputField search = actorResourceSearchInput?.GetComponent<InputField>();
+        if (search != null)
+        {
+            search.onValueChanged = new InputField.OnChangeEvent();
+            search.onValueChanged.AddListener(_ => { actorResourcePage = 0; RefreshActorResourcePicker(); });
+        }
+        IButton sourceButton = CreateActionButton(actorResourceOverlay, "本体资源", new Vector2(-106f, -56f),
+            new Vector2(92f, 28f), ToggleActorResourceSource, TextAnchor.UpperRight);
+        actorResourceSourceText = sourceButton?.GetComponentInChildren<Text>();
+        CreateModalCloseButton(actorResourceOverlay, CloseActorResourcePicker);
+        actorResourceContent = CreateScrollContent(actorResourceOverlay,
+            new Vector2(16f, 48f), new Vector2(-16f, -96f));
+        CreateActionButton(actorResourceOverlay, "上一页", new Vector2(250f, -394f),
+            new Vector2(64f, 26f), () => ChangeActorResourcePage(-1));
+        actorResourcePageText = CreateText("NPC Resource Page", actorResourceOverlay, string.Empty, 12,
+            TextAnchor.MiddleCenter, HintColor, new Vector2(0f, 1f), new Vector2(0f, 1f),
+            new Vector2(318f, -394f), new Vector2(64f, 26f));
+        CreateActionButton(actorResourceOverlay, "下一页", new Vector2(386f, -394f),
+            new Vector2(64f, 26f), () => ChangeActorResourcePage(1));
+        overlayObject.SetActive(false);
+    }
+
+    private Image CreateActorPreview(string name, Transform parent, Vector2 position, Vector2 size)
+    {
+        GameObject obj = new GameObject(name, typeof(RectTransform), typeof(CanvasRenderer), typeof(Image), typeof(Outline));
+        obj.transform.SetParent(parent, false);
+        RectTransform rect = obj.GetComponent<RectTransform>();
+        rect.anchorMin = new Vector2(0f, 1f);
+        rect.anchorMax = new Vector2(0f, 1f);
+        rect.pivot = new Vector2(0f, 1f);
+        rect.anchoredPosition = position;
+        rect.sizeDelta = size;
+        Image backgroundImage = obj.GetComponent<Image>();
+        backgroundImage.color = new Color32(12, 32, 40, 255);
+        backgroundImage.raycastTarget = false;
+        Outline outline = obj.GetComponent<Outline>();
+        outline.effectColor = new Color(Cyan.r, Cyan.g, Cyan.b, .45f);
+        outline.effectDistance = new Vector2(1f, -1f);
+        GameObject previewObject = new GameObject("Preview Image", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));
+        previewObject.transform.SetParent(obj.transform, false);
+        RectTransform previewRect = previewObject.GetComponent<RectTransform>();
+        previewRect.anchorMin = Vector2.zero;
+        previewRect.anchorMax = Vector2.one;
+        previewRect.offsetMin = new Vector2(6f, 6f);
+        previewRect.offsetMax = new Vector2(-6f, -6f);
+        Image image = previewObject.GetComponent<Image>();
+        image.color = Color.white;
+        image.preserveAspect = true;
+        image.raycastTarget = false;
+        return image;
     }
 
     private RectTransform CreateGraphScrollContent(RectTransform parent)
@@ -741,6 +979,360 @@ public class WorkshopStoryBrowserPanel : Panel
             Hintbox.OpenHintboxWithContent("无法打开剧本预览。", 16);
     }
 
+    private void OpenActorManager()
+    {
+        if (controller.SelectedDocument == null)
+        {
+            Hintbox.OpenHintboxWithContent("请先选择要管理角色的剧本。", 16);
+            return;
+        }
+
+        OpenModal(actorManagerOverlay);
+        RefreshActorManager();
+    }
+
+    private void CloseActorManager()
+    {
+        if (actorManagerOverlay != null)
+            actorManagerOverlay.gameObject.SetActive(false);
+        HideModalLayer();
+        RefreshStoryInfo();
+    }
+
+    private void CreateNpcActor()
+    {
+        if (!controller.CreateNpcActor(out StoryActorDocument actor, out string error))
+        {
+            Hintbox.OpenHintboxWithContent(error, 16);
+            return;
+        }
+        selectedActorId = actor.id;
+        RefreshActorManager();
+    }
+
+    private void DeleteNpcActor()
+    {
+        if (string.IsNullOrWhiteSpace(selectedActorId))
+        {
+            Hintbox.OpenHintboxWithContent("请先选择要删除的剧本角色。", 16);
+            return;
+        }
+        if (!controller.DeleteNpcActor(selectedActorId, out string error))
+        {
+            Hintbox.OpenHintboxWithContent(error, 16);
+            return;
+        }
+        selectedActorId = null;
+        RefreshActorManager();
+    }
+
+    private void SelectNpcActor(string actorId)
+    {
+        selectedActorId = actorId;
+        RefreshActorManager();
+    }
+
+    private StoryActorDocument GetSelectedNpcActor()
+    {
+        return controller.GetStoryActors().FirstOrDefault(actor => actor != null
+            && string.Equals(actor.id, selectedActorId, StringComparison.OrdinalIgnoreCase)
+            && string.Equals(actor.actorType, "npc", StringComparison.OrdinalIgnoreCase));
+    }
+
+    private void RefreshActorManager()
+    {
+        if (actorManagerContent == null)
+            return;
+
+        StoryActorDocument[] actors = controller.GetStoryActors()
+            .Where(actor => actor != null && string.Equals(actor.actorType, "npc", StringComparison.OrdinalIgnoreCase))
+            .ToArray();
+        if (actors.Length > 0 && !actors.Any(actor => string.Equals(actor.id, selectedActorId, StringComparison.OrdinalIgnoreCase)))
+            selectedActorId = actors[0].id;
+
+        ClearChildren(actorManagerContent);
+        for (int index = 0; index < actors.Length; index++)
+        {
+            StoryActorDocument actor = actors[index];
+            bool selected = string.Equals(actor.id, selectedActorId, StringComparison.OrdinalIgnoreCase);
+            CreateListButton(actorManagerContent, "角色 · " + actor.displayName, selected, index,
+                () => SelectNpcActor(actor.id));
+        }
+        if (actors.Length == 0)
+            CreateHint(actorManagerContent, "尚未建立 NPC 剧本角色");
+        else
+            actorManagerContent.sizeDelta = new Vector2(0f, 12f + actors.Length * 42f);
+
+        StoryActorDocument selectedActor = GetSelectedNpcActor();
+        bool hasActor = selectedActor != null;
+        SetInputFieldValue(actorNameInput, selectedActor?.name, hasActor);
+        if (actorFacingDropdown != null)
+        {
+            actorFacingDropdown.gameObject.SetActive(hasActor);
+            actorFacingDropdown.SetValueWithoutNotify(selectedActor?.sourceFacesLeft == true ? 1 : 0);
+            SetSelectorValueText(actorFacingValueText, actorFacingDropdown, "原始朝右");
+        }
+        if (actorIconModeDropdown != null)
+        {
+            actorIconModeDropdown.gameObject.SetActive(hasActor);
+            actorIconModeDropdown.SetValueWithoutNotify(selectedActor?.usesPortraitIcon == true ? 0 : 1);
+            SetSelectorValueText(actorIconModeValueText, actorIconModeDropdown, "从立绘裁剪");
+        }
+        bool usesPortraitCrop = hasActor && selectedActor.usesPortraitIcon;
+        if (actorCropControls != null)
+            actorCropControls.gameObject.SetActive(usesPortraitCrop);
+        if (actorIndependentIconControls != null)
+            actorIndependentIconControls.gameObject.SetActive(hasActor && !usesPortraitCrop);
+
+        Sprite portrait = hasActor ? StorySpriteResolver.Load(selectedActor.sprite) : null;
+        Sprite icon = hasActor ? StorySpriteResolver.Load(selectedActor.icon) : null;
+        if (hasActor && selectedActor.usesPortraitIcon)
+            icon = StorySpriteResolver.PrepareIconSprite(portrait, selectedActor.normalizedIconCrop);
+        SetActorPreview(actorPortraitPreview, portrait);
+        SetActorPreview(actorIconPreview, icon);
+        if (actorPathText != null)
+            actorPathText.text = hasActor ? Shorten(selectedActor.sprite ?? "尚未选择立绘", 30) : string.Empty;
+        if (actorIconPathText != null)
+            actorIconPathText.text = hasActor
+                ? selectedActor.usesPortraitIcon ? "使用立绘裁剪" : Shorten(selectedActor.icon ?? "尚未选择头像", 22)
+                : string.Empty;
+    }
+
+    private static void SetActorPreview(Image image, Sprite sprite)
+    {
+        if (image == null)
+            return;
+        image.sprite = sprite;
+        image.enabled = sprite != null && sprite != SpriteSet.Empty;
+    }
+
+    private void OnActorNameEdited(string value)
+    {
+        UpdateSelectedNpcActor(value, null, null);
+    }
+
+    private void OnActorFacingChanged(int value)
+    {
+        UpdateSelectedNpcActor(null, value == 1 ? "left" : "right", null);
+    }
+
+    private void OnActorIconModeChanged(int value)
+    {
+        UpdateSelectedNpcActor(null, null, value == 0);
+    }
+
+    private void UpdateSelectedNpcActor(string name, string facing, bool? usePortraitIcon)
+    {
+        StoryActorDocument actor = GetSelectedNpcActor();
+        if (actor == null)
+            return;
+        string resolvedName = name ?? actorNameInput?.inputString ?? actor.name;
+        string resolvedFacing = facing ?? (actor.sourceFacesLeft ? "left" : "right");
+        bool resolvedIconMode = usePortraitIcon ?? actor.usesPortraitIcon;
+        if (!controller.UpdateNpcActor(actor.id, resolvedName, resolvedFacing, resolvedIconMode, out string error))
+        {
+            Hintbox.OpenHintboxWithContent(error, 16);
+            return;
+        }
+        RefreshActorManager();
+    }
+
+    private void AdjustActorCrop(float moveX, float moveY, float zoomDelta)
+    {
+        if (!controller.AdjustNpcActorCrop(selectedActorId, moveX, moveY, zoomDelta, out string error))
+        {
+            Hintbox.OpenHintboxWithContent(error, 16);
+            return;
+        }
+        RefreshActorManager();
+    }
+
+    private void ImportActorImage(bool isIcon)
+    {
+        if (GetSelectedNpcActor() == null)
+        {
+            Hintbox.OpenHintboxWithContent("请先新建或选择一个 NPC 角色。", 16);
+            return;
+        }
+
+        FileBrowser.SetFilters(false, new FileBrowser.Filter("PNG 图片", ".png"));
+        FileBrowser.ShowLoadDialog(paths =>
+        {
+            if (paths == null || paths.Length == 0)
+                return;
+            if (!controller.ImportNpcActorImage(selectedActorId, paths[0], isIcon, out string error))
+                Hintbox.OpenHintboxWithContent(error, 16);
+            RefreshActorManager();
+        }, () => { }, FileBrowser.PickMode.Files, title: isIcon ? "选择要导入的头像" : "选择要导入的立绘");
+    }
+
+    private void OpenActorResourcePicker(bool isIcon)
+    {
+        if (GetSelectedNpcActor() == null)
+        {
+            Hintbox.OpenHintboxWithContent("请先新建或选择一个 NPC 角色。", 16);
+            return;
+        }
+        selectingActorIcon = isIcon;
+        actorResourceIsMod = false;
+        actorResourcePage = 0;
+        OpenModal(actorResourceOverlay);
+        RefreshActorResourcePicker();
+    }
+
+    private void CloseActorResourcePicker()
+    {
+        if (actorResourceOverlay != null)
+            actorResourceOverlay.gameObject.SetActive(false);
+        OpenModal(actorManagerOverlay);
+        RefreshActorManager();
+    }
+
+    private void ToggleActorResourceSource()
+    {
+        if (!GetNpcImageOptions().Any(option => option.isMod))
+            return;
+        actorResourceIsMod = !actorResourceIsMod;
+        actorResourcePage = 0;
+        RefreshActorResourcePicker();
+    }
+
+    private void ChangeActorResourcePage(int delta)
+    {
+        actorResourcePage = Mathf.Max(0, actorResourcePage + delta);
+        RefreshActorResourcePicker();
+    }
+
+    private void RefreshActorResourcePicker()
+    {
+        if (actorResourceContent == null)
+            return;
+
+        NpcImageOption[] all = GetNpcImageOptions().ToArray();
+        bool hasMod = all.Any(option => option.isMod);
+        if (actorResourceSourceText != null)
+            actorResourceSourceText.text = actorResourceIsMod ? "当前 Mod" : hasMod ? "本体资源" : "仅本体";
+        string query = actorResourceSearchInput?.inputString?.Trim() ?? string.Empty;
+        NpcImageOption[] filtered = all.Where(option => option.isMod == actorResourceIsMod
+                && (string.IsNullOrWhiteSpace(query)
+                    || option.name.IndexOf(query, StringComparison.OrdinalIgnoreCase) >= 0))
+            .ToArray();
+        const int pageSize = 36;
+        int pageCount = Mathf.Max(1, Mathf.CeilToInt(filtered.Length / (float)pageSize));
+        actorResourcePage = Mathf.Clamp(actorResourcePage, 0, pageCount - 1);
+        NpcImageOption[] visible = filtered.Skip(actorResourcePage * pageSize).Take(pageSize).ToArray();
+        if (actorResourcePageText != null)
+            actorResourcePageText.text = (actorResourcePage + 1) + "/" + pageCount;
+
+        ClearChildren(actorResourceContent);
+        for (int index = 0; index < visible.Length; index++)
+        {
+            NpcImageOption option = visible[index];
+            CreateNpcImageItem(option, index, () => SelectNpcImage(option));
+        }
+        if (visible.Length == 0)
+            CreateHint(actorResourceContent, actorResourceIsMod ? "当前 Mod 没有 NPC 图片" : "本体没有 NPC 图片");
+        else
+        {
+            int rowCount = Mathf.CeilToInt(visible.Length / 3f);
+            actorResourceContent.sizeDelta = new Vector2(0f, 8f + rowCount * 74f);
+        }
+    }
+
+    private IEnumerable<NpcImageOption> GetNpcImageOptions()
+    {
+        foreach (var source in new[]
+                 {
+                     new { root = Path.Combine(Application.persistentDataPath, "Resources", "Npc"), prefix = "Builtin/Npc/", isMod = false },
+                     new { root = Path.Combine(Application.persistentDataPath, "Mod", "Npc"), prefix = "Mod/Npc/", isMod = true },
+                 })
+        {
+            if (!Directory.Exists(source.root))
+                continue;
+            string[] files;
+            try { files = Directory.GetFiles(source.root, "*.png", SearchOption.TopDirectoryOnly); }
+            catch { continue; }
+            foreach (string file in files.OrderBy(value => value, StringComparer.OrdinalIgnoreCase))
+            {
+                string name = Path.GetFileNameWithoutExtension(file);
+                yield return new NpcImageOption { path = source.prefix + name, name = name, isMod = source.isMod };
+            }
+        }
+    }
+
+    private void SelectNpcImage(NpcImageOption option)
+    {
+        if (option == null)
+            return;
+        if (!controller.SetNpcActorImage(selectedActorId, option.path, selectingActorIcon, out string error))
+        {
+            if (!string.IsNullOrWhiteSpace(error))
+                Hintbox.OpenHintboxWithContent(error, 16);
+            return;
+        }
+        CloseActorResourcePicker();
+    }
+
+    private void CreateNpcImageItem(NpcImageOption option, int index, Action callback)
+    {
+        const int columnCount = 3;
+        const float columnGap = 8f;
+        const float rowHeight = 74f;
+        int column = index % columnCount;
+        int row = index / columnCount;
+        float cardWidth = (668f - columnGap * (columnCount - 1)) / columnCount;
+
+        GameObject item = new GameObject("NPC Image " + option.name,
+            typeof(RectTransform), typeof(CanvasRenderer), typeof(Image), typeof(Button), typeof(IButton), typeof(Outline));
+        item.transform.SetParent(actorResourceContent, false);
+        item.name = "NPC Image " + option.name;
+        RectTransform rect = item.GetComponent<RectTransform>();
+        rect.anchorMin = new Vector2(0f, 1f);
+        rect.anchorMax = new Vector2(0f, 1f);
+        rect.pivot = new Vector2(0f, 1f);
+        rect.anchoredPosition = new Vector2(column * (cardWidth + columnGap), -4f - row * rowHeight);
+        rect.sizeDelta = new Vector2(cardWidth, 66f);
+
+        Image background = item.GetComponent<Image>();
+        Color normalColor = new Color32(9, 31, 38, 245);
+        Color hoverColor = new Color32(13, 55, 66, 255);
+        background.color = normalColor;
+
+        Outline outline = item.GetComponent<Outline>();
+        outline.effectColor = new Color(Cyan.r, Cyan.g, Cyan.b, .42f);
+        outline.effectDistance = new Vector2(1f, -1f);
+
+        IButton button = item.GetComponent<IButton>();
+        button.button.targetGraphic = background;
+        button.button.transition = Selectable.Transition.None;
+        button.onPointerClickEvent = new UnityEvent();
+        button.onPointerEnterEvent = new UnityEvent();
+        button.onPointerExitEvent = new UnityEvent();
+        button.onPointerClickEvent.AddListener(callback.Invoke);
+        button.onPointerEnterEvent.AddListener(() => background.color = hoverColor);
+        button.onPointerExitEvent.AddListener(() => background.color = normalColor);
+
+        CreateText("NPC Image Name", item.transform, Shorten(option.name, 14), 15, TextAnchor.MiddleLeft,
+            new Color32(205, 238, 242, 255), new Vector2(0f, 1f), new Vector2(0f, 1f),
+            new Vector2(70f, -8f), new Vector2(cardWidth - 78f, 26f));
+        CreateText("NPC Image Source", item.transform, option.isMod ? "当前 Mod · NPC" : "本体 · NPC", 12,
+            TextAnchor.MiddleLeft, HintColor, new Vector2(0f, 1f), new Vector2(0f, 1f),
+            new Vector2(70f, -35f), new Vector2(cardWidth - 78f, 22f));
+
+        GameObject iconObject = new GameObject("Thumbnail", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));
+        iconObject.transform.SetParent(item.transform, false);
+        RectTransform iconRect = iconObject.GetComponent<RectTransform>();
+        iconRect.anchorMin = new Vector2(0f, .5f);
+        iconRect.anchorMax = iconRect.anchorMin;
+        iconRect.pivot = new Vector2(0f, .5f);
+        iconRect.anchoredPosition = new Vector2(7f, 0f);
+        iconRect.sizeDelta = new Vector2(52f, 52f);
+        Image icon = iconObject.GetComponent<Image>();
+        icon.sprite = StorySpriteResolver.Load(option.path);
+        icon.preserveAspect = true;
+        icon.raycastTarget = false;
+    }
+
     private void OpenGraphViewer()
     {
         if (controller.SelectedDocument == null)
@@ -822,6 +1414,10 @@ public class WorkshopStoryBrowserPanel : Panel
             graphOverlay.gameObject.SetActive(graphOverlay == overlay);
         if (nodeManagerOverlay != null)
             nodeManagerOverlay.gameObject.SetActive(nodeManagerOverlay == overlay);
+        if (actorManagerOverlay != null)
+            actorManagerOverlay.gameObject.SetActive(actorManagerOverlay == overlay);
+        if (actorResourceOverlay != null)
+            actorResourceOverlay.gameObject.SetActive(actorResourceOverlay == overlay);
         modalLayer.gameObject.SetActive(true);
         modalLayer.transform.SetAsLastSibling();
         overlay.transform.SetAsLastSibling();
@@ -831,7 +1427,9 @@ public class WorkshopStoryBrowserPanel : Panel
     {
         bool hasOpenModal = (connectionOverlay != null && connectionOverlay.gameObject.activeSelf)
             || (graphOverlay != null && graphOverlay.gameObject.activeSelf)
-            || (nodeManagerOverlay != null && nodeManagerOverlay.gameObject.activeSelf);
+            || (nodeManagerOverlay != null && nodeManagerOverlay.gameObject.activeSelf)
+            || (actorManagerOverlay != null && actorManagerOverlay.gameObject.activeSelf)
+            || (actorResourceOverlay != null && actorResourceOverlay.gameObject.activeSelf);
         if (!hasOpenModal && modalLayer != null)
             modalLayer.gameObject.SetActive(false);
     }

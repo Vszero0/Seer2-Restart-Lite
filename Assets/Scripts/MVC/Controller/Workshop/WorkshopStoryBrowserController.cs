@@ -36,6 +36,41 @@ public sealed class WorkshopStoryBrowserController
         return model.UpdateSelectedStoryMetadata(title, summary, replayable, out error);
     }
 
+    public IReadOnlyList<StoryActorDocument> GetStoryActors()
+    {
+        return model.GetStoryActors();
+    }
+
+    public bool CreateNpcActor(out StoryActorDocument actor, out string error)
+    {
+        return model.CreateNpcActor(out actor, out error);
+    }
+
+    public bool UpdateNpcActor(string actorId, string name, string sourceFacing, bool usePortraitIcon, out string error)
+    {
+        return model.UpdateNpcActor(actorId, name, sourceFacing, usePortraitIcon, out error);
+    }
+
+    public bool SetNpcActorImage(string actorId, string resourcePath, bool isIcon, out string error)
+    {
+        return model.SetNpcActorImage(actorId, resourcePath, isIcon, out error);
+    }
+
+    public bool ImportNpcActorImage(string actorId, string sourcePath, bool isIcon, out string error)
+    {
+        return model.ImportNpcActorImage(actorId, sourcePath, isIcon, out error);
+    }
+
+    public bool AdjustNpcActorCrop(string actorId, float moveX, float moveY, float zoomDelta, out string error)
+    {
+        return model.AdjustNpcActorCrop(actorId, moveX, moveY, zoomDelta, out error);
+    }
+
+    public bool DeleteNpcActor(string actorId, out string error)
+    {
+        return model.DeleteNpcActor(actorId, out error);
+    }
+
     public bool CreateNode(out string error)
     {
         return model.CreateNode(out error);

@@ -256,7 +256,7 @@ public class WorkshopStoryNodeEditorPanel : Panel
             new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(10f, -35f), new Vector2(34f, 20f));
         sceneActorDropdown = CreateDropdown(editorActions, new Vector2(46f, -33f), new Vector2(200f, 25f), OnSceneActorDropdownChanged);
         sceneActorDropdownValueText = CreateSelectorValueText(sceneActorDropdown);
-        CreateToolbarButton(editorActions, "添加精灵", new Vector2(254f, -33f), new Vector2(65f, 25f), OpenPetPicker, false);
+        CreateToolbarButton(editorActions, "添加角色", new Vector2(254f, -33f), new Vector2(65f, 25f), OpenActorPicker, false);
         CreateToolbarButton(editorActions, "移除", new Vector2(327f, -33f), new Vector2(50f, 25f), RemoveActiveSceneActor, false);
         CreateToolbarButton(editorActions, "放左", new Vector2(385f, -33f), new Vector2(48f, 25f), () => SetActiveActorSide("left"), false);
         CreateToolbarButton(editorActions, "放右", new Vector2(441f, -33f), new Vector2(48f, 25f), () => SetActiveActorSide("right"), false);
@@ -810,7 +810,9 @@ public class WorkshopStoryNodeEditorPanel : Panel
             iconPos = isNarration ? "0,0" : DefaultIconPosition,
             name = isNarration ? "旁白" : actor.displayName,
             storySpeakerSide = placement?.normalizedSide ?? "left",
-            storyFlipIcon = placement != null && placement.flipIcon,
+            storyFlipIcon = placement != null && (placement.flipIcon != (actor?.sourceFacesLeft ?? false)),
+            storyUseIconCrop = actor != null && actor.usesPortraitIcon,
+            storyIconCrop = actor?.normalizedIconCrop ?? new Rect(0f, 0f, 1f, 1f),
             storyExpression = command?.expression,
             storyTextStyle = node.style ?? document.style,
             rawContent = content,
@@ -1118,9 +1120,35 @@ public class WorkshopStoryNodeEditorPanel : Panel
         RefreshCanvas();
     }
 
-    private void OpenPetPicker()
+    private void OpenActorPicker()
     {
-        resourcePicker?.OpenPets(controller.GetPetOptions, AddPet);
+        resourcePicker?.OpenAddActors(controller.GetAddActorOptions, AddActor);
+    }
+
+    private void AddActor(WorkshopStoryPointAddActorOption option)
+    {
+        if (option == null)
+            return;
+        if (option.isPet)
+        {
+            AddPet(option.petId);
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(activeSceneId))
+        {
+            Hintbox.OpenHintboxWithContent("请先新建并选择一个场景。", 16);
+            return;
+        }
+        if (!controller.AddStoryActor(option.actorId, activeSceneId, out StoryActorDocument actor, out string error))
+        {
+            Hintbox.OpenHintboxWithContent(error, 16);
+            return;
+        }
+
+        resourcePicker?.Close();
+        activeSceneActorId = actor.id;
+        RefreshCanvas();
     }
 
     private void AddPet(int petId)
@@ -1319,7 +1347,7 @@ public class WorkshopStoryNodeEditorPanel : Panel
         List<WorkshopStoryPointActorOption> actors = controller.GetVisibleActorOptions(activeSceneId);
         if (actors.Count == 0)
         {
-            Hintbox.OpenHintboxWithContent("请先在“精灵资源”中添加精灵，并让它显示在当前场景。", 16);
+            Hintbox.OpenHintboxWithContent("请先通过“添加角色”加入角色，并让它显示在当前场景。", 16);
             return;
         }
 
@@ -1875,7 +1903,7 @@ public class WorkshopStoryNodeEditorPanel : Panel
     {
         if (string.IsNullOrWhiteSpace(activeSceneActorId))
         {
-            Hintbox.OpenHintboxWithContent("请先在“场景角色”中加入精灵。", 16);
+            Hintbox.OpenHintboxWithContent("请先在“场景角色”中加入角色。", 16);
             return;
         }
 

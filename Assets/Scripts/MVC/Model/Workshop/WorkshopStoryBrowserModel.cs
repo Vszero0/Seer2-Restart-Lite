@@ -1,7 +1,9 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using UnityEngine;
+using UnityEngine.UI;
 
 public sealed class WorkshopStoryBrowserModel
 {
@@ -88,6 +90,245 @@ public sealed class WorkshopStoryBrowserModel
         HasUnsavedChanges = true;
         error = string.Empty;
         return true;
+    }
+
+    public IReadOnlyList<StoryActorDocument> GetStoryActors()
+    {
+        return (SelectedDocument?.actors ?? Array.Empty<StoryActorDocument>())
+            .Where(actor => actor != null)
+            .OrderBy(actor => string.Equals(actor.actorType, "npc", StringComparison.OrdinalIgnoreCase) ? 0 : 1)
+            .ThenBy(actor => actor.displayName, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+    }
+
+    public bool CreateNpcActor(out StoryActorDocument actor, out string error)
+    {
+        actor = null;
+        if (!TryGetSelectedDocument(out error))
+            return false;
+
+        int index = 1;
+        string actorId;
+        do
+        {
+            actorId = "actor_" + index++;
+        }
+        while ((SelectedDocument.actors ?? Array.Empty<StoryActorDocument>())
+            .Any(value => value != null && string.Equals(value.id, actorId, StringComparison.OrdinalIgnoreCase)));
+
+        actor = new StoryActorDocument
+        {
+            id = actorId,
+            actorType = "npc",
+            name = "未命名角色",
+            sourceFacing = "right",
+            iconMode = "crop",
+            defaultScale = 1f,
+        };
+        SelectedDocument.actors = (SelectedDocument.actors ?? Array.Empty<StoryActorDocument>())
+            .Where(value => value != null)
+            .Append(actor)
+            .ToArray();
+        MarkUnsaved();
+        error = string.Empty;
+        return true;
+    }
+
+    public bool UpdateNpcActor(string actorId, string name, string sourceFacing, bool usePortraitIcon, out string error)
+    {
+        if (!TryGetNpcActor(actorId, out StoryActorDocument actor, out error))
+            return false;
+
+        actor.name = string.IsNullOrWhiteSpace(name) ? "未命名角色" : name.Trim();
+        actor.sourceFacing = string.Equals(sourceFacing, "left", StringComparison.OrdinalIgnoreCase) ? "left" : "right";
+        actor.iconMode = usePortraitIcon ? "crop" : "separate";
+        actor.icon = usePortraitIcon ? actor.sprite : actor.independentIcon;
+        if (usePortraitIcon
+            && actor.iconCropWidth <= 0f
+            && actor.iconCropHeight <= 0f
+            && !string.IsNullOrWhiteSpace(actor.sprite))
+        {
+            Sprite portrait = StorySpriteResolver.Load(actor.sprite,
+                actor.sprite.StartsWith("Mod/", StringComparison.OrdinalIgnoreCase) ? "mod" : "builtin");
+            if (portrait != null && portrait != SpriteSet.Empty)
+                ApplyCrop(actor, StorySpriteResolver.GetDefaultIconCrop(portrait));
+        }
+        MarkUnsaved();
+        error = string.Empty;
+        return true;
+    }
+
+    public bool SetNpcActorImage(string actorId, string resourcePath, bool isIcon, out string error)
+    {
+        if (!TryGetNpcActor(actorId, out StoryActorDocument actor, out error))
+            return false;
+
+        if (string.IsNullOrWhiteSpace(resourcePath))
+        {
+            error = "请选择有效的图片资源。";
+            return false;
+        }
+
+        Sprite sprite = StorySpriteResolver.Load(resourcePath, resourcePath.StartsWith("Mod/", StringComparison.OrdinalIgnoreCase) ? "mod" : "builtin");
+        if (sprite == null || sprite == SpriteSet.Empty)
+        {
+            error = "无法读取图片资源：" + resourcePath;
+            return false;
+        }
+
+        if (isIcon)
+        {
+            actor.independentIcon = resourcePath;
+            actor.iconMode = "separate";
+            actor.icon = resourcePath;
+        }
+        else
+        {
+            actor.sprite = resourcePath;
+            if (actor.usesPortraitIcon)
+            {
+                actor.icon = resourcePath;
+                ApplyCrop(actor, StorySpriteResolver.GetDefaultIconCrop(sprite));
+            }
+        }
+
+        MarkUnsaved();
+        error = string.Empty;
+        return true;
+    }
+
+    public bool ImportNpcActorImage(string actorId, string sourcePath, bool isIcon, out string error)
+    {
+        if (!TryGetNpcActor(actorId, out StoryActorDocument actor, out error))
+            return false;
+        if (!SaveSystem.TryLoadAllBytes(sourcePath, out byte[] bytes)
+            || !SpriteSet.TryCreateSpriteFromBytes(bytes, out Sprite sprite))
+        {
+            error = "选择的图片无法读取，请使用 PNG 图片。";
+            return false;
+        }
+
+        try
+        {
+            string storyId = MakeSafePathSegment(SelectedDocument.id, "story");
+            string safeActorId = MakeSafePathSegment(actor.id, "actor");
+            string kind = isIcon ? "icon" : "portrait";
+            string relativePath = Path.Combine("Stories", "Assets", storyId, "Actors", safeActorId, kind)
+                .Replace('\\', '/');
+            string absolutePath = Path.Combine(Application.persistentDataPath, "Mod", relativePath + ".png");
+            Directory.CreateDirectory(Path.GetDirectoryName(absolutePath));
+            File.WriteAllBytes(absolutePath, bytes);
+
+            string resourcePath = "Mod/" + relativePath;
+            ResourceManager.instance?.Set("Mod/" + relativePath, sprite);
+            if (isIcon)
+            {
+                actor.independentIcon = resourcePath;
+                actor.iconMode = "separate";
+                actor.icon = resourcePath;
+            }
+            else
+            {
+                actor.sprite = resourcePath;
+                if (actor.usesPortraitIcon)
+                {
+                    actor.icon = resourcePath;
+                    ApplyCrop(actor, StorySpriteResolver.GetDefaultIconCrop(sprite));
+                }
+            }
+
+            MarkUnsaved();
+            error = string.Empty;
+            return true;
+        }
+        catch (Exception exception)
+        {
+            error = "导入图片失败：" + exception.Message;
+            return false;
+        }
+    }
+
+    public bool AdjustNpcActorCrop(string actorId, float moveX, float moveY, float zoomDelta, out string error)
+    {
+        if (!TryGetNpcActor(actorId, out StoryActorDocument actor, out error))
+            return false;
+        if (!actor.usesPortraitIcon || string.IsNullOrWhiteSpace(actor.sprite))
+        {
+            error = "当前角色没有使用立绘裁剪头像。";
+            return false;
+        }
+
+        Rect crop = actor.normalizedIconCrop;
+        Vector2 center = crop.center + new Vector2(moveX * crop.width, moveY * crop.height);
+        float scale = Mathf.Clamp(1f + zoomDelta, .5f, 1.5f);
+        crop.width = Mathf.Clamp(crop.width * scale, .05f, 1f);
+        crop.height = Mathf.Clamp(crop.height * scale, .05f, 1f);
+        crop.x = center.x - crop.width * .5f;
+        crop.y = center.y - crop.height * .5f;
+        ApplyCrop(actor, crop);
+        MarkUnsaved();
+        error = string.Empty;
+        return true;
+    }
+
+    public bool DeleteNpcActor(string actorId, out string error)
+    {
+        if (!TryGetNpcActor(actorId, out StoryActorDocument actor, out error))
+            return false;
+
+        bool referenced = (SelectedDocument.nodes ?? Array.Empty<StoryNodeDocument>()).Any(node => node != null
+            && ((node.actorReferences ?? Array.Empty<StoryActorReferenceDocument>()).Any(reference => reference != null
+                    && string.Equals(reference.actorId, actorId, StringComparison.OrdinalIgnoreCase))
+                || (node.scenes ?? Array.Empty<StorySceneDocument>()).Any(scene => scene != null
+                    && (scene.actors ?? Array.Empty<StorySceneActorLayoutDocument>()).Any(layout => layout != null
+                        && string.Equals(layout.actorId, actorId, StringComparison.OrdinalIgnoreCase)))
+                || (node.commands ?? Array.Empty<StoryCommandDocument>()).Any(command => command != null
+                    && string.Equals(command.actor, actorId, StringComparison.OrdinalIgnoreCase))));
+        if (referenced)
+        {
+            error = "该角色已被剧情点、场景或对白引用，请先移除相关引用。";
+            return false;
+        }
+
+        SelectedDocument.actors = (SelectedDocument.actors ?? Array.Empty<StoryActorDocument>())
+            .Where(value => value != null && value != actor)
+            .ToArray();
+        MarkUnsaved();
+        error = string.Empty;
+        return true;
+    }
+
+    private bool TryGetNpcActor(string actorId, out StoryActorDocument actor, out string error)
+    {
+        actor = (SelectedDocument?.actors ?? Array.Empty<StoryActorDocument>())
+            .FirstOrDefault(value => value != null
+                && string.Equals(value.id, actorId, StringComparison.OrdinalIgnoreCase)
+                && string.Equals(value.actorType, "npc", StringComparison.OrdinalIgnoreCase));
+        if (actor == null)
+        {
+            error = "找不到要编辑的剧本角色。";
+            return false;
+        }
+
+        error = string.Empty;
+        return true;
+    }
+
+    private static void ApplyCrop(StoryActorDocument actor, Rect crop)
+    {
+        crop = StorySpriteResolver.NormalizeCrop(crop.x, crop.y, crop.width, crop.height);
+        actor.iconCropX = crop.x;
+        actor.iconCropY = crop.y;
+        actor.iconCropWidth = crop.width;
+        actor.iconCropHeight = crop.height;
+    }
+
+    private static string MakeSafePathSegment(string value, string fallback)
+    {
+        string result = string.IsNullOrWhiteSpace(value) ? fallback : value.Trim();
+        foreach (char invalid in Path.GetInvalidFileNameChars())
+            result = result.Replace(invalid, '_');
+        return string.IsNullOrWhiteSpace(result) ? fallback : result;
     }
 
     public bool CreateNode(out string error)
