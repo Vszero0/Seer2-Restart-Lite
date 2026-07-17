@@ -1796,7 +1796,6 @@ public class WorkshopStoryNodeEditorPanel : Panel
         }
 
         RefreshDirtyState();
-        Hintbox.OpenHintboxWithContent("剧情点草稿已保存。", 16);
     }
 
     private void PreviewDraft()
