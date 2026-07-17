@@ -111,7 +111,7 @@ public class MapWildNpcTalkController : MonoBehaviour
         bubbleView.ShowImage(sprite, duration);
     }
 
-    private Sprite GetTalkImage(string id)
+    public Sprite GetTalkImage(string id)
     {
         if (string.IsNullOrWhiteSpace(id))
             return null;
@@ -244,5 +244,53 @@ public class MapWildNpcTalkController : MonoBehaviour
     {
         if (bubbleHost == null)
             bubbleHost = GetComponentInChildren<MapWildNpcBubbleHost>(true);
+    }
+}
+
+/// <summary>
+/// Shared catalog for the built-in small expressions used by map NPC bubbles and story portraits.
+/// Story JSON stores the stable emoji/toon/... id and never treats these built-in sprites as Mod resources.
+/// </summary>
+public static class StoryExpressionCatalog
+{
+    private const string ExternalPathPrefix = "Map/talk bubble/";
+    private static MapWildNpcTalkController fallbackLibrary;
+
+    public static readonly string[] Ids =
+    {
+        "emoji/toon/alert", "emoji/toon/angry", "emoji/toon/annoyed", "emoji/toon/cool",
+        "emoji/toon/cry", "emoji/toon/dizzy", "emoji/toon/grin", "emoji/toon/happy",
+        "emoji/toon/hypno", "emoji/toon/laugh", "emoji/toon/love", "emoji/toon/mute",
+        "emoji/toon/shocked", "emoji/toon/shy", "emoji/toon/sick", "emoji/toon/silly",
+        "emoji/toon/skull", "emoji/toon/sleepy", "emoji/toon/smug", "emoji/toon/star_eyes",
+        "emoji/toon/sunglasses", "emoji/toon/surprised", "emoji/toon/sweat", "emoji/toon/worried"
+    };
+
+    public static string Normalize(string id)
+    {
+        if (string.IsNullOrWhiteSpace(id))
+            return null;
+
+        string normalized = id.Replace('\\', '/').Trim('/');
+        return Array.Find(Ids, value => string.Equals(value, normalized, StringComparison.OrdinalIgnoreCase));
+    }
+
+    public static Sprite Load(string id)
+    {
+        string normalized = Normalize(id);
+        if (normalized == null)
+            return null;
+
+        Sprite sprite = ResourceManager.instance?.GetLocalAddressables<Sprite>(ExternalPathPrefix + normalized);
+        if (sprite != null)
+            return sprite;
+
+        if (fallbackLibrary == null)
+        {
+            GameObject prefab = Resources.Load<GameObject>("Prefabs/Map/Npc");
+            fallbackLibrary = prefab?.GetComponentInChildren<MapWildNpcTalkController>(true);
+        }
+
+        return fallbackLibrary?.GetTalkImage(normalized);
     }
 }

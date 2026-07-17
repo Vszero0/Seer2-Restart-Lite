@@ -59,7 +59,7 @@ public static class StoryDocumentCodec
         int sourceVersion = document.schemaVersion;
         if (sourceVersion < 6)
             MigrateConnectionTransitionsToScenes(document);
-        document.schemaVersion = Math.Max(6, document.schemaVersion);
+        document.schemaVersion = Math.Max(7, document.schemaVersion);
         foreach (StoryNodeDocument node in document.nodes ?? Array.Empty<StoryNodeDocument>())
         {
             if (node != null && string.IsNullOrWhiteSpace(node.flowRole))
@@ -92,6 +92,8 @@ public static class StoryDocumentCodec
 
             foreach (StoryCommandDocument command in node?.commands ?? Array.Empty<StoryCommandDocument>())
             {
+                if (command != null)
+                    command.expression = StoryExpressionCatalog.Normalize(command.expression);
                 NormalizeConditionGroup(command?.condition);
                 NormalizeConditionGroup(command?.displayCondition);
             }

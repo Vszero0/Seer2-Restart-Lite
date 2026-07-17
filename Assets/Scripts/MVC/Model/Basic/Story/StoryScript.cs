@@ -41,6 +41,7 @@ public class StoryCommand
     public string actorId;
     public string choiceId;
     public string speaker;
+    public string expression;
     public string text;
     public StoryActorDocument actorInfo;
     public StoryActorDocument[] sceneActors;

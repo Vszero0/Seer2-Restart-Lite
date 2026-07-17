@@ -151,6 +151,43 @@ public sealed class WorkshopStoryNodeEditorModel
         return true;
     }
 
+    public bool UpdateCommandExpression(string commandId, string expression, out string error)
+    {
+        if (DraftNode == null)
+        {
+            error = "当前没有可编辑的剧情点草稿。";
+            return false;
+        }
+
+        StoryCommandDocument command = (DraftNode.commands ?? Array.Empty<StoryCommandDocument>())
+            .FirstOrDefault(value => value != null
+                && string.Equals(value.commandId, commandId, StringComparison.OrdinalIgnoreCase));
+        if (command == null)
+        {
+            error = "找不到要设置表情的对白。";
+            return false;
+        }
+
+        string type = (command.type ?? string.Empty).Trim().ToLowerInvariant();
+        if ((type != "say" && type != "choice") || string.IsNullOrWhiteSpace(command.actor))
+        {
+            error = "只有已绑定角色的对白可以设置表情。";
+            return false;
+        }
+
+        string normalized = StoryExpressionCatalog.Normalize(expression);
+        if (!string.IsNullOrWhiteSpace(expression) && normalized == null)
+        {
+            error = "选择的表情不存在。";
+            return false;
+        }
+
+        command.expression = normalized;
+        HasUnsavedChanges = true;
+        error = string.Empty;
+        return true;
+    }
+
     /// <summary>
     /// 剧情点的地图候选来自本体 XML 与当前已载入地图；未在列表中的 Mod 地图由编辑器按 ID 载入。
     /// 选择后仍通过 Map.GetMap 载入，确保背景与默认 BGM 遵循地图 XML。

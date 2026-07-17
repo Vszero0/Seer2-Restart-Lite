@@ -162,7 +162,7 @@ public class StoryTextStyleDocument
 [Serializable]
 public class StoryDocument
 {
-    public int schemaVersion = 6;
+    public int schemaVersion = 7;
     public string status = "published";
     public string id;
     public string title;
@@ -498,6 +498,7 @@ public class StoryCommandDocument
     public string bg;
     public StoryTransitionDocument transition;
     public string actor;
+    public string expression;
     public string text;
     public string target;
     public string args;
@@ -556,6 +557,7 @@ public class StoryCommandDocument
                 command.actorId = actor;
                 command.actorInfo = document?.GetActor(actor);
                 command.speaker = GetActorName(document);
+                command.expression = expression;
                 command.text = text;
                 return command;
             case "narrate":
@@ -567,6 +569,7 @@ public class StoryCommandDocument
                 command.actorId = actor;
                 command.actorInfo = document?.GetActor(actor);
                 command.speaker = GetActorName(document);
+                command.expression = expression;
                 command.text = text;
                 command.choices = (choices ?? Array.Empty<StoryChoiceDocument>())
                     .Select(x => x?.ToChoice())

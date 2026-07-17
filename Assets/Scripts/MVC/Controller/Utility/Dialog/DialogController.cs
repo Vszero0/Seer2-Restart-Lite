@@ -23,6 +23,10 @@ public class DialogController : Module
         dialogView.SetReplyClickHandler(handler);
     }
 
+    public void SetStorySpeakerIconClickHandler(Action handler) {
+        dialogView.SetStorySpeakerIconClickHandler(handler);
+    }
+
     public void OnBackgroundClick() {
         if (backgroundClickHandler != null)
         {

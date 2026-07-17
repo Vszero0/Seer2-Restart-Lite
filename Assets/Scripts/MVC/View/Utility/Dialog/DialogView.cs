@@ -26,9 +26,11 @@ public class DialogView : Module
 
     private Action<NpcButtonHandler> replyClickHandler;
     private Image storySpeakerIcon;
+    private Image storySpeakerExpression;
     private TextMeshProUGUI storySpeakerText;
     private RectTransform storySpeakerGroupRect;
     private RectTransform storySpeakerIconRect;
+    private RectTransform storySpeakerExpressionRect;
     private RectTransform storySpeakerRect;
     private RectTransform contentTextRect;
     private CanvasGroup storyContentCanvasGroup;
@@ -52,6 +54,7 @@ public class DialogView : Module
     private Color defaultOutlineColor;
     private float defaultOutlineWidth;
     private bool hasDefaultLayout;
+    private Action storySpeakerIconClickHandler;
 
     protected override void Awake()
     {
@@ -151,6 +154,13 @@ public class DialogView : Module
         defaultOutlineWidth = content.text.outlineWidth;
     }
 
+    public void SetStorySpeakerIconClickHandler(Action handler)
+    {
+        storySpeakerIconClickHandler = handler;
+        EnsureStorySpeakerBlock();
+        RefreshStorySpeakerIconButton();
+    }
+
     private void ApplyStoryTextStyle(StoryTextStyleDocument style)
     {
         TMP_FontAsset font = null;
@@ -238,6 +248,11 @@ public class DialogView : Module
             storySpeakerIcon.sprite = null;
         storySpeakerIcon.color = isActiveSpeaker ? Color.white : new Color32(150, 150, 150, 255);
 
+        Sprite expression = hasSpeakerIcon ? StoryExpressionCatalog.Load(info.storyExpression) : null;
+        storySpeakerExpression.gameObject.SetActive(expression != null);
+        storySpeakerExpression.sprite = expression;
+        RefreshStorySpeakerIconButton();
+
         storySpeakerText.gameObject.SetActive(hasSpeaker);
         storySpeakerText.text = speakerText;
         storySpeakerText.color = isActiveSpeaker ? new Color32(255, 230, 92, 255) : new Color32(185, 190, 196, 255);
@@ -289,6 +304,14 @@ public class DialogView : Module
         storySpeakerIconRect.sizeDelta = new Vector2(speakerIconSize, speakerIconSize);
         storySpeakerIconRect.localScale = new Vector3(info.storyFlipIcon ? -1f : 1f, 1f, 1f);
 
+        storySpeakerExpressionRect.anchorMin = new Vector2(0.5f, 0.5f);
+        storySpeakerExpressionRect.anchorMax = new Vector2(0.5f, 0.5f);
+        storySpeakerExpressionRect.pivot = new Vector2(0.5f, 0.5f);
+        storySpeakerExpressionRect.anchoredPosition = storySpeakerIconRect.anchoredPosition + new Vector2(16f, -14f);
+        storySpeakerExpressionRect.sizeDelta = new Vector2(30f, 30f);
+        storySpeakerExpressionRect.localScale = Vector3.one;
+        storySpeakerExpressionRect.SetAsLastSibling();
+
         storySpeakerRect.anchorMin = new Vector2(0.5f, 0.5f);
         storySpeakerRect.anchorMax = new Vector2(0.5f, 0.5f);
         storySpeakerRect.pivot = new Vector2(0.5f, 0.5f);
@@ -309,6 +332,9 @@ public class DialogView : Module
 
         if (storySpeakerIcon != null)
             storySpeakerIcon.gameObject.SetActive(false);
+
+        if (storySpeakerExpression != null)
+            storySpeakerExpression.gameObject.SetActive(false);
 
         if (storyFadeCoroutine != null)
         {
@@ -355,6 +381,19 @@ public class DialogView : Module
         storySpeakerIcon.preserveAspect = true;
         storySpeakerIcon.raycastTarget = false;
 
+        Button iconButton = iconObj.AddComponent<Button>();
+        iconButton.transition = Selectable.Transition.None;
+        iconButton.targetGraphic = storySpeakerIcon;
+        iconButton.onClick.AddListener(() => storySpeakerIconClickHandler?.Invoke());
+
+        GameObject expressionObj = new GameObject("Story Speaker Expression", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));
+        expressionObj.transform.SetParent(storySpeakerGroupRect, false);
+        storySpeakerExpressionRect = expressionObj.GetComponent<RectTransform>();
+        storySpeakerExpression = expressionObj.GetComponent<Image>();
+        storySpeakerExpression.preserveAspect = true;
+        storySpeakerExpression.raycastTarget = false;
+        storySpeakerExpression.gameObject.SetActive(false);
+
         GameObject textObj = new GameObject("Story Speaker Name", typeof(RectTransform), typeof(CanvasRenderer), typeof(TextMeshProUGUI));
         textObj.transform.SetParent(storySpeakerGroupRect, false);
         storySpeakerRect = textObj.GetComponent<RectTransform>();
@@ -365,6 +404,19 @@ public class DialogView : Module
         storySpeakerText.raycastTarget = false;
         storySpeakerText.enableWordWrapping = true;
         storySpeakerText.richText = true;
+        RefreshStorySpeakerIconButton();
+    }
+
+    private void RefreshStorySpeakerIconButton()
+    {
+        if (storySpeakerIcon == null)
+            return;
+
+        Button button = storySpeakerIcon.GetComponent<Button>();
+        bool canClick = storySpeakerIconClickHandler != null && storySpeakerIcon.gameObject.activeSelf;
+        storySpeakerIcon.raycastTarget = canClick;
+        if (button != null)
+            button.interactable = canClick;
     }
 
     private Sprite GetStorySpeakerIcon(DialogInfo info)

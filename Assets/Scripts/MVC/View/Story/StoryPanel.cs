@@ -325,7 +325,7 @@ public class StoryPanel : Panel
                     UnregisterActor(command.args);
                     continue;
                 case StoryCommandType.Say:
-                    SetDialogue(command.actorInfo, command.speaker, command.text);
+                    SetDialogue(command.actorInfo, command.speaker, command.text, command.expression);
                     return;
                 case StoryCommandType.Narrate:
                     SetNarration(command.text);
@@ -860,14 +860,14 @@ public class StoryPanel : Panel
         actorStage.Hide(tokens.Length == 0 ? null : tokens[0]);
     }
 
-    private void SetDialogue(StoryActorDocument actor, string speaker, string content)
+    private void SetDialogue(StoryActorDocument actor, string speaker, string content, string expression = null)
     {
         waitingForChoice = false;
         DialogManager.instance.SetStoryDialogReplyClickHandler(null);
         DialogManager.instance.ClearStoryChoices();
         DialogManager.instance.SetStoryDialogBackgroundClickHandler(Advance);
         actorStage?.SetActiveActor(actor?.id);
-        lastDialogInfo = CreateDialogInfo(actor, speaker, content, new List<NpcButtonHandler>());
+        lastDialogInfo = CreateDialogInfo(actor, speaker, content, new List<NpcButtonHandler>(), expression);
         DialogManager.instance.OpenStoryDialog(lastDialogInfo, false);
         RefreshOverlayLayering();
     }
@@ -894,7 +894,7 @@ public class StoryPanel : Panel
         }
 
         if (!string.IsNullOrWhiteSpace(command.text))
-            SetDialogue(command.actorInfo, command.speaker, command.text);
+            SetDialogue(command.actorInfo, command.speaker, command.text, command.expression);
 
         waitingForChoice = true;
         DialogManager.instance.SetStoryDialogBackgroundClickHandler(Advance);
@@ -932,7 +932,8 @@ public class StoryPanel : Panel
             : "left";
     }
 
-    private DialogInfo CreateDialogInfo(StoryActorDocument actor, string speaker, string content, List<NpcButtonHandler> replyHandlers)
+    private DialogInfo CreateDialogInfo(StoryActorDocument actor, string speaker, string content,
+        List<NpcButtonHandler> replyHandlers, string expression = null)
     {
         string iconPath = actor?.icon;
         bool hasIcon = !string.IsNullOrEmpty(iconPath);
@@ -947,6 +948,7 @@ public class StoryPanel : Panel
             name = speaker ?? string.Empty,
             storySpeakerSide = placement?.normalizedSide ?? "left",
             storyFlipIcon = placement != null && placement.flipIcon,
+            storyExpression = expression,
             storyTextStyle = story?.textStyle,
             rawContent = content ?? string.Empty,
             functionHandler = new List<NpcButtonHandler>(),

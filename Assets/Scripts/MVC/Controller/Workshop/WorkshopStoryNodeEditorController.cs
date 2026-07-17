@@ -37,6 +37,11 @@ public sealed class WorkshopStoryNodeEditorController
         return model.UpdateCommandText(commandId, text, out error);
     }
 
+    public bool UpdateCommandExpression(string commandId, string expression, out string error)
+    {
+        return model.UpdateCommandExpression(commandId, expression, out error);
+    }
+
     public bool EnsureNarrationCommand(out StoryCommandDocument command, out string error)
     {
         return model.EnsureNarrationCommand(out command, out error);

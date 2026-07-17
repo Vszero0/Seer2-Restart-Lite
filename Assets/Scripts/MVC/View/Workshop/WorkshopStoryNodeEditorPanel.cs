@@ -47,6 +47,7 @@ public class WorkshopStoryNodeEditorPanel : Panel
     private RectTransform toolbar;
     private RectTransform editorActions;
     private RectTransform choiceEditor;
+    private RectTransform expressionPickerOverlay;
     private Text nodeTitleText;
     private IInputField nodeNameInput;
     private InputField nativeNodeNameInput;
@@ -138,6 +139,7 @@ public class WorkshopStoryNodeEditorPanel : Panel
         StopSceneTransitionPreview(false);
         RestoreMusicContext();
         resourcePicker?.Close();
+        CloseExpressionPicker();
         actorStage?.Clear();
         base.ClosePanel();
         onClosed?.Invoke();
@@ -792,6 +794,11 @@ public class WorkshopStoryNodeEditorPanel : Panel
             ? (canEditDialogue ? "点击此处输入旁白" : "请先点击背景选择本剧情点的地图")
             : command.text ?? string.Empty;
 
+        bool canSelectExpression = !isNarration && command != null
+            && (commandType == "say" || commandType == "choice")
+            && !string.IsNullOrWhiteSpace(command.actor);
+        dialogController.SetStorySpeakerIconClickHandler(canSelectExpression ? OpenExpressionPicker : null);
+
         dialogController.OpenDialog(new DialogInfo
         {
             id = "story",
@@ -801,6 +808,7 @@ public class WorkshopStoryNodeEditorPanel : Panel
             name = isNarration ? "旁白" : actor.displayName,
             storySpeakerSide = placement?.normalizedSide ?? "left",
             storyFlipIcon = placement != null && placement.flipIcon,
+            storyExpression = command?.expression,
             storyTextStyle = node.style ?? document.style,
             rawContent = content,
             functionHandler = new List<NpcButtonHandler>(),
@@ -811,6 +819,142 @@ public class WorkshopStoryNodeEditorPanel : Panel
 
         actorStage.SetActiveActor(isNarration ? null : actor.id);
         RefreshDialogueInput(command, canEditDialogue);
+    }
+
+    private void OpenExpressionPicker()
+    {
+        if (activeDialogueCommand == null || string.IsNullOrWhiteSpace(activeDialogueCommand.actor))
+            return;
+
+        string commandType = (activeDialogueCommand.type ?? string.Empty).Trim().ToLowerInvariant();
+        if (commandType != "say" && commandType != "choice")
+            return;
+
+        CloseExpressionPicker();
+
+        GameObject overlayObject = new GameObject("Story Expression Picker Overlay", typeof(RectTransform),
+            typeof(CanvasRenderer), typeof(Image), typeof(Button));
+        overlayObject.transform.SetParent(transform, false);
+        expressionPickerOverlay = overlayObject.GetComponent<RectTransform>();
+        expressionPickerOverlay.anchorMin = Vector2.zero;
+        expressionPickerOverlay.anchorMax = Vector2.one;
+        expressionPickerOverlay.offsetMin = Vector2.zero;
+        expressionPickerOverlay.offsetMax = Vector2.zero;
+        expressionPickerOverlay.SetAsLastSibling();
+
+        Image mask = overlayObject.GetComponent<Image>();
+        mask.color = new Color(0f, 0f, 0f, .68f);
+        mask.raycastTarget = true;
+        Button maskButton = overlayObject.GetComponent<Button>();
+        maskButton.transition = Selectable.Transition.None;
+        maskButton.onClick.AddListener(CloseExpressionPicker);
+
+        RectTransform panel = CreateRect("Story Expression Picker", expressionPickerOverlay,
+            new Vector2(.5f, .5f), new Vector2(.5f, .5f), Vector2.zero, new Vector2(430f, 360f));
+        Image panelBackground = panel.gameObject.AddComponent<Image>();
+        panelBackground.color = new Color32(4, 24, 31, 252);
+        panelBackground.raycastTarget = true;
+        Button panelBlocker = panel.gameObject.AddComponent<Button>();
+        panelBlocker.transition = Selectable.Transition.None;
+        Outline border = panel.gameObject.AddComponent<Outline>();
+        border.effectColor = Cyan;
+        border.effectDistance = new Vector2(1f, -1f);
+
+        CreateText("Expression Picker Title", panel, "选择对白表情", 22, TextAnchor.MiddleCenter, Cyan,
+            new Vector2(.5f, 1f), new Vector2(.5f, 1f), new Vector2(0f, -16f), new Vector2(260f, 32f));
+        CreateText("Expression Picker Hint", panel, "表情只作用于当前这一句对白", 13,
+            TextAnchor.MiddleCenter, new Color32(180, 220, 230, 255), new Vector2(.5f, 1f),
+            new Vector2(.5f, 1f), new Vector2(0f, -48f), new Vector2(300f, 22f));
+        CreateToolbarButton(panel, "关闭", new Vector2(-12f, -12f), new Vector2(66f, 26f),
+            CloseExpressionPicker, true);
+
+        CreateExpressionOption(panel, null, "默认", 0);
+        string[] labels =
+        {
+            "警觉", "生气", "不耐", "酷", "哭泣", "眩晕", "坏笑", "开心",
+            "催眠", "大笑", "喜爱", "无语", "震惊", "害羞", "难受", "调皮",
+            "骷髅", "困倦", "得意", "星星眼", "墨镜", "惊讶", "流汗", "担忧"
+        };
+        for (int index = 0; index < StoryExpressionCatalog.Ids.Length; index++)
+            CreateExpressionOption(panel, StoryExpressionCatalog.Ids[index], labels[index], index + 1);
+    }
+
+    private void CreateExpressionOption(RectTransform panel, string expressionId, string label, int index)
+    {
+        const int columns = 5;
+        const float cellWidth = 76f;
+        const float cellHeight = 52f;
+        int column = index % columns;
+        int row = index / columns;
+        float x = 25f + column * cellWidth;
+        float y = -79f - row * cellHeight;
+
+        Text buttonText = CreateToolbarButton(panel, label, new Vector2(x, y), new Vector2(68f, 45f),
+            () => SelectExpression(expressionId), false);
+        if (buttonText == null)
+            return;
+
+        IButton expressionButton = buttonText.GetComponentInParent<IButton>();
+        Transform buttonRoot = expressionButton == null ? buttonText.transform.parent : expressionButton.transform;
+
+        RectTransform textRect = buttonText.rectTransform;
+        textRect.anchorMin = new Vector2(0f, 0f);
+        textRect.anchorMax = new Vector2(1f, 0f);
+        textRect.pivot = new Vector2(.5f, 0f);
+        textRect.anchoredPosition = new Vector2(0f, 2f);
+        textRect.sizeDelta = new Vector2(-4f, 14f);
+        buttonText.fontSize = 10;
+        buttonText.alignment = TextAnchor.MiddleCenter;
+
+        if (!string.IsNullOrEmpty(expressionId))
+        {
+            GameObject iconObject = new GameObject("Expression Icon", typeof(RectTransform),
+                typeof(CanvasRenderer), typeof(Image));
+            iconObject.transform.SetParent(buttonRoot, false);
+            RectTransform iconRect = iconObject.GetComponent<RectTransform>();
+            iconRect.anchorMin = new Vector2(.5f, 1f);
+            iconRect.anchorMax = new Vector2(.5f, 1f);
+            iconRect.pivot = new Vector2(.5f, 1f);
+            iconRect.anchoredPosition = new Vector2(0f, -2f);
+            iconRect.sizeDelta = new Vector2(29f, 29f);
+            Image icon = iconObject.GetComponent<Image>();
+            icon.sprite = StoryExpressionCatalog.Load(expressionId);
+            icon.preserveAspect = true;
+            icon.raycastTarget = false;
+        }
+
+        if (string.Equals(activeDialogueCommand.expression, expressionId, StringComparison.OrdinalIgnoreCase)
+            || (string.IsNullOrWhiteSpace(activeDialogueCommand.expression) && string.IsNullOrEmpty(expressionId)))
+        {
+            buttonText.color = WarningColor;
+            Outline selected = buttonRoot.gameObject.AddComponent<Outline>();
+            selected.effectColor = WarningColor;
+            selected.effectDistance = new Vector2(1f, -1f);
+        }
+    }
+
+    private void SelectExpression(string expressionId)
+    {
+        if (activeDialogueCommand == null)
+            return;
+
+        if (!controller.UpdateCommandExpression(activeDialogueCommand.commandId, expressionId, out string error))
+        {
+            Hintbox.OpenHintboxWithContent(error, 16);
+            return;
+        }
+
+        CloseExpressionPicker();
+        RefreshCanvas();
+    }
+
+    private void CloseExpressionPicker()
+    {
+        if (expressionPickerOverlay == null)
+            return;
+
+        Destroy(expressionPickerOverlay.gameObject);
+        expressionPickerOverlay = null;
     }
 
     private void RefreshDialogueInput(StoryCommandDocument command, bool interactable)

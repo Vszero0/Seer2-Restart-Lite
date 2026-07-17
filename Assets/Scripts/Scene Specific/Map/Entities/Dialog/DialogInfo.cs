@@ -23,6 +23,7 @@ public class DialogInfo
     [XmlAttribute] public string name;
     public string storySpeakerSide = "left";
     public bool storyFlipIcon = false;
+    public string storyExpression;
     public StoryTextStyleDocument storyTextStyle;
     [XmlElement("gif")] public AnimInfo gifInfo;
     [XmlElement("content")] public string rawContent;
