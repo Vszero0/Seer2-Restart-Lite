@@ -1,0 +1,331 @@
+{
+  "schemaVersion": 8,
+  "status": "published",
+  "id": "story_system_test_v1",
+  "title": "剧情系统测试 v1",
+  "summary": "覆盖剧情点流程、条件分支、场景转场、BGM 连续播放、角色表现与结束语义的内置回归测试。",
+  "entry": "point_1",
+  "mission": {
+    "id": -10002,
+    "title": "剧情系统测试 v1",
+    "replayable": true,
+    "mapId": 121,
+    "mapIds": [121, 122],
+    "summary": "依次验证选择条件、流程汇合、转场、音频、布局、表情和结束语义。"
+  },
+  "replayable": true,
+  "resourceDefinitions": [
+    { "path": "Maps/bg/121", "kind": "mapBackground", "source": "builtin" },
+    { "path": "Maps/bg/122", "kind": "mapBackground", "source": "builtin" },
+    { "path": "BGM/101/BGM_1.mp3", "kind": "audio", "source": "builtin" },
+    { "path": "Pets/pet/10", "kind": "actorSprite", "source": "builtin" },
+    { "path": "Pets/battle/10", "kind": "actorSprite", "source": "builtin" },
+    { "path": "Pets/icon/10", "kind": "actorIcon", "source": "builtin" },
+    { "path": "Pets/pet/11", "kind": "actorSprite", "source": "builtin" },
+    { "path": "Pets/battle/11", "kind": "actorSprite", "source": "builtin" },
+    { "path": "Pets/icon/11", "kind": "actorIcon", "source": "builtin" },
+    { "path": "Pets/pet/12", "kind": "actorSprite", "source": "builtin" },
+    { "path": "Pets/battle/12", "kind": "actorSprite", "source": "builtin" },
+    { "path": "Pets/icon/12", "kind": "actorIcon", "source": "builtin" }
+  ],
+  "actors": [
+    {
+      "id": "pet_10",
+      "actorType": "pet",
+      "petId": "10",
+      "name": "法拉",
+      "sprite": "Builtin/Pets/pet/10",
+      "icon": "Builtin/Pets/icon/10",
+      "battleSprite": "Builtin/Pets/battle/10",
+      "sourceFacing": "right",
+      "iconMode": "separate",
+      "independentIcon": "Builtin/Pets/icon/10",
+      "defaultScale": 1.0,
+      "defaultFaceLeft": false,
+      "defaultFlipIcon": false
+    },
+    {
+      "id": "pet_11",
+      "actorType": "pet",
+      "petId": "11",
+      "name": "法娜",
+      "sprite": "Builtin/Pets/pet/11",
+      "icon": "Builtin/Pets/icon/11",
+      "battleSprite": "Builtin/Pets/battle/11",
+      "sourceFacing": "right",
+      "iconMode": "separate",
+      "independentIcon": "Builtin/Pets/icon/11",
+      "defaultScale": 1.0,
+      "defaultFaceLeft": true,
+      "defaultFlipIcon": false
+    },
+    {
+      "id": "pet_12",
+      "actorType": "pet",
+      "petId": "12",
+      "name": "法伊娜",
+      "sprite": "Builtin/Pets/pet/12",
+      "icon": "Builtin/Pets/icon/12",
+      "battleSprite": "Builtin/Pets/battle/12",
+      "sourceFacing": "right",
+      "iconMode": "separate",
+      "independentIcon": "Builtin/Pets/icon/12",
+      "defaultScale": 1.0,
+      "defaultFaceLeft": true,
+      "defaultFlipIcon": false
+    }
+  ],
+  "nodes": [
+    {
+      "id": "point_1",
+      "displayName": "入口与组合选择",
+      "flowRole": "sequence",
+      "mapReferences": [{ "mapId": 121 }],
+      "actorReferences": [
+        { "actorId": "pet_10" },
+        { "actorId": "pet_11" },
+        { "actorId": "pet_12" }
+      ],
+      "scenes": [
+        {
+          "id": "scene_121_opening",
+          "mapId": 121,
+          "transition": { "type": "fade", "duration": 0.55 },
+          "actors": [
+            { "actorId": "pet_10", "placementMode": "auto", "side": "left", "order": 0, "scale": 1.0, "faceLeft": false, "flipIcon": false },
+            { "actorId": "pet_11", "placementMode": "auto", "side": "right", "order": 0, "scale": 1.0, "faceLeft": true, "flipIcon": true },
+            { "actorId": "pet_12", "placementMode": "auto", "side": "right", "order": 1, "scale": 1.0, "faceLeft": true, "flipIcon": true }
+          ],
+          "layout": { "autoLayoutMode": "invertedV", "actorSpacing": 150.0, "actorHeight": 250.0, "actorBottom": 150.0, "centerGap": 120.0, "stackOffset": 28.0 }
+        }
+      ],
+      "commands": [
+        { "commandId": "point_1:0", "type": "scene", "sceneId": "scene_121_opening" },
+        { "commandId": "point_1:1", "type": "show", "actor": "pet_10" },
+        { "commandId": "point_1:2", "type": "show", "actor": "pet_11" },
+        { "commandId": "point_1:3", "type": "show", "actor": "pet_12" },
+        { "commandId": "point_1:4", "type": "narrate", "text": "【1/6 入口与场景】淡入后应显示地图 121。三名角色采用倒 V 布局，左右分区独立排列。" },
+        { "commandId": "point_1:5", "type": "say", "actor": "pet_10", "expression": "emoji/toon/cool", "text": "先选一名搭档，再决定行动方式。两个选择会共同决定这个剧情点结束后的走向。" },
+        {
+          "commandId": "point_1:6",
+          "type": "choice",
+          "choiceId": "choice_partner",
+          "actor": "pet_10",
+          "text": "【2/6 选择一】你想和谁一起行动？",
+          "choices": [
+            { "choiceId": "choice_partner", "optionId": "partner_fala", "text": "法拉：先观察环境" },
+            { "choiceId": "choice_partner", "optionId": "partner_fanna", "text": "法娜：正面调查" },
+            { "choiceId": "choice_partner", "optionId": "partner_fayina", "text": "法伊娜：寻找异常能量" }
+          ]
+        },
+        {
+          "commandId": "point_1:7",
+          "type": "choice",
+          "choiceId": "choice_action",
+          "actor": "pet_11",
+          "expression": "emoji/toon/surprised",
+          "text": "【3/6 选择二】面对前方的异动，你准备怎么做？",
+          "choices": [
+            { "choiceId": "choice_action", "optionId": "action_brave", "text": "立即前进" },
+            { "choiceId": "choice_action", "optionId": "action_calm", "text": "冷静分析" },
+            { "choiceId": "choice_action", "optionId": "action_wait", "text": "暂不决定" }
+          ]
+        }
+      ],
+      "transitions": [
+        {
+          "transitionId": "point_1:rule:and",
+          "targetType": "node",
+          "targetNodeId": "branch_courage",
+          "isDefault": false,
+          "condition": {
+            "operatorType": "OR",
+            "clauses": [{
+              "conditions": [
+                { "type": "choiceSelected", "pointId": "point_1", "commandId": "point_1:6", "choiceId": "choice_partner", "optionId": "partner_fala" },
+                { "type": "choiceSelected", "pointId": "point_1", "commandId": "point_1:7", "choiceId": "choice_action", "optionId": "action_brave" }
+              ]
+            }]
+          }
+        },
+        {
+          "transitionId": "point_1:rule:pair",
+          "targetType": "node",
+          "targetNodeId": "branch_wisdom",
+          "isDefault": false,
+          "condition": {
+            "operatorType": "OR",
+            "clauses": [{
+              "conditions": [
+                { "type": "choiceSelected", "pointId": "point_1", "commandId": "point_1:6", "choiceId": "choice_partner", "optionId": "partner_fanna" },
+                { "type": "choiceSelected", "pointId": "point_1", "commandId": "point_1:7", "choiceId": "choice_action", "optionId": "action_calm" }
+              ]
+            }]
+          }
+        },
+        {
+          "transitionId": "point_1:rule:not",
+          "targetType": "node",
+          "targetNodeId": "branch_careful",
+          "isDefault": false,
+          "condition": {
+            "operatorType": "OR",
+            "clauses": [{
+              "conditions": [
+                { "type": "choiceSelected", "pointId": "point_1", "commandId": "point_1:6", "choiceId": "choice_partner", "optionId": "partner_fala" },
+                { "type": "choiceSelected", "negated": true, "pointId": "point_1", "commandId": "point_1:7", "choiceId": "choice_action", "optionId": "action_brave" }
+              ]
+            }]
+          }
+        },
+        {
+          "transitionId": "point_1:rule:or",
+          "targetType": "node",
+          "targetNodeId": "branch_echo",
+          "isDefault": false,
+          "condition": {
+            "operatorType": "OR",
+            "clauses": [
+              { "conditions": [{ "type": "choiceSelected", "pointId": "point_1", "commandId": "point_1:6", "choiceId": "choice_partner", "optionId": "partner_fayina" }] },
+              { "conditions": [{ "type": "choiceSelected", "pointId": "point_1", "commandId": "point_1:7", "choiceId": "choice_action", "optionId": "action_brave" }] }
+            ]
+          }
+        },
+        {
+          "transitionId": "point_1:default",
+          "targetType": "node",
+          "targetNodeId": "branch_default",
+          "isDefault": true,
+          "isAutoGenerated": false
+        }
+      ]
+    },
+    {
+      "id": "point_2",
+      "displayName": "分支汇合与角色状态",
+      "flowRole": "sequence",
+      "actorReferences": [{ "actorId": "pet_10" }, { "actorId": "pet_11" }, { "actorId": "pet_12" }],
+      "commands": [
+        { "commandId": "point_2:0", "type": "narrate", "text": "【4/6 分支汇合】无论命中哪条规则，现在都应回到同一个默认流程剧情点。" },
+        { "commandId": "point_2:1", "type": "hide", "actor": "pet_12" },
+        { "commandId": "point_2:2", "type": "say", "actor": "pet_11", "expression": "emoji/toon/happy", "text": "法伊娜暂时离开画面；当前对白角色应获得轻微动态强调，其他角色保持安静。" },
+        { "commandId": "point_2:3", "type": "show", "actor": "pet_12" },
+        { "commandId": "point_2:4", "type": "say", "actor": "pet_12", "expression": "emoji/toon/alert", "text": "我又回来了。下一步将验证同一剧情点内的多场景转场和 BGM 连续播放。" }
+      ]
+    },
+    {
+      "id": "point_3",
+      "displayName": "多场景、转场与音频",
+      "flowRole": "sequence",
+      "mapReferences": [{ "mapId": 121 }, { "mapId": 122 }],
+      "actorReferences": [{ "actorId": "pet_10" }, { "actorId": "pet_11" }, { "actorId": "pet_12" }],
+      "scenes": [
+        {
+          "id": "scene_121_radial",
+          "mapId": 121,
+          "bgmResourcePath": "BGM/101/BGM_1.mp3",
+          "transition": { "type": "radial", "duration": 0.75 },
+          "actors": [
+            { "actorId": "pet_10", "placementMode": "auto", "side": "left", "order": 0, "scale": 1.0, "faceLeft": false, "flipIcon": false },
+            { "actorId": "pet_11", "placementMode": "auto", "side": "right", "order": 0, "scale": 1.0, "faceLeft": true, "flipIcon": true }
+          ],
+          "layout": { "autoLayoutMode": "invertedV", "actorSpacing": 150.0, "actorHeight": 250.0, "actorBottom": 150.0, "centerGap": 120.0, "stackOffset": 28.0 }
+        },
+        {
+          "id": "scene_122_wipe",
+          "mapId": 122,
+          "bgmResourcePath": "BGM/101/BGM_1.mp3",
+          "transition": { "type": "wipeleft", "duration": 0.65 },
+          "actors": [
+            { "actorId": "pet_10", "placementMode": "auto", "side": "left", "order": 0, "scale": 1.0, "faceLeft": false, "flipIcon": false },
+            { "actorId": "pet_11", "placementMode": "auto", "side": "right", "order": 0, "scale": 1.0, "faceLeft": true, "flipIcon": true },
+            { "actorId": "pet_12", "placementMode": "auto", "side": "right", "order": 1, "scale": 1.0, "faceLeft": true, "flipIcon": true }
+          ],
+          "layout": { "autoLayoutMode": "bottomAligned", "actorSpacing": 150.0, "actorHeight": 250.0, "actorBottom": 150.0, "centerGap": 120.0, "stackOffset": 28.0 }
+        }
+      ],
+      "commands": [
+        { "commandId": "point_3:0", "type": "scene", "sceneId": "scene_121_radial" },
+        { "commandId": "point_3:1", "type": "say", "actor": "pet_10", "expression": "emoji/toon/grin", "text": "径向展开应只作用于背景；角色和对白应在背景切换完成后进入正确状态。" },
+        { "commandId": "point_3:2", "type": "scene", "sceneId": "scene_122_wipe" },
+        { "commandId": "point_3:3", "type": "narrate", "text": "地图已切换为 122，并使用左向擦除。两个场景配置了同一 BGM，音乐不应从头重新播放。" },
+        { "commandId": "point_3:4", "type": "say", "actor": "pet_12", "expression": "emoji/toon/star_eyes", "text": "当前场景改为底部对齐。<color=#FFE847>这段黄色文字</color>同时验证基础富文本是否正常保留。" }
+      ]
+    },
+    {
+      "id": "point_4",
+      "displayName": "结束确认",
+      "flowRole": "sequence",
+      "mapReferences": [{ "mapId": 121 }],
+      "actorReferences": [{ "actorId": "pet_10" }],
+      "scenes": [
+        {
+          "id": "scene_121_ending",
+          "mapId": 121,
+          "transition": { "type": "crossfade", "duration": 0.55 },
+          "actors": [
+            { "actorId": "pet_10", "placementMode": "auto", "side": "left", "order": 0, "scale": 1.0, "faceLeft": false, "flipIcon": false }
+          ],
+          "layout": { "autoLayoutMode": "bottomAligned", "actorSpacing": 150.0, "actorHeight": 250.0, "actorBottom": 150.0, "centerGap": 120.0, "stackOffset": 28.0 }
+        }
+      ],
+      "commands": [
+        { "commandId": "point_4:0", "type": "scene", "sceneId": "scene_121_ending" },
+        { "commandId": "point_4:1", "type": "narrate", "text": "【6/6 结束】这是唯一带“结束”标记的剧情点。转场结束后仍应完整播放本段内容。" },
+        { "commandId": "point_4:2", "type": "say", "actor": "pet_10", "expression": "emoji/toon/sunglasses", "text": "测试完成。关闭播放器后，剧情 BGM 应停止并恢复进入剧情前的地图音乐。" }
+      ],
+      "transitions": [
+        { "transitionId": "point_4:auto:end", "targetType": "end", "isDefault": true, "isAutoGenerated": true }
+      ]
+    },
+    {
+      "id": "branch_courage",
+      "displayName": "规则结果：AND",
+      "flowRole": "branch",
+      "fallbackNodeId": "point_2",
+      "actorReferences": [{ "actorId": "pet_10" }],
+      "commands": [
+        { "commandId": "branch_courage:0", "type": "say", "actor": "pet_10", "expression": "emoji/toon/cool", "text": "命中 AND：选择了法拉，并且选择立即前进。规则从上到下判定，这一条最先生效。" }
+      ]
+    },
+    {
+      "id": "branch_wisdom",
+      "displayName": "规则结果：第二组 AND",
+      "flowRole": "branch",
+      "fallbackNodeId": "point_2",
+      "actorReferences": [{ "actorId": "pet_11" }],
+      "commands": [
+        { "commandId": "branch_wisdom:0", "type": "say", "actor": "pet_11", "expression": "emoji/toon/happy", "text": "命中第二组 AND：选择了法娜，并且选择冷静分析。" }
+      ]
+    },
+    {
+      "id": "branch_careful",
+      "displayName": "规则结果：NOT",
+      "flowRole": "branch",
+      "fallbackNodeId": "point_2",
+      "actorReferences": [{ "actorId": "pet_10" }],
+      "commands": [
+        { "commandId": "branch_careful:0", "type": "say", "actor": "pet_10", "expression": "emoji/toon/smug", "text": "命中 NOT：选择了法拉，并且没有选择立即前进。" }
+      ]
+    },
+    {
+      "id": "branch_echo",
+      "displayName": "规则结果：OR",
+      "flowRole": "branch",
+      "fallbackNodeId": "point_2",
+      "actorReferences": [{ "actorId": "pet_12" }],
+      "commands": [
+        { "commandId": "branch_echo:0", "type": "say", "actor": "pet_12", "expression": "emoji/toon/alert", "text": "命中 OR：选择法伊娜，或者选择立即前进，只要其中一项成立即可。" }
+      ]
+    },
+    {
+      "id": "branch_default",
+      "displayName": "规则结果：默认兜底",
+      "flowRole": "branch",
+      "fallbackNodeId": "point_2",
+      "commands": [
+        { "commandId": "branch_default:0", "type": "narrate", "text": "所有条件规则均未满足，因此进入默认后续。当前组合应为法娜与暂不决定。" }
+      ]
+    }
+  ]
+}

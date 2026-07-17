@@ -150,12 +150,14 @@ public class StoryPanel : Panel
         for (int index = 0; index < nodes.Length; index++)
         {
             StoryNodeDocument node = nodes[index];
-            List<string> roles = new List<string>();
+            List<string> roles = new List<string>
+            {
+                node.isBranch ? "分支剧情" : "默认流程",
+            };
             if (string.Equals(node.id, document.entry, StringComparison.OrdinalIgnoreCase))
                 roles.Add("入口");
             if (node.isEnding)
                 roles.Add("结束");
-            roles.Add(node.isBranch ? "分支" : "顺序");
             infos[node.id] = new PreviewNodeInfo
             {
                 id = node.id,

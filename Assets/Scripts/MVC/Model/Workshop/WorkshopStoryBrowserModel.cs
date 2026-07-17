@@ -418,7 +418,7 @@ public sealed class WorkshopStoryBrowserModel
         Dictionary<string, string> optionIdMap = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
         copy.id = newNodeId;
-        copy.displayName = (string.IsNullOrWhiteSpace(source.displayName) ? source.id : source.displayName) + "（分支）";
+        copy.displayName = (string.IsNullOrWhiteSpace(source.displayName) ? source.id : source.displayName) + "（副本）";
         copy.flowRole = "branch";
         copy.fallbackNodeId = GetDefaultFlowTargetForCopy(source);
 
@@ -488,7 +488,7 @@ public sealed class WorkshopStoryBrowserModel
                 ?? remainingNodes.LastOrDefault(node => CanBecomeEndingAfterDeletion(node, nodeId));
             if (replacementEnding == null)
             {
-                error = "删除后剧本将没有结束节点，请先将其他剧情点的后续走向设置为结束。";
+                error = "删除后剧本将没有带“结束”标记的剧情点，请先将其他剧情点的后续走向设置为结束。";
                 return false;
             }
         }

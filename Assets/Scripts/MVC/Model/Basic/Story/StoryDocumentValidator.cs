@@ -60,7 +60,7 @@ public static class StoryValidator
 
         string entry = string.IsNullOrWhiteSpace(document.entry) ? "start" : document.entry;
         if (nodeDict.Count > 0 && !nodeDict.ContainsKey(entry))
-            errors.Add("entry 指向的节点不存在：" + entry);
+            errors.Add("入口（entry）指向的剧情点不存在：" + entry);
 
         foreach (StoryNodeDocument node in document.nodes ?? Array.Empty<StoryNodeDocument>())
         {
@@ -73,7 +73,7 @@ public static class StoryValidator
         if (nodeDict.Count > 0 && !(document.nodes ?? Array.Empty<StoryNodeDocument>())
             .Any(node => node != null && node.isEnding))
         {
-            errors.Add("剧本至少需要一个明确的结束节点");
+            errors.Add("剧本至少需要一个带“结束”标记的剧情点");
         }
 
         error = string.Join("\n", errors);
@@ -96,11 +96,11 @@ public static class StoryValidator
         if (string.IsNullOrWhiteSpace(document.id))
             errors.Add("story.id 不能为空");
         if (string.IsNullOrWhiteSpace(document.entry))
-            errors.Add("entry 不能为空");
+            errors.Add("入口剧情点（entry）不能为空");
 
         Dictionary<string, StoryNodeDocument> nodeDict = ValidateNodes(document, errors);
         if (!string.IsNullOrWhiteSpace(document.entry) && !nodeDict.ContainsKey(document.entry))
-            errors.Add("entry 指向的剧情点不存在：" + document.entry);
+            errors.Add("入口（entry）指向的剧情点不存在：" + document.entry);
 
         foreach (StoryNodeDocument node in document.nodes ?? Array.Empty<StoryNodeDocument>())
         {
@@ -112,7 +112,7 @@ public static class StoryValidator
         if (nodeDict.Count > 0 && !(document.nodes ?? Array.Empty<StoryNodeDocument>())
             .Any(node => node != null && node.isEnding))
         {
-            errors.Add("剧本至少需要一个明确的结束节点");
+            errors.Add("剧本至少需要一个带“结束”标记的剧情点");
         }
 
         error = string.Join("\n", errors);
@@ -215,13 +215,13 @@ public static class StoryValidator
 
             if (string.IsNullOrWhiteSpace(node.id))
             {
-                errors.Add("nodes 中存在 id 为空的节点");
+                errors.Add("nodes 中存在 ID 为空的剧情点");
                 continue;
             }
 
             if (nodeDict.ContainsKey(node.id))
             {
-                errors.Add("nodes 存在重复节点 id：" + node.id);
+                errors.Add("nodes 存在重复的剧情点 ID：" + node.id);
                 continue;
             }
 
@@ -248,7 +248,7 @@ public static class StoryValidator
             errors.Add(location + ".flowRole must be sequence or branch");
 
         if (string.Equals(node.id, entry, StringComparison.OrdinalIgnoreCase) && flowRole == "branch")
-            errors.Add(location + " entry node must use sequence flowRole");
+            errors.Add(location + " 入口剧情点必须使用默认流程（sequence）");
 
         if (flowRole == "branch")
         {
@@ -642,6 +642,6 @@ public static class StoryValidator
         }
 
         if (!nodeDict.ContainsKey(target))
-            errors.Add(location + ".target 指向不存在的节点：" + target);
+            errors.Add(location + ".target 指向不存在的剧情点：" + target);
     }
 }
