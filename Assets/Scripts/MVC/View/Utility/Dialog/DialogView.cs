@@ -3,6 +3,7 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.EventSystems;
 using UnityEngine.UI;
 using UnityEngine.TextCore.LowLevel;
 using TMPro;
@@ -28,10 +29,12 @@ public class DialogView : Module
     private Image storySpeakerIcon;
     private Image storySpeakerExpression;
     private TextMeshProUGUI storySpeakerText;
+    private TextMeshProUGUI storySpeakerHintText;
     private RectTransform storySpeakerGroupRect;
     private RectTransform storySpeakerIconRect;
     private RectTransform storySpeakerExpressionRect;
     private RectTransform storySpeakerRect;
+    private RectTransform storySpeakerHintRect;
     private RectTransform contentTextRect;
     private CanvasGroup storyContentCanvasGroup;
     private CanvasGroup storyIconCanvasGroup;
@@ -55,6 +58,9 @@ public class DialogView : Module
     private float defaultOutlineWidth;
     private bool hasDefaultLayout;
     private Action storySpeakerIconClickHandler;
+    private string storySpeakerHint;
+    private static readonly Color32 StorySpeakerHintColor = new Color32(145, 190, 200, 210);
+    private static readonly Color32 StorySpeakerHintHoverColor = new Color32(82, 229, 249, 255);
 
     protected override void Awake()
     {
@@ -161,6 +167,16 @@ public class DialogView : Module
         RefreshStorySpeakerIconButton();
     }
 
+    public void SetStorySpeakerHint(string hint)
+    {
+        storySpeakerHint = hint ?? string.Empty;
+        EnsureStorySpeakerBlock();
+        storySpeakerHintText.text = storySpeakerHint;
+        storySpeakerHintText.color = StorySpeakerHintColor;
+        storySpeakerHintText.gameObject.SetActive(!string.IsNullOrWhiteSpace(storySpeakerHint)
+            && storySpeakerIconClickHandler != null && storySpeakerIcon.gameObject.activeSelf);
+    }
+
     private void ApplyStoryTextStyle(StoryTextStyleDocument style)
     {
         TMP_FontAsset font = null;
@@ -199,6 +215,12 @@ public class DialogView : Module
             storySpeakerText.fontSharedMaterial = content.text.fontSharedMaterial;
             storySpeakerText.fontSize = content.text.fontSize;
             storySpeakerText.fontStyle = content.text.fontStyle;
+        }
+
+        if (storySpeakerHintText != null)
+        {
+            storySpeakerHintText.font = content.text.font;
+            storySpeakerHintText.fontSharedMaterial = content.text.fontSharedMaterial;
         }
 
         DialogManager.instance?.SetStoryChoiceFont(content.text.font, content.text.fontSharedMaterial);
@@ -253,6 +275,12 @@ public class DialogView : Module
         storySpeakerExpression.sprite = expression;
         RefreshStorySpeakerIconButton();
 
+        bool showSpeakerHint = hasSpeakerIcon && storySpeakerIconClickHandler != null
+            && !string.IsNullOrWhiteSpace(storySpeakerHint);
+        storySpeakerHintText.gameObject.SetActive(showSpeakerHint);
+        storySpeakerHintText.text = storySpeakerHint;
+        storySpeakerHintText.color = StorySpeakerHintColor;
+
         storySpeakerText.gameObject.SetActive(hasSpeaker);
         storySpeakerText.text = speakerText;
         storySpeakerText.color = isActiveSpeaker ? new Color32(255, 230, 92, 255) : new Color32(185, 190, 196, 255);
@@ -297,6 +325,15 @@ public class DialogView : Module
         storySpeakerGroupRect.anchoredPosition = new Vector2(speakerX, -barHeight * 0.5f);
         storySpeakerGroupRect.sizeDelta = new Vector2(speakerWidth, innerHeight);
 
+        storySpeakerHintRect.anchorMin = new Vector2(0f, 1f);
+        storySpeakerHintRect.anchorMax = new Vector2(0f, 1f);
+        storySpeakerHintRect.pivot = new Vector2(speakerOnRight ? 1f : 0f, 0f);
+        storySpeakerHintRect.anchoredPosition = new Vector2(speakerOnRight ? barWidth - paddingX : paddingX, 4f);
+        storySpeakerHintRect.sizeDelta = new Vector2(170f, 18f);
+        storySpeakerHintText.alignment = speakerOnRight
+            ? TextAlignmentOptions.BottomRight
+            : TextAlignmentOptions.BottomLeft;
+
         storySpeakerIconRect.anchorMin = new Vector2(0.5f, 0.5f);
         storySpeakerIconRect.anchorMax = new Vector2(0.5f, 0.5f);
         storySpeakerIconRect.pivot = new Vector2(0.5f, 0.5f);
@@ -335,6 +372,9 @@ public class DialogView : Module
 
         if (storySpeakerExpression != null)
             storySpeakerExpression.gameObject.SetActive(false);
+
+        if (storySpeakerHintText != null)
+            storySpeakerHintText.gameObject.SetActive(false);
 
         if (storyFadeCoroutine != null)
         {
@@ -386,6 +426,14 @@ public class DialogView : Module
         iconButton.targetGraphic = storySpeakerIcon;
         iconButton.onClick.AddListener(() => storySpeakerIconClickHandler?.Invoke());
 
+        EventTrigger iconTrigger = iconObj.AddComponent<EventTrigger>();
+        EventTrigger.Entry enterEntry = new EventTrigger.Entry { eventID = EventTriggerType.PointerEnter };
+        enterEntry.callback.AddListener(_ => SetStorySpeakerHintHover(true));
+        iconTrigger.triggers.Add(enterEntry);
+        EventTrigger.Entry exitEntry = new EventTrigger.Entry { eventID = EventTriggerType.PointerExit };
+        exitEntry.callback.AddListener(_ => SetStorySpeakerHintHover(false));
+        iconTrigger.triggers.Add(exitEntry);
+
         GameObject expressionObj = new GameObject("Story Speaker Expression", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));
         expressionObj.transform.SetParent(storySpeakerGroupRect, false);
         storySpeakerExpressionRect = expressionObj.GetComponent<RectTransform>();
@@ -404,7 +452,28 @@ public class DialogView : Module
         storySpeakerText.raycastTarget = false;
         storySpeakerText.enableWordWrapping = true;
         storySpeakerText.richText = true;
+
+        GameObject hintObj = new GameObject("Story Speaker Editor Hint", typeof(RectTransform),
+            typeof(CanvasRenderer), typeof(TextMeshProUGUI));
+        hintObj.transform.SetParent(contentRect, false);
+        storySpeakerHintRect = hintObj.GetComponent<RectTransform>();
+        storySpeakerHintText = hintObj.GetComponent<TextMeshProUGUI>();
+        storySpeakerHintText.font = content.text.font;
+        storySpeakerHintText.fontSharedMaterial = content.text.fontSharedMaterial;
+        storySpeakerHintText.fontSize = 11f;
+        storySpeakerHintText.fontStyle = FontStyles.Normal;
+        storySpeakerHintText.color = StorySpeakerHintColor;
+        storySpeakerHintText.raycastTarget = false;
+        storySpeakerHintText.enableWordWrapping = false;
+        storySpeakerHintText.richText = false;
+        storySpeakerHintText.gameObject.SetActive(false);
         RefreshStorySpeakerIconButton();
+    }
+
+    private void SetStorySpeakerHintHover(bool isHovering)
+    {
+        if (storySpeakerHintText != null && storySpeakerHintText.gameObject.activeSelf)
+            storySpeakerHintText.color = isHovering ? StorySpeakerHintHoverColor : StorySpeakerHintColor;
     }
 
     private void RefreshStorySpeakerIconButton()

@@ -27,6 +27,10 @@ public class DialogController : Module
         dialogView.SetStorySpeakerIconClickHandler(handler);
     }
 
+    public void SetStorySpeakerHint(string hint) {
+        dialogView.SetStorySpeakerHint(hint);
+    }
+
     public void OnBackgroundClick() {
         if (backgroundClickHandler != null)
         {

@@ -1283,7 +1283,7 @@ public sealed class WorkshopStoryNodeEditorModel
             && (string.IsNullOrWhiteSpace(sceneId) || string.Equals(value.scene.id, sceneId, StringComparison.OrdinalIgnoreCase)));
         if (section == null)
         {
-            error = "请先点击背景选择本剧情点的地图。";
+            error = "请先新建场景并选择地图。";
             return false;
         }
 
