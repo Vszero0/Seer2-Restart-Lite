@@ -1075,7 +1075,7 @@ public class WorkshopStoryNodeEditorPanel : Panel
 
     private void OpenCreateScenePicker()
     {
-        resourcePicker?.OpenMaps(controller.GetMapOptions, CreateSceneFromMap, CreateSceneFromMap);
+        resourcePicker?.OpenMaps(controller.GetMapOptions, CreateSceneFromMap);
     }
 
     private void CreateSceneFromMap(int mapId)
@@ -1100,7 +1100,7 @@ public class WorkshopStoryNodeEditorPanel : Panel
             return;
         }
 
-        resourcePicker?.OpenMaps(controller.GetMapOptions, ChangeSceneMap, ChangeSceneMap);
+        resourcePicker?.OpenMaps(controller.GetMapOptions, ChangeSceneMap);
     }
 
     private void ChangeSceneMap(int mapId)

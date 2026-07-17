@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
+using SimpleFileBrowser;
 using UnityEngine;
 
 /// <summary>
@@ -13,9 +15,14 @@ public sealed class WorkshopStoryPointResourceOption
     public string name;
     public bool isMod;
 
-    public string displayName => string.IsNullOrWhiteSpace(name)
-        ? id.ToString()
-        : name + "  " + id;
+    public string displayName
+    {
+        get
+        {
+            string label = string.IsNullOrWhiteSpace(name) ? id.ToString() : name + "  " + id;
+            return (isMod ? "[当前 Mod] " : "[本体] ") + label;
+        }
+    }
 }
 
 /// <summary>
@@ -189,7 +196,7 @@ public sealed class WorkshopStoryNodeEditorModel
     }
 
     /// <summary>
-    /// 剧情点的地图候选来自本体 XML 与当前已载入地图；未在列表中的 Mod 地图由编辑器按 ID 载入。
+    /// 剧情点的地图候选来自本体 XML 与当前 Mod/Maps，并可按名称或 ID 检索。
     /// 选择后仍通过 Map.GetMap 载入，确保背景与默认 BGM 遵循地图 XML。
     /// </summary>
     public List<WorkshopStoryPointResourceOption> GetMapOptions(string filter)
@@ -212,6 +219,31 @@ public sealed class WorkshopStoryNodeEditorModel
         {
             foreach (Map map in Database.instance.mapDict.Values)
                 AddMapOption(options, map);
+        }
+
+        string modMapDirectory = Path.Combine(Application.persistentDataPath, "Mod", "Maps");
+        try
+        {
+            if (Directory.Exists(modMapDirectory))
+            {
+                foreach (string path in Directory.GetFiles(modMapDirectory, "*.xml", SearchOption.TopDirectoryOnly))
+                {
+                    try
+                    {
+                        Map map = ResourceManager.GetXML<Map>(FileBrowserHelpers.ReadTextFromFile(path));
+                        if (map != null && Map.IsMod(map.id))
+                            AddMapOption(options, map);
+                    }
+                    catch
+                    {
+                        // 当前 Mod 中单个无效地图 XML 不应阻断其他资源的选择。
+                    }
+                }
+            }
+        }
+        catch
+        {
+            // 当前 Mod 目录不可读时仍允许作者继续使用本体地图。
         }
 
         return FilterOptions(options.Values, filter);
@@ -813,6 +845,7 @@ public sealed class WorkshopStoryNodeEditorModel
         if (actor == null)
         {
             string stageSpritePath = GetPreferredPetStageSpritePath(pet, skinId);
+            string resourcePrefix = PetInfo.IsMod(skinId) ? "Mod/" : string.Empty;
             actor = new StoryActorDocument
             {
                 id = actorId,
@@ -820,8 +853,8 @@ public sealed class WorkshopStoryNodeEditorModel
                 petId = pet.id.ToString(),
                 name = pet.name,
                 sprite = stageSpritePath,
-                icon = "Pets/icon/" + skinId,
-                battleSprite = "Pets/battle/" + skinId,
+                icon = resourcePrefix + "Pets/icon/" + skinId,
+                battleSprite = resourcePrefix + "Pets/battle/" + skinId,
             };
             DraftDocument.actors = (DraftDocument.actors ?? Array.Empty<StoryActorDocument>()).Append(actor).ToArray();
         }
@@ -886,6 +919,7 @@ public sealed class WorkshopStoryNodeEditorModel
         {
             int skinId = pet.ui == null || pet.ui.defaultSkinId == 0 ? pet.id : pet.ui.defaultSkinId;
             string stageSpritePath = GetPreferredPetStageSpritePath(pet, skinId);
+            string resourcePrefix = PetInfo.IsMod(skinId) ? "Mod/" : string.Empty;
             actor = new StoryActorDocument
             {
                 id = actorId,
@@ -893,8 +927,8 @@ public sealed class WorkshopStoryNodeEditorModel
                 petId = pet.id.ToString(),
                 name = pet.name,
                 sprite = stageSpritePath,
-                icon = "Pets/icon/" + skinId,
-                battleSprite = "Pets/battle/" + skinId,
+                icon = resourcePrefix + "Pets/icon/" + skinId,
+                battleSprite = resourcePrefix + "Pets/battle/" + skinId,
             };
             DraftDocument.actors = (DraftDocument.actors ?? Array.Empty<StoryActorDocument>()).Append(actor).ToArray();
         }
@@ -915,12 +949,13 @@ public sealed class WorkshopStoryNodeEditorModel
 
     private static string GetPreferredPetStageSpritePath(PetInfo pet, int skinId)
     {
-        string idlePath = "Pets/pet/" + skinId;
+        string resourcePrefix = PetInfo.IsMod(skinId) ? "Mod/" : string.Empty;
+        string idlePath = resourcePrefix + "Pets/pet/" + skinId;
         Sprite idleSprite = pet?.ui?.idleImage;
         if (idleSprite != null)
             return idlePath;
 
-        string battlePath = "Pets/battle/" + skinId;
+        string battlePath = resourcePrefix + "Pets/battle/" + skinId;
         Sprite battleSprite = pet?.ui?.battleImage;
         return battleSprite != null ? battlePath : idlePath;
     }

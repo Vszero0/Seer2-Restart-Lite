@@ -21,6 +21,10 @@ public sealed class WorkshopStoryPointResourcePicker
     private RectTransform listContent;
     private InputField searchInput;
     private Action<string> refresh;
+    private IButton sourceButton;
+    private Text sourceButtonText;
+    private bool showModResources;
+    private bool hasModResources;
 
     public bool isOpen => root != null;
 
@@ -35,30 +39,26 @@ public sealed class WorkshopStoryPointResourcePicker
     }
 
     public void OpenMaps(Func<string, List<WorkshopStoryPointResourceOption>> getOptions,
-        Action<int> onSelected, Action<int> onLoadById)
+        Action<int> onSelected)
     {
+        bool canUseModResources = HasModResources(getOptions);
         Open("选择本剧情点地图", "输入地图名称或 ID", query =>
         {
             List<WorkshopStoryPointResourceOption> options = getOptions?.Invoke(query)
                 ?? new List<WorkshopStoryPointResourceOption>();
-            BuildResourceItems(options, option => onSelected?.Invoke(option.id));
-        }, "按 ID 载入", () =>
-        {
-            if (!int.TryParse(searchInput?.text?.Trim(), out int mapId) || mapId == 0)
-                return;
-
-            onLoadById?.Invoke(mapId);
-        });
+            BuildResourceItems(FilterResourceSource(options), option => onSelected?.Invoke(option.id));
+        }, null, null, true, canUseModResources);
     }
 
     public void OpenPets(Func<string, List<WorkshopStoryPointResourceOption>> getOptions, Action<int> onSelected)
     {
+        bool canUseModResources = HasModResources(getOptions);
         Open("添加本剧情点精灵", "输入精灵名称或 ID", query =>
         {
             List<WorkshopStoryPointResourceOption> options = getOptions?.Invoke(query)
                 ?? new List<WorkshopStoryPointResourceOption>();
-            BuildResourceItems(options, option => onSelected?.Invoke(option.id));
-        }, null, null);
+            BuildResourceItems(FilterResourceSource(options), option => onSelected?.Invoke(option.id));
+        }, null, null, true, canUseModResources);
     }
 
     public void OpenActors(IReadOnlyList<WorkshopStoryPointActorOption> options, Action<string> onSelected)
@@ -142,14 +142,21 @@ public sealed class WorkshopStoryPointResourcePicker
         listContent = null;
         searchInput = null;
         refresh = null;
+        sourceButton = null;
+        sourceButtonText = null;
+        showModResources = false;
+        hasModResources = false;
     }
 
     private void Open(string title, string placeholder, Action<string> refreshItems,
-        string directActionLabel, Action directAction)
+        string directActionLabel, Action directAction, bool showSourceButton = false,
+        bool canUseModResources = false)
     {
         Close();
         if (parent == null || actionButtonPrefab == null || listButtonPrefab == null || inputPrefab == null)
             return;
+
+        hasModResources = canUseModResources;
 
         root = new GameObject("Story Point Resource Picker", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image), typeof(Outline));
         root.transform.SetParent(parent, false);
@@ -172,9 +179,18 @@ public sealed class WorkshopStoryPointResourcePicker
             new Vector2(.5f, 1f), new Vector2(.5f, 1f), new Vector2(0f, -22f), new Vector2(300f, 28f));
         CreateActionButton("关闭", new Vector2(-16f, -12f), new Vector2(72f, 26f), Close, true);
 
-        searchInput = CreateInput(placeholder, new Vector2(18f, -54f), new Vector2(282f, 26f));
+        float searchWidth = showSourceButton ? 334f : 282f;
+        searchInput = CreateInput(placeholder, new Vector2(18f, -54f), new Vector2(searchWidth, 26f));
         if (searchInput != null)
             searchInput.onValueChanged.AddListener(value => refresh?.Invoke(value));
+
+        if (showSourceButton)
+        {
+            sourceButton = CreateActionButton("本体资源", new Vector2(-16f, -54f), new Vector2(116f, 26f),
+                ToggleResourceSource, true);
+            sourceButtonText = sourceButton?.GetComponentInChildren<Text>(true);
+            RefreshSourceButton();
+        }
 
         if (!string.IsNullOrWhiteSpace(directActionLabel))
         {
@@ -186,7 +202,37 @@ public sealed class WorkshopStoryPointResourcePicker
         refresh?.Invoke(string.Empty);
     }
 
-    private void BuildResourceItems(IEnumerable<WorkshopStoryPointResourceOption> options, Action<WorkshopStoryPointResourceOption> onClick)
+    private static bool HasModResources(Func<string, List<WorkshopStoryPointResourceOption>> getOptions)
+    {
+        return (getOptions?.Invoke(string.Empty) ?? new List<WorkshopStoryPointResourceOption>())
+            .Any(option => option != null && option.isMod);
+    }
+
+    private IEnumerable<WorkshopStoryPointResourceOption> FilterResourceSource(
+        IEnumerable<WorkshopStoryPointResourceOption> options)
+    {
+        return (options ?? Enumerable.Empty<WorkshopStoryPointResourceOption>())
+            .Where(option => option != null && option.isMod == showModResources);
+    }
+
+    private void ToggleResourceSource()
+    {
+        if (!hasModResources)
+            return;
+
+        showModResources = !showModResources;
+        RefreshSourceButton();
+        refresh?.Invoke(searchInput?.text ?? string.Empty);
+    }
+
+    private void RefreshSourceButton()
+    {
+        if (sourceButtonText != null)
+            sourceButtonText.text = showModResources ? "当前 Mod" : hasModResources ? "本体资源" : "仅本体";
+    }
+
+    private void BuildResourceItems(IEnumerable<WorkshopStoryPointResourceOption> options,
+        Action<WorkshopStoryPointResourceOption> onClick)
     {
         ClearList();
         int index = 0;
@@ -199,7 +245,8 @@ public sealed class WorkshopStoryPointResourcePicker
             CreateListButton(option.displayName, index++, () => onClick?.Invoke(captured));
         }
 
-        FinishList(index, "没有匹配的资源。可输入 ID 后按右侧按钮载入 Mod 地图。");
+        string sourceLabel = showModResources ? "当前 Mod" : "本体";
+        FinishList(index, "没有匹配的" + sourceLabel + "资源。");
     }
 
     private void BuildActorItems(IEnumerable<WorkshopStoryPointActorOption> options, Action<WorkshopStoryPointActorOption> onClick)
@@ -415,7 +462,7 @@ public sealed class WorkshopStoryPointResourcePicker
         }
     }
 
-    private void CreateActionButton(string label, Vector2 position, Vector2 size, Action callback, bool anchorRight)
+    private IButton CreateActionButton(string label, Vector2 position, Vector2 size, Action callback, bool anchorRight)
     {
         GameObject item = UnityEngine.Object.Instantiate(actionButtonPrefab, root.transform);
         item.name = label + " Button";
@@ -433,10 +480,11 @@ public sealed class WorkshopStoryPointResourcePicker
 
         Text text = item.GetComponentInChildren<Text>(true);
         if (text == null)
-            return;
+            return button;
 
         text.raycastTarget = false;
         text.text = label;
+        return button;
     }
 
     private void ClearList()
