@@ -46,6 +46,7 @@ public class WorkshopStoryBrowserPanel : Panel
 
     private static readonly Color Cyan = new Color32(82, 229, 249, 255);
     private static readonly Color HintColor = new Color32(180, 220, 230, 255);
+    private static readonly Color SavedColor = new Color32(119, 224, 113, 255);
     private static readonly Color WarningColor = new Color32(255, 232, 71, 255);
 
     private readonly WorkshopStoryBrowserController controller = new WorkshopStoryBrowserController(
@@ -959,12 +960,15 @@ public class WorkshopStoryBrowserPanel : Panel
             return;
         }
 
+        bool hasUnsavedChanges = controller.HasUnsavedChanges;
+        string saveState = hasUnsavedChanges ? "未保存" : "已保存";
+        Color saveStateColor = hasUnsavedChanges ? WarningColor : SavedColor;
         string status = (document.isDraft ? "暂未载入 Mod" : "已载入 Mod")
-            + " · " + (controller.HasUnsavedChanges ? "未保存" : "已保存");
+            + " · <color=#" + ColorUtility.ToHtmlStringRGB(saveStateColor) + ">" + saveState + "</color>";
         SetInputFieldValue(storyTitleInput, document.title, true);
         SetInputFieldValue(storySummaryInput, document.summary, true);
         storyStatusText.text = "状态：" + status;
-        storyStatusText.color = controller.HasUnsavedChanges ? WarningColor : HintColor;
+        storyStatusText.color = HintColor;
         RefreshStoryOverview(document);
     }
 

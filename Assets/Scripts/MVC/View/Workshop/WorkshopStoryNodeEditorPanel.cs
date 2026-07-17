@@ -13,6 +13,8 @@ using UnityEngine.UI;
 public class WorkshopStoryNodeEditorPanel : Panel
 {
     private static readonly Color Cyan = new Color32(82, 229, 249, 255);
+    private static readonly Color SavedColor = new Color32(119, 224, 113, 255);
+    private static readonly Color WarningColor = new Color32(255, 232, 71, 255);
     private static readonly Color StageFallbackColor = new Color32(8, 11, 18, 255);
     private const string DefaultIconSize = "90,120";
     private const string DefaultIconPosition = "0,45";
@@ -204,62 +206,73 @@ public class WorkshopStoryNodeEditorPanel : Panel
         CreateToolbarButton(toolbar, "保存", new Vector2(-18f, -8f), new Vector2(96f, 28f), SaveDraft, true);
         CreateToolbarButton(toolbar, "剧情点预览", new Vector2(-122f, -8f), new Vector2(96f, 28f), PreviewDraft, true);
         nodeTitleText = CreateText("Node Title", toolbar, "编辑剧情点 ·", 22, TextAnchor.MiddleRight, Cyan,
-            new Vector2(.5f, 1f), new Vector2(.5f, 1f), new Vector2(-12f, -8f), new Vector2(250f, 28f));
+            new Vector2(.5f, 1f), new Vector2(1f, 1f), new Vector2(-5f, -8f), new Vector2(150f, 28f));
         CreateNodeNameInput();
 
-        editorActions = CreateRect("Story Editor Console", transform, new Vector2(0f, 1f), new Vector2(0f, 1f),
-            new Vector2(14f, -58f), new Vector2(604f, 128f));
-        editorActions.pivot = new Vector2(0f, 1f);
+        editorActions = CreateRect("Story Editor Console", transform, new Vector2(0f, 1f), new Vector2(1f, 1f),
+            new Vector2(0f, -58f), new Vector2(-28f, 120f));
+        editorActions.pivot = new Vector2(.5f, 1f);
         Image consoleBackground = editorActions.gameObject.AddComponent<Image>();
-        consoleBackground.color = new Color(0f, 0f, 0f, .76f);
+        consoleBackground.color = new Color(0f, 0f, 0f, .72f);
         consoleBackground.raycastTarget = true;
+        CreateConsoleDivider(-31f, .18f);
+        CreateConsoleDivider(-59f, .18f);
+        CreateConsoleDivider(-87f, .18f);
 
         CreateText("Scene Group", editorActions, "场景", 13, TextAnchor.MiddleLeft, Cyan,
-            new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(10f, -5f), new Vector2(34f, 20f));
-        sceneDropdown = CreateDropdown(editorActions, new Vector2(46f, -3f), new Vector2(90f, 25f), OnSceneDropdownChanged);
+            new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(10f, -7f), new Vector2(34f, 20f));
+        sceneDropdown = CreateDropdown(editorActions, new Vector2(46f, -5f), new Vector2(90f, 25f), OnSceneDropdownChanged);
         sceneDropdownValueText = CreateSelectorValueText(sceneDropdown);
-        CreateToolbarButton(editorActions, "新建", new Vector2(144f, -3f), new Vector2(58f, 25f), OpenCreateScenePicker, false);
-        CreateToolbarButton(editorActions, "删除", new Vector2(210f, -3f), new Vector2(58f, 25f), RemoveActiveScene, false);
-        CreateToolbarButton(editorActions, "更换背景", new Vector2(276f, -3f), new Vector2(82f, 25f), OpenChangeSceneMapPicker, false);
-        sceneStateText = CreateText("Scene State", editorActions, string.Empty, 12, TextAnchor.MiddleLeft, Color.white,
-            new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(366f, -5f), new Vector2(228f, 20f));
+        CreateToolbarButton(editorActions, "新建", new Vector2(144f, -5f), new Vector2(58f, 25f), OpenCreateScenePicker, false);
+        CreateToolbarButton(editorActions, "删除", new Vector2(210f, -5f), new Vector2(58f, 25f), RemoveActiveScene, false);
+        CreateToolbarButton(editorActions, "更换背景", new Vector2(276f, -5f), new Vector2(82f, 25f), OpenChangeSceneMapPicker, false);
+        sceneStateText = CreateText("Scene State", editorActions, string.Empty, 13, TextAnchor.MiddleLeft, Color.white,
+            new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(366f, -7f), new Vector2(228f, 20f));
+        dirtyStateText = CreateText("Dirty State", editorActions, string.Empty, 15, TextAnchor.MiddleRight,
+            WarningColor, new Vector2(1f, 1f), new Vector2(1f, 1f), new Vector2(-14f, -6f), new Vector2(118f, 22f));
 
         CreateText("Actor Group", editorActions, "角色", 13, TextAnchor.MiddleLeft, Cyan,
-            new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(10f, -33f), new Vector2(34f, 20f));
-        sceneActorDropdown = CreateDropdown(editorActions, new Vector2(46f, -31f), new Vector2(90f, 25f), OnSceneActorDropdownChanged);
+            new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(10f, -35f), new Vector2(34f, 20f));
+        sceneActorDropdown = CreateDropdown(editorActions, new Vector2(46f, -33f), new Vector2(90f, 25f), OnSceneActorDropdownChanged);
         sceneActorDropdownValueText = CreateSelectorValueText(sceneActorDropdown);
-        CreateToolbarButton(editorActions, "添加精灵", new Vector2(144f, -31f), new Vector2(65f, 25f), OpenPetPicker, false);
-        CreateToolbarButton(editorActions, "移除", new Vector2(217f, -31f), new Vector2(50f, 25f), RemoveActiveSceneActor, false);
-        CreateToolbarButton(editorActions, "放左", new Vector2(275f, -31f), new Vector2(48f, 25f), () => SetActiveActorSide("left"), false);
-        CreateToolbarButton(editorActions, "放右", new Vector2(331f, -31f), new Vector2(48f, 25f), () => SetActiveActorSide("right"), false);
-        CreateToolbarButton(editorActions, "靠内", new Vector2(387f, -31f), new Vector2(48f, 25f), () => MoveActiveActorDepth(false), false);
-        CreateToolbarButton(editorActions, "靠外", new Vector2(443f, -31f), new Vector2(48f, 25f), () => MoveActiveActorDepth(true), false);
-        layoutModeButtonText = CreateToolbarButton(editorActions, "布局", new Vector2(499f, -31f), new Vector2(95f, 25f), ToggleAutoLayoutMode, false);
+        CreateToolbarButton(editorActions, "添加精灵", new Vector2(144f, -33f), new Vector2(65f, 25f), OpenPetPicker, false);
+        CreateToolbarButton(editorActions, "移除", new Vector2(217f, -33f), new Vector2(50f, 25f), RemoveActiveSceneActor, false);
+        CreateToolbarButton(editorActions, "放左", new Vector2(275f, -33f), new Vector2(48f, 25f), () => SetActiveActorSide("left"), false);
+        CreateToolbarButton(editorActions, "放右", new Vector2(331f, -33f), new Vector2(48f, 25f), () => SetActiveActorSide("right"), false);
+        CreateToolbarButton(editorActions, "靠内", new Vector2(387f, -33f), new Vector2(48f, 25f), () => MoveActiveActorDepth(false), false);
+        CreateToolbarButton(editorActions, "靠外", new Vector2(443f, -33f), new Vector2(48f, 25f), () => MoveActiveActorDepth(true), false);
+        layoutModeButtonText = CreateToolbarButton(editorActions, "布局", new Vector2(499f, -33f), new Vector2(95f, 25f), ToggleAutoLayoutMode, false);
 
         CreateText("Content Group", editorActions, "内容", 13, TextAnchor.MiddleLeft, Cyan,
-            new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(10f, -61f), new Vector2(34f, 20f));
-        sceneContentDropdown = CreateDropdown(editorActions, new Vector2(46f, -59f), new Vector2(200f, 25f), OnSceneContentDropdownChanged);
+            new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(10f, -63f), new Vector2(34f, 20f));
+        sceneContentDropdown = CreateDropdown(editorActions, new Vector2(46f, -61f), new Vector2(200f, 25f), OnSceneContentDropdownChanged);
         sceneContentDropdownValueText = CreateSelectorValueText(sceneContentDropdown);
-        CreateToolbarButton(editorActions, "+旁白", new Vector2(254f, -59f), new Vector2(54f, 25f), CreateNarration, false);
-        CreateToolbarButton(editorActions, "+对白", new Vector2(316f, -59f), new Vector2(54f, 25f), OpenSayActorPicker, false);
-        CreateToolbarButton(editorActions, "上移", new Vector2(378f, -59f), new Vector2(42f, 25f), () => MoveActiveSceneContent(false), false);
-        CreateToolbarButton(editorActions, "下移", new Vector2(428f, -59f), new Vector2(42f, 25f), () => MoveActiveSceneContent(true), false);
-        CreateToolbarButton(editorActions, "删除", new Vector2(478f, -59f), new Vector2(60f, 25f), RemoveActiveSceneContent, false);
-        dirtyStateText = CreateText("Dirty State", editorActions, string.Empty, 12, TextAnchor.MiddleCenter,
-            new Color32(255, 230, 92, 255), new Vector2(0f, 1f), new Vector2(0f, 1f),
-            new Vector2(546f, -61f), new Vector2(78f, 20f));
-        CreateToolbarButton(editorActions, "+选项", new Vector2(46f, -87f), new Vector2(60f, 25f), ConvertActiveContentToChoice, false);
-        restoreChoiceButtonText = CreateToolbarButton(editorActions, "还原内容", new Vector2(114f, -87f), new Vector2(76f, 25f),
+        CreateToolbarButton(editorActions, "+旁白", new Vector2(254f, -61f), new Vector2(54f, 25f), CreateNarration, false);
+        CreateToolbarButton(editorActions, "+对白", new Vector2(316f, -61f), new Vector2(54f, 25f), OpenSayActorPicker, false);
+        CreateToolbarButton(editorActions, "+选项", new Vector2(378f, -61f), new Vector2(60f, 25f), ConvertActiveContentToChoice, false);
+        restoreChoiceButtonText = CreateToolbarButton(editorActions, "还原内容", new Vector2(446f, -61f), new Vector2(76f, 25f),
             RestoreActiveChoiceToContent, false);
+        CreateToolbarButton(editorActions, "上移", new Vector2(530f, -61f), new Vector2(42f, 25f), () => MoveActiveSceneContent(false), false);
+        CreateToolbarButton(editorActions, "下移", new Vector2(580f, -61f), new Vector2(42f, 25f), () => MoveActiveSceneContent(true), false);
+        CreateToolbarButton(editorActions, "删除", new Vector2(630f, -61f), new Vector2(60f, 25f), RemoveActiveSceneContent, false);
         CreateText("Transition Group", editorActions, "转场", 13, TextAnchor.MiddleLeft, Cyan,
-            new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(202f, -89f), new Vector2(34f, 20f));
-        sceneTransitionDropdown = CreateDropdown(editorActions, new Vector2(240f, -87f), new Vector2(142f, 25f), OnSceneTransitionChanged);
+            new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(10f, -91f), new Vector2(34f, 20f));
+        sceneTransitionDropdown = CreateDropdown(editorActions, new Vector2(46f, -89f), new Vector2(142f, 25f), OnSceneTransitionChanged);
         sceneTransitionDropdownValueText = CreateSelectorValueText(sceneTransitionDropdown);
-        sceneTransitionDurationText = CreateToolbarButton(editorActions, "时长 0.35秒", new Vector2(390f, -87f),
+        sceneTransitionDurationText = CreateToolbarButton(editorActions, "时长 0.35秒", new Vector2(196f, -89f),
             new Vector2(104f, 25f), CycleSceneTransitionDuration, false);
         BuildChoiceEditor();
         toolbar.SetAsLastSibling();
         editorActions.SetAsLastSibling();
+    }
+
+    private void CreateConsoleDivider(float y, float alpha)
+    {
+        RectTransform divider = CreateRect("Console Divider", editorActions, new Vector2(0f, 1f), new Vector2(1f, 1f),
+            new Vector2(0f, y), new Vector2(-16f, 1f));
+        Image image = divider.gameObject.AddComponent<Image>();
+        image.color = new Color(Cyan.r, Cyan.g, Cyan.b, alpha);
+        image.raycastTarget = false;
     }
 
     private void CreateNodeNameInput()
@@ -273,8 +286,8 @@ public class WorkshopStoryNodeEditorPanel : Panel
         rect.anchorMin = new Vector2(.5f, 1f);
         rect.anchorMax = new Vector2(.5f, 1f);
         rect.pivot = new Vector2(0f, 1f);
-        rect.anchoredPosition = new Vector2(118f, -8f);
-        rect.sizeDelta = new Vector2(140f, 28f);
+        rect.anchoredPosition = new Vector2(5f, -8f);
+        rect.sizeDelta = new Vector2(150f, 28f);
 
         nodeNameInput = item.GetComponent<IInputField>();
         nativeNodeNameInput = item.GetComponent<InputField>();
@@ -331,7 +344,7 @@ public class WorkshopStoryNodeEditorPanel : Panel
             return;
         }
 
-        dirtyStateText.text = "未保存";
+        RefreshDirtyState();
         RefreshCanvas();
     }
 
@@ -549,7 +562,7 @@ public class WorkshopStoryNodeEditorPanel : Panel
             nativeNodeNameInput.SetTextWithoutNotify(displayName);
             isUpdatingNodeNameInput = false;
         }
-        dirtyStateText.text = controller.HasUnsavedChanges ? "未保存" : string.Empty;
+        RefreshDirtyState();
 
         List<WorkshopStorySceneSection> sections = controller.GetSceneSections();
         StorySceneDocument activeScene = node.GetScene(activeSceneId)
@@ -579,6 +592,16 @@ public class WorkshopStoryNodeEditorPanel : Panel
         SetRuntimeDialogue(document, node, activeScene, activeDialogueCommand);
         RefreshChoiceEditor();
         RefreshOverlayLayering();
+    }
+
+    private void RefreshDirtyState()
+    {
+        if (dirtyStateText == null)
+            return;
+
+        bool hasUnsavedChanges = controller.HasUnsavedChanges;
+        dirtyStateText.text = hasUnsavedChanges ? "状态：未保存" : "状态：已保存";
+        dirtyStateText.color = hasUnsavedChanges ? WarningColor : SavedColor;
     }
 
     private void SetSceneBackground(StorySceneDocument scene)
@@ -877,7 +900,7 @@ public class WorkshopStoryNodeEditorPanel : Panel
             return;
         }
 
-        dirtyStateText.text = "未保存";
+        RefreshDirtyState();
     }
 
     private void OpenCreateScenePicker()
@@ -1049,7 +1072,7 @@ public class WorkshopStoryNodeEditorPanel : Panel
             return;
         }
 
-        dirtyStateText.text = "未保存";
+        RefreshDirtyState();
     }
 
     private void MoveChoiceOption(string optionId, bool moveDown)
@@ -1473,7 +1496,7 @@ public class WorkshopStoryNodeEditorPanel : Panel
             return;
         }
 
-        dirtyStateText.text = string.Empty;
+        RefreshDirtyState();
         Hintbox.OpenHintboxWithContent("剧情点草稿已保存。", 16);
     }
 
