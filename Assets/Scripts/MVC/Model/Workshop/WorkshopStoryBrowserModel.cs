@@ -866,6 +866,29 @@ public sealed class WorkshopStoryBrowserModel
         return Reload(out error);
     }
 
+    public bool CopySelectedStory(out string error)
+    {
+        if (SelectedDocument == null)
+        {
+            error = "请先选择要复制的剧本。";
+            return false;
+        }
+        if (HasUnsavedChanges)
+        {
+            error = "当前剧本尚未保存，请先保存后再复制。";
+            return false;
+        }
+
+        if (!repository.TryCopyDraft(SelectedDocument, out WorkshopStorySummary summary, out error))
+            return false;
+
+        SelectedStory = summary;
+        SelectedDocument = null;
+        SelectedNode = null;
+        HasUnsavedChanges = false;
+        return Reload(out error);
+    }
+
     public bool SaveSelected(out string error)
     {
         if (SelectedStory == null || SelectedDocument == null)

@@ -186,6 +186,11 @@ public sealed class WorkshopStoryBrowserController
         return model.CreateDraft(out error);
     }
 
+    public bool CopySelectedStory(out string error)
+    {
+        return model.CopySelectedStory(out error);
+    }
+
     public bool SaveSelected(out string error)
     {
         return model.SaveSelected(out error);

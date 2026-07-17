@@ -98,6 +98,57 @@ public sealed class WorkshopStoryRepository
         }
     }
 
+    public bool TryCopyDraft(StoryDocument source, out WorkshopStorySummary summary, out string error)
+    {
+        summary = null;
+        error = string.Empty;
+        if (source == null)
+        {
+            error = "没有可复制的剧本。";
+            return false;
+        }
+
+        try
+        {
+            string directory = GetStoryDirectory();
+            if (!Directory.Exists(directory))
+                Directory.CreateDirectory(directory);
+
+            if (!StoryDocumentCodec.TryDeserialize(StoryDocumentCodec.Serialize(source), false,
+                    out StoryDocument copy, out error))
+            {
+                return false;
+            }
+
+            string sourceId = source.id;
+            string storyId = CreateAvailableStoryId(directory);
+            string path = Path.Combine(directory, storyId + StoryFileExtension);
+            CopyOwnedAssets(sourceId, storyId);
+            RewriteOwnedAssetPaths(copy, sourceId, storyId);
+
+            copy.id = storyId;
+            copy.status = "draft";
+            copy.title = (string.IsNullOrWhiteSpace(source.title) ? "未命名剧本" : source.title.Trim()) + "（副本）";
+            if (copy.mission == null)
+                copy.mission = new StoryMissionDocument();
+            copy.mission.id = CreateAvailableMissionId(null);
+            copy.mission.title = copy.title;
+            copy.mission.summary = copy.summary ?? string.Empty;
+            copy.mission.replayable = copy.replayable;
+
+            if (!TrySave(path, copy, out error))
+                return false;
+
+            summary = CreateSummary(path, copy);
+            return true;
+        }
+        catch (Exception exception)
+        {
+            error = "复制剧本失败：" + exception.Message;
+            return false;
+        }
+    }
+
     public bool TrySave(string path, StoryDocument document, out string error)
     {
         error = string.Empty;
@@ -362,6 +413,83 @@ public sealed class WorkshopStoryRepository
             storyId = baseId + "_" + suffix++;
 
         return storyId;
+    }
+
+    private static void CopyOwnedAssets(string sourceId, string targetId)
+    {
+        if (string.IsNullOrWhiteSpace(sourceId) || string.IsNullOrWhiteSpace(targetId))
+            return;
+
+        string sourceDirectory = Path.Combine(Application.persistentDataPath,
+            "Mod", "Stories", "Assets", sourceId);
+        if (!Directory.Exists(sourceDirectory))
+            return;
+
+        string targetDirectory = Path.Combine(Application.persistentDataPath,
+            "Mod", "Stories", "Assets", targetId);
+        foreach (string sourcePath in Directory.GetFiles(sourceDirectory, "*", SearchOption.AllDirectories))
+        {
+            string relativePath = sourcePath.Substring(sourceDirectory.Length)
+                .TrimStart(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            string targetPath = Path.Combine(targetDirectory, relativePath);
+            string targetParent = Path.GetDirectoryName(targetPath);
+            if (!string.IsNullOrWhiteSpace(targetParent))
+                Directory.CreateDirectory(targetParent);
+            File.Copy(sourcePath, targetPath, false);
+        }
+    }
+
+    private static void RewriteOwnedAssetPaths(StoryDocument document, string sourceId, string targetId)
+    {
+        if (document == null || string.IsNullOrWhiteSpace(sourceId) || string.IsNullOrWhiteSpace(targetId))
+            return;
+
+        foreach (StoryResourceDefinition resource in document.resourceDefinitions ?? Array.Empty<StoryResourceDefinition>())
+        {
+            if (resource != null)
+                resource.path = RewriteOwnedAssetPath(resource.path, sourceId, targetId);
+        }
+
+        foreach (StoryActorDocument actor in document.actors ?? Array.Empty<StoryActorDocument>())
+        {
+            if (actor == null)
+                continue;
+            actor.sprite = RewriteOwnedAssetPath(actor.sprite, sourceId, targetId);
+            actor.icon = RewriteOwnedAssetPath(actor.icon, sourceId, targetId);
+            actor.independentIcon = RewriteOwnedAssetPath(actor.independentIcon, sourceId, targetId);
+            actor.battleSprite = RewriteOwnedAssetPath(actor.battleSprite, sourceId, targetId);
+        }
+
+        foreach (StoryNodeDocument node in document.nodes ?? Array.Empty<StoryNodeDocument>())
+        {
+            if (node == null)
+                continue;
+            foreach (StorySceneDocument scene in node.scenes ?? Array.Empty<StorySceneDocument>())
+            {
+                if (scene != null)
+                    scene.bgmResourcePath = RewriteOwnedAssetPath(scene.bgmResourcePath, sourceId, targetId);
+            }
+            foreach (StoryCommandDocument command in node.commands ?? Array.Empty<StoryCommandDocument>())
+            {
+                if (command == null)
+                    continue;
+                command.bgmResourcePath = RewriteOwnedAssetPath(command.bgmResourcePath, sourceId, targetId);
+                command.bg = RewriteOwnedAssetPath(command.bg, sourceId, targetId);
+                command.expression = RewriteOwnedAssetPath(command.expression, sourceId, targetId);
+                command.args = RewriteOwnedAssetPath(command.args, sourceId, targetId);
+            }
+        }
+    }
+
+    private static string RewriteOwnedAssetPath(string path, string sourceId, string targetId)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+            return path;
+
+        string sourcePrefix = "Mod/Stories/Assets/" + sourceId + "/";
+        if (!path.StartsWith(sourcePrefix, StringComparison.OrdinalIgnoreCase))
+            return path;
+        return "Mod/Stories/Assets/" + targetId + "/" + path.Substring(sourcePrefix.Length);
     }
 
     private bool IsStoryPath(string path)
