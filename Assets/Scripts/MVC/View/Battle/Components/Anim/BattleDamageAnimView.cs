@@ -141,7 +141,7 @@ public class BattleDamageAnimView : Module
         script.Rect.anchoredPosition = damageAnchoredPos;
         holder.transform.SetAsLastSibling();
 
-        if (isDamage || (!isFinalDamage && isHit))
+        if (isHit && damage != 0)
         {
             script.InstantiateDamageNum(damage, isCritical);
         }
