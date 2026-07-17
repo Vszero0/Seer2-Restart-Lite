@@ -57,7 +57,9 @@ public static class StoryDocumentCodec
             return;
 
         int sourceVersion = document.schemaVersion;
-        document.schemaVersion = Math.Max(5, document.schemaVersion);
+        if (sourceVersion < 6)
+            MigrateConnectionTransitionsToScenes(document);
+        document.schemaVersion = Math.Max(6, document.schemaVersion);
         foreach (StoryNodeDocument node in document.nodes ?? Array.Empty<StoryNodeDocument>())
         {
             if (node != null && string.IsNullOrWhiteSpace(node.flowRole))
@@ -76,12 +78,9 @@ public static class StoryDocumentCodec
                         ? "node"
                         : transition.targetType.Trim().ToLowerInvariant();
                     if (transition.isEnd)
-                    {
                         transition.targetNodeId = null;
-                        transition.transition = null;
-                    }
+                    transition.transition = null;
                 }
-                NormalizeTransition(transition?.transition, true);
                 NormalizeConditionGroup(transition?.condition);
                 if (transition != null
                     && transition.isDefault
@@ -100,6 +99,50 @@ public static class StoryDocumentCodec
 
         if (sourceVersion < 4)
             EnsureAutoEnding(document);
+    }
+
+    private static void MigrateConnectionTransitionsToScenes(StoryDocument document)
+    {
+        StoryNodeDocument[] nodes = document?.nodes ?? Array.Empty<StoryNodeDocument>();
+        foreach (StoryNodeDocument targetNode in nodes)
+        {
+            StorySceneDocument firstScene = (targetNode?.scenes ?? Array.Empty<StorySceneDocument>())
+                .FirstOrDefault(scene => scene != null);
+            if (firstScene == null || firstScene.transition != null)
+                continue;
+
+            StoryTransitionDocument[] legacyTransitions = nodes
+                .SelectMany(node => node?.transitions ?? Array.Empty<StoryNodeTransitionDocument>())
+                .Where(transition => transition != null
+                    && !transition.isEnd
+                    && string.Equals(transition.targetNodeId, targetNode.id, StringComparison.OrdinalIgnoreCase)
+                    && transition.transition != null
+                    && transition.transition.normalizedType != "inherit")
+                .Select(transition => transition.transition)
+                .ToArray();
+            if (legacyTransitions.Length == 0)
+                continue;
+
+            StoryTransitionDocument selected = legacyTransitions[0];
+            firstScene.transition = new StoryTransitionDocument
+            {
+                type = selected.normalizedType,
+                duration = selected.normalizedDuration,
+            };
+            if (legacyTransitions.Skip(1).Any(value => value.normalizedType != selected.normalizedType
+                || Math.Abs(value.normalizedDuration - selected.normalizedDuration) > .001f))
+            {
+                Debug.LogWarning("剧情点 " + targetNode.id
+                    + " 的旧连接包含不同转场，已迁移第一条到首场景，请在剧情点编辑器中确认。");
+            }
+        }
+
+        foreach (StoryNodeTransitionDocument transition in nodes
+                     .SelectMany(node => node?.transitions ?? Array.Empty<StoryNodeTransitionDocument>()))
+        {
+            if (transition != null)
+                transition.transition = null;
+        }
     }
 
     private static void NormalizeTransition(StoryTransitionDocument transition, bool allowInherit)

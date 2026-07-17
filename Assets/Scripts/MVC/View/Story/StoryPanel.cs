@@ -51,7 +51,6 @@ public class StoryPanel : Panel
     private bool hasRestartedMusic;
     private string activeMusicIdentity;
     private AudioSystem.MusicPlaybackSnapshot musicSnapshot;
-    private StoryTransitionDocument pendingNodeTransition;
     private Coroutine sceneTransitionCoroutine;
 
     private Image sceneImage;
@@ -270,7 +269,6 @@ public class StoryPanel : Panel
         isClosing = false;
         waitingForChoice = false;
         isTransitioning = false;
-        pendingNodeTransition = null;
         actorStage.Reset(story.layout);
         ClearDialogHandlers();
         lastDialogInfo = null;
@@ -338,7 +336,6 @@ public class StoryPanel : Panel
                 case StoryCommandType.Jump:
                     if (StoryConditionEvaluator.Evaluate(story, command.condition))
                     {
-                        pendingNodeTransition = command.transition;
                         JumpTo(command.args);
                     }
                     continue;
@@ -395,9 +392,7 @@ public class StoryPanel : Panel
     {
         PrepareSceneBoundary();
         PlaySceneMusic(command.mapId, command.bgmResourcePath, ++sceneMusicRequestVersion);
-        StoryTransitionDocument transition = ResolveSceneTransition(command.transition);
-        pendingNodeTransition = null;
-        return BeginSceneVisualChange(command, transition);
+        return BeginSceneVisualChange(command, command.transition);
     }
 
     private void PlaySceneMusic(int mapId, string resourcePath, int requestVersion)
@@ -508,13 +503,6 @@ public class StoryPanel : Panel
         }, _ => { });
     }
 
-    private StoryTransitionDocument ResolveSceneTransition(StoryTransitionDocument sceneTransition)
-    {
-        if (pendingNodeTransition != null && pendingNodeTransition.normalizedType != "inherit")
-            return pendingNodeTransition;
-        return sceneTransition;
-    }
-
     private bool BeginSceneVisualChange(StoryCommand command, StoryTransitionDocument transition)
     {
         string path = StoryCommandArguments.GetValue(command.args, "bg", command.args);
@@ -568,7 +556,7 @@ public class StoryPanel : Panel
         string type = transition?.normalizedType ?? "none";
         if (type == "inherit")
             type = "none";
-        if (sprite == null || sceneImage == null || sceneImage.sprite == null || type == "none")
+        if (sprite == null || sceneImage == null || type == "none")
         {
             if (sprite != null)
                 ApplySceneSprite(sprite);

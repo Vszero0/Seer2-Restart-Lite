@@ -404,9 +404,6 @@ public static class StoryValidator
                     errors.Add(location + " 默认后续不能重新进入当前剧情点");
                 }
             }
-            ValidateTransition(transition.transition, true, errors, location + ".transition");
-            if (transition.isEnd && transition.transition != null)
-                errors.Add(location + ".transition 结束连接不使用场景转场");
             if (transition.isDefault)
             {
                 defaultCount++;

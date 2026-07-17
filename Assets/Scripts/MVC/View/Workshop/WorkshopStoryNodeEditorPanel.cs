@@ -30,6 +30,7 @@ public class WorkshopStoryNodeEditorPanel : Panel
     private bool isUpdatingDialogueInput;
     private bool isUpdatingNodeNameInput;
     private int sceneVisualRequestVersion;
+    private int sceneTransitionPreviewRequestVersion;
     private int sceneMusicRequestVersion;
     private Font font;
     private GameObject actionButtonPrefab;
@@ -39,6 +40,7 @@ public class WorkshopStoryNodeEditorPanel : Panel
     private RectTransform storyLayer;
     private RectTransform dialogueTextBar;
     private Image sceneImage;
+    private Image sceneTransitionPreviewImage;
     private DialogController dialogController;
     private StoryActorStage actorStage;
     private RectTransform actorLayer;
@@ -61,6 +63,7 @@ public class WorkshopStoryNodeEditorPanel : Panel
     private Text layoutModeButtonText;
     private Text restoreChoiceButtonText;
     private Text sceneTransitionDurationText;
+    private Text sceneTransitionPreviewButtonText;
     private string activeSceneActorId;
     private bool isUpdatingSceneSelectors;
     private TextMeshProUGUI sourceDialogueText;
@@ -77,6 +80,7 @@ public class WorkshopStoryNodeEditorPanel : Panel
     private bool hasChangedMusicIdentity;
     private bool hasRestartedMusic;
     private AudioSystem.MusicPlaybackSnapshot musicSnapshot;
+    private Coroutine sceneTransitionPreviewCoroutine;
 
     public static WorkshopStoryNodeEditorPanel Open(string storyPath, string nodeId, Action onClosed = null)
     {
@@ -131,6 +135,7 @@ public class WorkshopStoryNodeEditorPanel : Panel
         Action onClosed = closedCallback;
         closedCallback = null;
         sceneMusicRequestVersion++;
+        StopSceneTransitionPreview(false);
         RestoreMusicContext();
         resourcePicker?.Close();
         actorStage?.Clear();
@@ -173,6 +178,18 @@ public class WorkshopStoryNodeEditorPanel : Panel
             IButton backgroundButton = sceneImage.GetComponent<IButton>();
             if (backgroundButton != null)
                 backgroundButton.enabled = false;
+
+            GameObject previewObject = new GameObject("Story Editor Transition Preview", typeof(RectTransform),
+                typeof(CanvasRenderer), typeof(Image));
+            previewObject.transform.SetParent(sceneImage.transform.parent, false);
+            RectTransform previewRect = previewObject.GetComponent<RectTransform>();
+            CopyRectTransform(sceneImage.rectTransform, previewRect);
+            previewObject.transform.SetSiblingIndex(sceneImage.transform.GetSiblingIndex() + 1);
+            sceneTransitionPreviewImage = previewObject.GetComponent<Image>();
+            sceneTransitionPreviewImage.raycastTarget = false;
+            sceneTransitionPreviewImage.preserveAspect = sceneImage.preserveAspect;
+            sceneTransitionPreviewImage.color = Color.clear;
+            sceneTransitionPreviewImage.gameObject.SetActive(false);
         }
 
         RectTransform textBar = layer.GetComponentsInChildren<RectTransform>(true)
@@ -186,7 +203,9 @@ public class WorkshopStoryNodeEditorPanel : Panel
         }
 
         actorLayer = CreateRect("Story Editor Actor Layer", storyLayer, Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero);
-        actorLayer.SetSiblingIndex(sceneImage == null ? 0 : sceneImage.transform.GetSiblingIndex() + 1);
+        actorLayer.SetSiblingIndex(sceneTransitionPreviewImage != null
+            ? sceneTransitionPreviewImage.transform.GetSiblingIndex() + 1
+            : sceneImage == null ? 0 : sceneImage.transform.GetSiblingIndex() + 1);
         actorStage = new StoryActorStage(actorLayer, this, RefreshOverlayLayering, controller.GetResourceSource);
         sourceDialogueText = layer.GetComponentsInChildren<TextMeshProUGUI>(true)
             .FirstOrDefault(text => text.gameObject.name == "Dialog");
@@ -255,12 +274,14 @@ public class WorkshopStoryNodeEditorPanel : Panel
         CreateToolbarButton(editorActions, "上移", new Vector2(530f, -61f), new Vector2(42f, 25f), () => MoveActiveSceneContent(false), false);
         CreateToolbarButton(editorActions, "下移", new Vector2(580f, -61f), new Vector2(42f, 25f), () => MoveActiveSceneContent(true), false);
         CreateToolbarButton(editorActions, "删除", new Vector2(630f, -61f), new Vector2(60f, 25f), RemoveActiveSceneContent, false);
-        CreateText("Transition Group", editorActions, "转场", 13, TextAnchor.MiddleLeft, Cyan,
-            new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(10f, -91f), new Vector2(34f, 20f));
-        sceneTransitionDropdown = CreateDropdown(editorActions, new Vector2(46f, -89f), new Vector2(142f, 25f), OnSceneTransitionChanged);
+        CreateText("Transition Group", editorActions, "进入转场", 13, TextAnchor.MiddleLeft, Cyan,
+            new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(10f, -91f), new Vector2(58f, 20f));
+        sceneTransitionDropdown = CreateDropdown(editorActions, new Vector2(72f, -89f), new Vector2(142f, 25f), OnSceneTransitionChanged);
         sceneTransitionDropdownValueText = CreateSelectorValueText(sceneTransitionDropdown);
-        sceneTransitionDurationText = CreateToolbarButton(editorActions, "时长 0.35秒", new Vector2(196f, -89f),
+        sceneTransitionDurationText = CreateToolbarButton(editorActions, "时长 0.35秒", new Vector2(222f, -89f),
             new Vector2(104f, 25f), CycleSceneTransitionDuration, false);
+        sceneTransitionPreviewButtonText = CreateToolbarButton(editorActions, "预览", new Vector2(334f, -89f),
+            new Vector2(68f, 25f), PreviewActiveSceneTransition, false);
         BuildChoiceEditor();
         toolbar.SetAsLastSibling();
         editorActions.SetAsLastSibling();
@@ -549,6 +570,11 @@ public class WorkshopStoryNodeEditorPanel : Panel
 
     private void RefreshCanvas()
     {
+        if (sceneTransitionPreviewCoroutine != null)
+            StopSceneTransitionPreview(true);
+        else
+            sceneTransitionPreviewRequestVersion++;
+
         StoryDocument document = controller.DraftDocument;
         StoryNodeDocument node = controller.DraftNode;
         if (document == null || node == null)
@@ -1241,6 +1267,8 @@ public class WorkshopStoryNodeEditorPanel : Panel
                 sceneTransitionDurationText.text = "时长 " + duration.ToString("0.00") + "秒";
                 sceneTransitionDurationText.transform.parent.gameObject.SetActive(activeScene != null);
             }
+            if (sceneTransitionPreviewButtonText != null)
+                sceneTransitionPreviewButtonText.transform.parent.gameObject.SetActive(activeScene != null);
 
         }
         finally
@@ -1258,6 +1286,7 @@ public class WorkshopStoryNodeEditorPanel : Panel
         if (index < 0 || index >= sections.Count)
             return;
 
+        StopSceneTransitionPreview(true);
         activeSceneId = sections[index].scene.id;
         activeDialogueCommand = null;
         RefreshCanvas();
@@ -1297,6 +1326,276 @@ public class WorkshopStoryNodeEditorPanel : Panel
             return;
         }
         RefreshCanvas();
+    }
+
+    private void PreviewActiveSceneTransition()
+    {
+        if (sceneImage == null || sceneTransitionPreviewImage == null)
+            return;
+
+        StorySceneDocument[] scenes = (controller.DraftNode?.scenes ?? Array.Empty<StorySceneDocument>())
+            .Where(scene => scene != null)
+            .ToArray();
+        int sceneIndex = Array.FindIndex(scenes, scene => string.Equals(scene.id, activeSceneId, StringComparison.OrdinalIgnoreCase));
+        if (sceneIndex < 0)
+            return;
+
+        StorySceneDocument targetScene = scenes[sceneIndex];
+        StoryTransitionDocument transition = targetScene.transition;
+        string type = transition?.normalizedType ?? "none";
+        if (type == "none")
+        {
+            Hintbox.OpenHintboxWithContent("当前场景未设置进入转场。", 16);
+            return;
+        }
+
+        StopSceneTransitionPreview(false);
+        int requestVersion = ++sceneTransitionPreviewRequestVersion;
+        ResolveSceneSprite(targetScene, targetSprite =>
+        {
+            if (requestVersion != sceneTransitionPreviewRequestVersion
+                || !string.Equals(activeSceneId, targetScene.id, StringComparison.OrdinalIgnoreCase))
+            {
+                return;
+            }
+            if (targetSprite == null)
+            {
+                Hintbox.OpenHintboxWithContent("当前场景背景尚未加载，无法预览进入转场。", 16);
+                StopSceneTransitionPreview(true);
+                return;
+            }
+
+            StorySceneDocument sourceScene = sceneIndex > 0 ? scenes[sceneIndex - 1] : null;
+            ResolveSceneSprite(sourceScene, sourceSprite =>
+            {
+                if (requestVersion != sceneTransitionPreviewRequestVersion
+                    || !string.Equals(activeSceneId, targetScene.id, StringComparison.OrdinalIgnoreCase))
+                {
+                    return;
+                }
+
+                ResetSceneTransitionPreviewImages();
+                ApplyPreviewSceneSprite(sourceSprite);
+                sceneTransitionPreviewCoroutine = StartCoroutine(PreviewSceneTransitionCoroutine(
+                    targetSprite, type, transition.normalizedDuration));
+            });
+        });
+    }
+
+    private void ResolveSceneSprite(StorySceneDocument scene, Action<Sprite> onResolved)
+    {
+        if (scene == null || scene.mapId == 0)
+        {
+            onResolved?.Invoke(null);
+            return;
+        }
+
+        Map.GetMap(scene.mapId, map =>
+        {
+            Sprite sprite = map?.resources?.bg;
+            if (sprite == null)
+            {
+                int resourceId = map?.resId > 0 ? map.resId : scene.mapId;
+                string path = "Maps/bg/" + resourceId;
+                sprite = StorySpriteResolver.Load(path, controller.GetResourceSource(path));
+            }
+            onResolved?.Invoke(sprite);
+        }, _ => onResolved?.Invoke(null));
+    }
+
+    private System.Collections.IEnumerator PreviewSceneTransitionCoroutine(
+        Sprite targetSprite,
+        string type,
+        float duration)
+    {
+        bool revealsSameBackground = type == "radial"
+            && sceneImage != null
+            && sceneImage.sprite == targetSprite;
+        PrepareSceneTransitionPreviewImage(targetSprite);
+        if (type == "fade")
+        {
+            sceneTransitionPreviewImage.gameObject.SetActive(false);
+            float halfDuration = duration * .5f;
+            yield return AnimateSceneTransitionPreview(halfDuration, progress => SetPreviewPrimaryAlpha(1f - progress));
+            ApplyPreviewSceneSprite(targetSprite);
+            SetPreviewPrimaryAlpha(0f);
+            yield return AnimateSceneTransitionPreview(halfDuration, SetPreviewPrimaryAlpha);
+        }
+        else if (type == "crossfade")
+        {
+            SetPreviewTransitionAlpha(0f);
+            yield return AnimateSceneTransitionPreview(duration, SetPreviewTransitionAlpha);
+        }
+        else if (type == "wipeleft" || type == "wiperight"
+            || type == "wipeup" || type == "wipedown" || type == "radial")
+        {
+            ConfigureSceneTransitionPreviewWipe(type);
+            float revealDuration = duration;
+            if (revealsSameBackground)
+            {
+                float dimDuration = Mathf.Min(.12f, duration * .2f);
+                revealDuration = Mathf.Max(.01f, duration - dimDuration);
+                yield return AnimateSceneTransitionPreview(dimDuration, progress =>
+                    SetPreviewPrimaryBrightness(Mathf.Lerp(1f, .35f, progress)));
+            }
+            yield return AnimateSceneTransitionPreview(revealDuration,
+                progress => sceneTransitionPreviewImage.fillAmount = progress);
+        }
+        else if (type == "zoomcross")
+        {
+            SetPreviewPrimaryAlpha(1f);
+            SetPreviewTransitionAlpha(0f);
+            sceneImage.rectTransform.localScale = Vector3.one;
+            sceneTransitionPreviewImage.rectTransform.localScale = Vector3.one * .88f;
+            yield return AnimateSceneTransitionPreview(duration, progress =>
+            {
+                SetPreviewPrimaryAlpha(1f - progress);
+                SetPreviewTransitionAlpha(progress);
+                sceneImage.rectTransform.localScale = Vector3.one * Mathf.Lerp(1f, 1.08f, progress);
+                sceneTransitionPreviewImage.rectTransform.localScale = Vector3.one * Mathf.Lerp(.88f, 1f, progress);
+            });
+        }
+        else
+        {
+            float width = Mathf.Max(1f, sceneImage.rectTransform.rect.width);
+            float height = Mathf.Max(1f, sceneImage.rectTransform.rect.height);
+            Vector2 offset = type == "pushright" ? new Vector2(-width, 0f)
+                : type == "pushup" ? new Vector2(0f, -height)
+                : type == "pushdown" ? new Vector2(0f, height)
+                : new Vector2(width, 0f);
+            sceneTransitionPreviewImage.rectTransform.anchoredPosition = offset;
+            yield return AnimateSceneTransitionPreview(duration, progress =>
+            {
+                sceneImage.rectTransform.anchoredPosition = -offset * progress;
+                sceneTransitionPreviewImage.rectTransform.anchoredPosition = offset * (1f - progress);
+            });
+        }
+
+        ApplyPreviewSceneSprite(targetSprite);
+        ResetSceneTransitionPreviewImages();
+        sceneTransitionPreviewCoroutine = null;
+    }
+
+    private System.Collections.IEnumerator AnimateSceneTransitionPreview(float duration, Action<float> update)
+    {
+        float elapsed = 0f;
+        update?.Invoke(0f);
+        while (elapsed < duration)
+        {
+            elapsed += Time.unscaledDeltaTime;
+            update?.Invoke(Mathf.Clamp01(elapsed / duration));
+            yield return null;
+        }
+        update?.Invoke(1f);
+    }
+
+    private void PrepareSceneTransitionPreviewImage(Sprite sprite)
+    {
+        if (sceneTransitionPreviewImage == null)
+            return;
+
+        sceneTransitionPreviewImage.sprite = sprite;
+        sceneTransitionPreviewImage.color = Color.white;
+        sceneTransitionPreviewImage.type = Image.Type.Simple;
+        sceneTransitionPreviewImage.fillAmount = 1f;
+        sceneTransitionPreviewImage.fillClockwise = true;
+        sceneTransitionPreviewImage.rectTransform.anchoredPosition = Vector2.zero;
+        sceneTransitionPreviewImage.rectTransform.localScale = Vector3.one;
+        sceneTransitionPreviewImage.gameObject.SetActive(true);
+    }
+
+    private void ConfigureSceneTransitionPreviewWipe(string type)
+    {
+        sceneTransitionPreviewImage.type = Image.Type.Filled;
+        if (type == "radial")
+        {
+            sceneTransitionPreviewImage.fillMethod = Image.FillMethod.Radial360;
+            sceneTransitionPreviewImage.fillOrigin = (int)Image.Origin360.Bottom;
+            sceneTransitionPreviewImage.fillClockwise = true;
+        }
+        else if (type == "wipeup" || type == "wipedown")
+        {
+            sceneTransitionPreviewImage.fillMethod = Image.FillMethod.Vertical;
+            sceneTransitionPreviewImage.fillOrigin = type == "wipedown" ? 1 : 0;
+        }
+        else
+        {
+            sceneTransitionPreviewImage.fillMethod = Image.FillMethod.Horizontal;
+            sceneTransitionPreviewImage.fillOrigin = type == "wipeleft" ? 1 : 0;
+        }
+        sceneTransitionPreviewImage.fillAmount = 0f;
+    }
+
+    private void StopSceneTransitionPreview(bool restoreCurrentScene)
+    {
+        sceneTransitionPreviewRequestVersion++;
+        if (sceneTransitionPreviewCoroutine != null)
+        {
+            StopCoroutine(sceneTransitionPreviewCoroutine);
+            sceneTransitionPreviewCoroutine = null;
+        }
+        ResetSceneTransitionPreviewImages();
+        if (!restoreCurrentScene)
+            return;
+
+        renderedMapId = int.MinValue;
+        SetSceneBackground(controller.DraftNode?.GetScene(activeSceneId));
+    }
+
+    private void ResetSceneTransitionPreviewImages()
+    {
+        if (sceneImage != null)
+        {
+            sceneImage.rectTransform.anchoredPosition = Vector2.zero;
+            sceneImage.rectTransform.localScale = Vector3.one;
+            sceneImage.color = sceneImage.sprite == null ? StageFallbackColor : Color.white;
+        }
+        if (sceneTransitionPreviewImage == null)
+            return;
+
+        sceneTransitionPreviewImage.rectTransform.anchoredPosition = Vector2.zero;
+        sceneTransitionPreviewImage.rectTransform.localScale = Vector3.one;
+        sceneTransitionPreviewImage.sprite = null;
+        sceneTransitionPreviewImage.type = Image.Type.Simple;
+        sceneTransitionPreviewImage.fillAmount = 1f;
+        sceneTransitionPreviewImage.gameObject.SetActive(false);
+    }
+
+    private void ApplyPreviewSceneSprite(Sprite sprite)
+    {
+        if (sceneImage == null)
+            return;
+        sceneImage.sprite = sprite;
+        sceneImage.color = sprite == null ? StageFallbackColor : Color.white;
+    }
+
+    private void SetPreviewPrimaryAlpha(float alpha)
+    {
+        if (sceneImage == null)
+            return;
+        Color color = sceneImage.color;
+        color.a = alpha;
+        sceneImage.color = color;
+    }
+
+    private void SetPreviewPrimaryBrightness(float brightness)
+    {
+        if (sceneImage == null)
+            return;
+        Color color = sceneImage.color;
+        color.r = brightness;
+        color.g = brightness;
+        color.b = brightness;
+        sceneImage.color = color;
+    }
+
+    private void SetPreviewTransitionAlpha(float alpha)
+    {
+        if (sceneTransitionPreviewImage == null)
+            return;
+        Color color = sceneTransitionPreviewImage.color;
+        color.a = alpha;
+        sceneTransitionPreviewImage.color = color;
     }
 
     private static string[] GetSceneTransitionTypes()
@@ -1510,6 +1809,7 @@ public class WorkshopStoryNodeEditorPanel : Panel
             return;
         }
 
+        StopSceneTransitionPreview(true);
         resourcePicker?.Close();
         sceneMusicRequestVersion++;
         gameObject.SetActive(false);
@@ -1538,8 +1838,12 @@ public class WorkshopStoryNodeEditorPanel : Panel
     {
         if (sceneImage != null)
             sceneImage.transform.SetAsFirstSibling();
+        if (sceneTransitionPreviewImage != null && sceneImage != null)
+            sceneTransitionPreviewImage.transform.SetSiblingIndex(sceneImage.transform.GetSiblingIndex() + 1);
         if (actorLayer != null)
-            actorLayer.SetSiblingIndex(sceneImage == null ? 0 : sceneImage.transform.GetSiblingIndex() + 1);
+            actorLayer.SetSiblingIndex(sceneTransitionPreviewImage != null
+                ? sceneTransitionPreviewImage.transform.GetSiblingIndex() + 1
+                : sceneImage == null ? 0 : sceneImage.transform.GetSiblingIndex() + 1);
         toolbar?.SetAsLastSibling();
         editorActions?.SetAsLastSibling();
         if (choiceEditor != null && choiceEditor.gameObject.activeSelf)
