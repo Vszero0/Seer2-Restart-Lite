@@ -74,6 +74,9 @@ public class WorkshopStoryBrowserPanel : Panel
     private RectTransform actorManagerContent;
     private RectTransform actorResourceOverlay;
     private RectTransform actorResourceContent;
+    private RectTransform sourceExportOverlay;
+    private RectTransform sourceRewardPickerOverlay;
+    private RectTransform sourceRewardContent;
     private RectTransform actorIndependentIconControls;
     private RectTransform actorCropControls;
     private IInputField actorNameInput;
@@ -101,6 +104,21 @@ public class WorkshopStoryBrowserPanel : Panel
     private Text nodeManagerFlowFilterValueText;
     private Text nodeManagerMarkerFilterValueText;
     private IInputField nodeManagerSearchInput;
+    private IInputField sourceExportTitleInput;
+    private IInputField sourceExportMapInput;
+    private IInputField sourceRewardSearchInput;
+    private readonly IInputField[] sourceRewardAmountInputs = new IInputField[3];
+    private readonly Text[] sourceRewardLabels = new Text[3];
+    private readonly int[] sourceRewardIds = new int[3];
+    private Dropdown sourceMissionTypeDropdown;
+    private Dropdown sourceReplayDropdown;
+    private Dropdown sourceRewardModeDropdown;
+    private Text sourceMissionTypeValueText;
+    private Text sourceReplayValueText;
+    private Text sourceRewardModeValueText;
+    private Text sourceReplayLabel;
+    private Text sourceRewardModeLabel;
+    private Text sourceRewardPageText;
     private Text storyStatusText;
     private Text storyOverviewText;
     private Text storyStructureText;
@@ -124,6 +142,9 @@ public class WorkshopStoryBrowserPanel : Panel
     private bool actorResourceIsMod;
     private bool selectingActorIcon;
     private int actorResourcePage;
+    private int activeSourceRewardSlot;
+    private int sourceRewardPage;
+    private string sourceRewardQuery = string.Empty;
     private bool hasBuilt;
 
     public override void Init()
@@ -145,6 +166,16 @@ public class WorkshopStoryBrowserPanel : Panel
 
     public override void ClosePanel()
     {
+        if (sourceRewardPickerOverlay != null && sourceRewardPickerOverlay.gameObject.activeSelf)
+        {
+            CloseSourceRewardPicker();
+            return;
+        }
+        if (sourceExportOverlay != null && sourceExportOverlay.gameObject.activeSelf)
+        {
+            CloseSourceExport();
+            return;
+        }
         if (graphOverlay != null && graphOverlay.gameObject.activeSelf)
         {
             CloseGraphViewer();
@@ -223,8 +254,8 @@ public class WorkshopStoryBrowserPanel : Panel
 
         storyStatusText = CreateText("Story Status", infoSection, string.Empty, 13, TextAnchor.UpperLeft, HintColor,
             new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(358f, -50f), new Vector2(170f, 40f));
-        CreateActionButton(infoSection, "保存", new Vector2(536f, -56f),
-            new Vector2(78f, 28f), SaveStory);
+        CreateActionButton(infoSection, "保存到 Mod", new Vector2(516f, -56f),
+            new Vector2(98f, 28f), SaveStory);
         IButton manageButton = CreateActionButton(infoSection, "管理剧情点", new Vector2(358f, -100f),
             new Vector2(256f, 62f), OpenNodeManager);
         EmphasizePrimaryAction(manageButton);
@@ -234,6 +265,15 @@ public class WorkshopStoryBrowserPanel : Panel
             new Vector2(80f, 30f), OpenGraphViewer);
         CreateActionButton(infoSection, "剧本预览", new Vector2(534f, -170f),
             new Vector2(80f, 30f), PreviewStory);
+        if (controller.CanExportSource)
+        {
+            CreateText("Source Export Label", infoSection, "源码开发", 14, TextAnchor.MiddleLeft, HintColor,
+                new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(358f, -220f), new Vector2(74f, 30f));
+            CreateActionButton(infoSection, "导出为……", new Vector2(438f, -220f),
+                new Vector2(106f, 30f), OpenSourceExport);
+            CreateText("Source Export Hint", infoSection, "仅 Unity Editor 可用", 11, TextAnchor.MiddleLeft, HintColor,
+                new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(552f, -220f), new Vector2(66f, 30f));
+        }
 
         GameObject overviewObject = new GameObject("Story Overview", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image), typeof(Outline));
         overviewObject.transform.SetParent(infoSection, false);
@@ -271,6 +311,8 @@ public class WorkshopStoryBrowserPanel : Panel
         BuildGraphViewer(modalLayer);
         BuildActorManager(modalLayer);
         BuildActorResourcePicker(modalLayer);
+        BuildSourceExport(modalLayer);
+        BuildSourceRewardPicker(modalLayer);
         modalLayer.gameObject.SetActive(false);
     }
 
@@ -660,6 +702,156 @@ public class WorkshopStoryBrowserPanel : Panel
             new Vector2(318f, -394f), new Vector2(64f, 26f));
         CreateActionButton(actorResourceOverlay, "下一页", new Vector2(386f, -394f),
             new Vector2(64f, 26f), () => ChangeActorResourcePage(1));
+        overlayObject.SetActive(false);
+    }
+
+    private void BuildSourceExport(RectTransform root)
+    {
+        GameObject overlayObject = new GameObject("Story Source Export",
+            typeof(RectTransform), typeof(CanvasRenderer), typeof(Image), typeof(Outline));
+        overlayObject.transform.SetParent(root, false);
+        sourceExportOverlay = overlayObject.GetComponent<RectTransform>();
+        sourceExportOverlay.anchorMin = new Vector2(.5f, .5f);
+        sourceExportOverlay.anchorMax = new Vector2(.5f, .5f);
+        sourceExportOverlay.pivot = new Vector2(.5f, .5f);
+        sourceExportOverlay.anchoredPosition = Vector2.zero;
+        sourceExportOverlay.sizeDelta = new Vector2(760f, 450f);
+        overlayObject.GetComponent<Image>().color = new Color32(0, 8, 12, 255);
+        Outline outline = overlayObject.GetComponent<Outline>();
+        outline.effectColor = Cyan;
+        outline.effectDistance = new Vector2(2f, -2f);
+
+        CreateText("Source Export Heading", sourceExportOverlay, "导出为源码任务", 22,
+            TextAnchor.MiddleCenter, Cyan, new Vector2(.5f, 1f), new Vector2(.5f, 1f),
+            new Vector2(0f, -18f), new Vector2(280f, 30f));
+        CreateModalCloseButton(sourceExportOverlay, CloseSourceExport);
+
+        CreateText("Source Type Label", sourceExportOverlay, "任务类型：", 14, TextAnchor.MiddleLeft, HintColor,
+            new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(28f, -62f), new Vector2(82f, 28f));
+        sourceMissionTypeDropdown = CreateDropdown(sourceExportOverlay, new Vector2(112f, -62f),
+            new Vector2(170f, 28f), OnSourceMissionTypeChanged);
+        if (sourceMissionTypeDropdown != null)
+        {
+            sourceMissionTypeDropdown.options = new List<Dropdown.OptionData>
+            {
+                new Dropdown.OptionData("支线任务"),
+                new Dropdown.OptionData("日常任务"),
+                new Dropdown.OptionData("活动任务"),
+            };
+            sourceMissionTypeDropdown.RefreshShownValue();
+            sourceMissionTypeValueText = CreateSelectorValueText(sourceMissionTypeDropdown);
+        }
+
+        CreateText("Source Title Label", sourceExportOverlay, "任务标题：", 14, TextAnchor.MiddleLeft, HintColor,
+            new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(306f, -62f), new Vector2(82f, 28f));
+        sourceExportTitleInput = CreateInputField(petNameInputFieldPrefab, sourceExportOverlay,
+            "Source Mission Title", "任务标题", string.Empty, new Vector2(390f, -62f),
+            new Vector2(326f, 28f), _ => { });
+
+        CreateText("Source Map Label", sourceExportOverlay, "入口地图 ID：", 14, TextAnchor.MiddleLeft, HintColor,
+            new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(28f, -102f), new Vector2(104f, 28f));
+        sourceExportMapInput = CreateInputField(petNameInputFieldPrefab, sourceExportOverlay,
+            "Source Mission Map", "本体地图 ID", string.Empty, new Vector2(132f, -102f),
+            new Vector2(150f, 28f), _ => { });
+        if (sourceExportMapInput?.inputField != null)
+            sourceExportMapInput.inputField.contentType = InputField.ContentType.IntegerNumber;
+
+        sourceReplayLabel = CreateText("Source Replay Label", sourceExportOverlay, "允许重复体验：", 14,
+            TextAnchor.MiddleLeft, HintColor, new Vector2(0f, 1f), new Vector2(0f, 1f),
+            new Vector2(306f, -102f), new Vector2(112f, 28f));
+        sourceReplayDropdown = CreateDropdown(sourceExportOverlay, new Vector2(418f, -102f),
+            new Vector2(116f, 28f), OnSourceReplayChanged);
+        if (sourceReplayDropdown != null)
+        {
+            sourceReplayDropdown.options = new List<Dropdown.OptionData>
+            {
+                new Dropdown.OptionData("不允许"),
+                new Dropdown.OptionData("允许"),
+            };
+            sourceReplayDropdown.RefreshShownValue();
+            sourceReplayValueText = CreateSelectorValueText(sourceReplayDropdown);
+        }
+
+        sourceRewardModeLabel = CreateText("Source Reward Mode Label", sourceExportOverlay, "奖励领取：", 14,
+            TextAnchor.MiddleLeft, HintColor, new Vector2(0f, 1f), new Vector2(0f, 1f),
+            new Vector2(28f, -148f), new Vector2(92f, 28f));
+        sourceRewardModeDropdown = CreateDropdown(sourceExportOverlay, new Vector2(120f, -148f),
+            new Vector2(190f, 28f), _ => RefreshSourceExportSemantics());
+        if (sourceRewardModeDropdown != null)
+            sourceRewardModeValueText = CreateSelectorValueText(sourceRewardModeDropdown);
+        CreateText("Source Reward Hint", sourceExportOverlay, "最多三项本体道具奖励", 12,
+            TextAnchor.MiddleLeft, HintColor, new Vector2(0f, 1f), new Vector2(0f, 1f),
+            new Vector2(332f, -148f), new Vector2(220f, 28f));
+
+        for (int index = 0; index < 3; index++)
+        {
+            int slot = index;
+            float y = -194f - index * 50f;
+            CreateText("Source Reward Index " + index, sourceExportOverlay, "奖励 " + (index + 1) + "：", 14,
+                TextAnchor.MiddleLeft, Cyan, new Vector2(0f, 1f), new Vector2(0f, 1f),
+                new Vector2(28f, y), new Vector2(72f, 28f));
+            sourceRewardLabels[index] = CreateText("Source Reward Value " + index, sourceExportOverlay,
+                "未设置", 13, TextAnchor.MiddleLeft, HintColor, new Vector2(0f, 1f), new Vector2(0f, 1f),
+                new Vector2(100f, y), new Vector2(294f, 28f));
+            CreateActionButton(sourceExportOverlay, "选择", new Vector2(402f, y), new Vector2(66f, 28f),
+                () => OpenSourceRewardPicker(slot));
+            CreateText("Source Reward Amount Label " + index, sourceExportOverlay, "数量", 13,
+                TextAnchor.MiddleLeft, HintColor, new Vector2(0f, 1f), new Vector2(0f, 1f),
+                new Vector2(482f, y), new Vector2(42f, 28f));
+            sourceRewardAmountInputs[index] = CreateInputField(petNameInputFieldPrefab, sourceExportOverlay,
+                "Source Reward Amount " + index, "1", "1", new Vector2(524f, y),
+                new Vector2(88f, 28f), _ => { });
+            if (sourceRewardAmountInputs[index]?.inputField != null)
+                sourceRewardAmountInputs[index].inputField.contentType = InputField.ContentType.IntegerNumber;
+            CreateActionButton(sourceExportOverlay, "清除", new Vector2(624f, y), new Vector2(66f, 28f),
+                () => ClearSourceReward(slot));
+        }
+
+        CreateText("Source Export Footnote", sourceExportOverlay,
+            "导出会写入 Assets/Resources/Data，并更新对应任务计数；再次导出同一剧本与类型会覆盖更新。",
+            12, TextAnchor.MiddleLeft, HintColor, new Vector2(0f, 1f), new Vector2(0f, 1f),
+            new Vector2(28f, -358f), new Vector2(590f, 44f));
+        CreateActionButton(sourceExportOverlay, "确认导出", new Vector2(-28f, -390f),
+            new Vector2(112f, 32f), ExportSourceStory, TextAnchor.UpperRight);
+        overlayObject.SetActive(false);
+    }
+
+    private void BuildSourceRewardPicker(RectTransform root)
+    {
+        GameObject overlayObject = new GameObject("Source Reward Picker",
+            typeof(RectTransform), typeof(CanvasRenderer), typeof(Image), typeof(Outline));
+        overlayObject.transform.SetParent(root, false);
+        sourceRewardPickerOverlay = overlayObject.GetComponent<RectTransform>();
+        sourceRewardPickerOverlay.anchorMin = new Vector2(.5f, .5f);
+        sourceRewardPickerOverlay.anchorMax = new Vector2(.5f, .5f);
+        sourceRewardPickerOverlay.pivot = new Vector2(.5f, .5f);
+        sourceRewardPickerOverlay.anchoredPosition = Vector2.zero;
+        sourceRewardPickerOverlay.sizeDelta = new Vector2(660f, 410f);
+        overlayObject.GetComponent<Image>().color = new Color32(0, 8, 12, 255);
+        Outline outline = overlayObject.GetComponent<Outline>();
+        outline.effectColor = Cyan;
+        outline.effectDistance = new Vector2(2f, -2f);
+        CreateText("Reward Picker Heading", sourceRewardPickerOverlay, "选择本体奖励道具", 22,
+            TextAnchor.MiddleCenter, Cyan, new Vector2(.5f, 1f), new Vector2(.5f, 1f),
+            new Vector2(0f, -18f), new Vector2(280f, 30f));
+        CreateModalCloseButton(sourceRewardPickerOverlay, CloseSourceRewardPicker);
+        sourceRewardSearchInput = CreateInputField(petNameInputFieldPrefab, sourceRewardPickerOverlay,
+            "Reward Search", "名称或 ID", string.Empty, new Vector2(18f, -58f),
+            new Vector2(300f, 28f), OnSourceRewardSearchChanged);
+        if (sourceRewardSearchInput?.inputField != null)
+        {
+            sourceRewardSearchInput.inputField.onValueChanged = new InputField.OnChangeEvent();
+            sourceRewardSearchInput.inputField.onValueChanged.AddListener(OnSourceRewardSearchChanged);
+        }
+        sourceRewardContent = CreateScrollContent(sourceRewardPickerOverlay,
+            new Vector2(16f, 48f), new Vector2(-16f, -98f));
+        CreateActionButton(sourceRewardPickerOverlay, "上一页", new Vector2(226f, -374f),
+            new Vector2(68f, 26f), () => ChangeSourceRewardPage(-1));
+        sourceRewardPageText = CreateText("Reward Page", sourceRewardPickerOverlay, string.Empty, 12,
+            TextAnchor.MiddleCenter, HintColor, new Vector2(0f, 1f), new Vector2(0f, 1f),
+            new Vector2(298f, -374f), new Vector2(64f, 26f));
+        CreateActionButton(sourceRewardPickerOverlay, "下一页", new Vector2(366f, -374f),
+            new Vector2(68f, 26f), () => ChangeSourceRewardPage(1));
         overlayObject.SetActive(false);
     }
 
@@ -1491,6 +1683,247 @@ public class WorkshopStoryBrowserPanel : Panel
         HideModalLayer();
     }
 
+    private void OpenSourceExport()
+    {
+        StoryDocument document = controller.SelectedDocument;
+        if (document == null)
+        {
+            Hintbox.OpenHintboxWithContent("请先选择要导出的剧本。", 16);
+            return;
+        }
+        if (!controller.CanExportSource)
+        {
+            Hintbox.OpenHintboxWithContent("源码任务导出只在 Unity Editor 中可用。", 16);
+            return;
+        }
+
+        sourceExportTitleInput?.SetInputString(document.title ?? string.Empty);
+        int mapId = document.mission?.mapId ?? 0;
+        if (mapId <= 0 || Map.IsMod(mapId))
+        {
+            mapId = (document.nodes ?? Array.Empty<StoryNodeDocument>())
+                .Where(node => node != null)
+                .SelectMany(node => node.scenes ?? Array.Empty<StorySceneDocument>())
+                .Where(scene => scene != null && scene.mapId > 0 && !Map.IsMod(scene.mapId))
+                .Select(scene => scene.mapId)
+                .FirstOrDefault();
+        }
+        sourceExportMapInput?.SetInputString(mapId > 0 ? mapId.ToString() : string.Empty);
+        sourceMissionTypeDropdown?.SetValueWithoutNotify(0);
+        sourceReplayDropdown?.SetValueWithoutNotify(document.replayable ? 1 : 0);
+        sourceRewardModeDropdown?.SetValueWithoutNotify(0);
+        for (int index = 0; index < sourceRewardIds.Length; index++)
+        {
+            sourceRewardIds[index] = 0;
+            sourceRewardAmountInputs[index]?.SetInputString("1");
+        }
+        RefreshSourceRewardRows();
+        RefreshSourceExportSemantics();
+        OpenModal(sourceExportOverlay);
+    }
+
+    private void CloseSourceExport()
+    {
+        if (sourceExportOverlay != null)
+            sourceExportOverlay.gameObject.SetActive(false);
+        HideModalLayer();
+    }
+
+    private void OnSourceMissionTypeChanged(int _)
+    {
+        RefreshSourceExportSemantics();
+    }
+
+    private void OnSourceReplayChanged(int _)
+    {
+        RefreshSourceExportSemantics();
+    }
+
+    private void RefreshSourceExportSemantics()
+    {
+        bool daily = sourceMissionTypeDropdown != null && sourceMissionTypeDropdown.value == 1;
+        bool replayable = sourceReplayDropdown != null && sourceReplayDropdown.value == 1;
+        if (sourceReplayLabel != null)
+            sourceReplayLabel.text = daily ? "允许当日重复：" : "允许重复体验：";
+        if (sourceRewardModeLabel != null)
+            sourceRewardModeLabel.text = daily ? "当日奖励：" : "奖励领取：";
+        if (sourceRewardModeDropdown != null)
+        {
+            sourceRewardModeDropdown.options = new List<Dropdown.OptionData>
+            {
+                new Dropdown.OptionData(daily ? "每日首次完成" : "仅首次完成"),
+                new Dropdown.OptionData("每次完成"),
+            };
+            if (!replayable)
+                sourceRewardModeDropdown.SetValueWithoutNotify(0);
+            sourceRewardModeDropdown.interactable = replayable;
+            sourceRewardModeDropdown.RefreshShownValue();
+        }
+        SetSelectorValueText(sourceMissionTypeValueText, sourceMissionTypeDropdown, "支线任务");
+        SetSelectorValueText(sourceReplayValueText, sourceReplayDropdown, "不允许");
+        SetSelectorValueText(sourceRewardModeValueText, sourceRewardModeDropdown,
+            daily ? "每日首次完成" : "仅首次完成");
+        if (sourceRewardModeValueText != null)
+            sourceRewardModeValueText.color = replayable ? Cyan : HintColor;
+    }
+
+    private void OpenSourceRewardPicker(int slot)
+    {
+        activeSourceRewardSlot = Mathf.Clamp(slot, 0, sourceRewardIds.Length - 1);
+        sourceRewardPage = 0;
+        sourceRewardQuery = string.Empty;
+        sourceRewardSearchInput?.SetInputString(string.Empty);
+        OpenModal(sourceRewardPickerOverlay);
+        RefreshSourceRewardPicker();
+    }
+
+    private void CloseSourceRewardPicker()
+    {
+        if (sourceRewardPickerOverlay != null)
+            sourceRewardPickerOverlay.gameObject.SetActive(false);
+        OpenModal(sourceExportOverlay);
+    }
+
+    private void OnSourceRewardSearchChanged(string value)
+    {
+        sourceRewardQuery = value ?? string.Empty;
+        sourceRewardPage = 0;
+        RefreshSourceRewardPicker();
+    }
+
+    private void ChangeSourceRewardPage(int delta)
+    {
+        sourceRewardPage = Mathf.Max(0, sourceRewardPage + delta);
+        RefreshSourceRewardPicker();
+    }
+
+    private void RefreshSourceRewardPicker()
+    {
+        if (sourceRewardContent == null)
+            return;
+        ClearChildren(sourceRewardContent);
+        const int pageSize = 7;
+        WorkshopStorySourceRewardOption[] options = controller.GetSourceRewardOptions(sourceRewardQuery).ToArray();
+        int pageCount = Mathf.Max(1, Mathf.CeilToInt(options.Length / (float)pageSize));
+        sourceRewardPage = Mathf.Clamp(sourceRewardPage, 0, pageCount - 1);
+        WorkshopStorySourceRewardOption[] page = options.Skip(sourceRewardPage * pageSize).Take(pageSize).ToArray();
+        for (int index = 0; index < page.Length; index++)
+        {
+            WorkshopStorySourceRewardOption option = page[index];
+            CreateListButton(sourceRewardContent, option.displayName,
+                sourceRewardIds[activeSourceRewardSlot] == option.itemId, index,
+                () => SelectSourceReward(option));
+        }
+        if (page.Length == 0)
+            CreateHint(sourceRewardContent, "没有匹配的本体道具。");
+        else
+            sourceRewardContent.sizeDelta = new Vector2(0f, 12f + page.Length * 42f);
+        if (sourceRewardPageText != null)
+            sourceRewardPageText.text = (sourceRewardPage + 1) + " / " + pageCount;
+    }
+
+    private void SelectSourceReward(WorkshopStorySourceRewardOption option)
+    {
+        if (option == null)
+            return;
+        sourceRewardIds[activeSourceRewardSlot] = option.itemId;
+        RefreshSourceRewardRows();
+        CloseSourceRewardPicker();
+    }
+
+    private void ClearSourceReward(int slot)
+    {
+        if (slot < 0 || slot >= sourceRewardIds.Length)
+            return;
+        sourceRewardIds[slot] = 0;
+        sourceRewardAmountInputs[slot]?.SetInputString("1");
+        RefreshSourceRewardRows();
+    }
+
+    private void RefreshSourceRewardRows()
+    {
+        IReadOnlyList<WorkshopStorySourceRewardOption> all = controller.GetSourceRewardOptions(string.Empty);
+        for (int index = 0; index < sourceRewardLabels.Length; index++)
+        {
+            WorkshopStorySourceRewardOption option = all.FirstOrDefault(value => value.itemId == sourceRewardIds[index]);
+            sourceRewardLabels[index].text = option == null ? "未设置" : option.displayName;
+            sourceRewardLabels[index].color = option == null ? HintColor : Cyan;
+        }
+    }
+
+    private void ExportSourceStory()
+    {
+        StoryDocument document = controller.SelectedDocument;
+        if (document == null)
+            return;
+
+        string title = sourceExportTitleInput?.inputString ?? document.title;
+        string summary = storySummaryInput?.inputString ?? document.summary;
+        if (!controller.UpdateSelectedStoryMetadata(title, summary, document.replayable, out string metadataError))
+        {
+            Hintbox.OpenHintboxWithContent(metadataError, 16);
+            return;
+        }
+        if (controller.HasUnsavedChanges)
+        {
+            bool saved = controller.SaveSelectedForRuntime(out bool runtimeReady, out string saveMessage);
+            if (!saved || !runtimeReady)
+            {
+                Hintbox hintbox = Hintbox.OpenHintboxWithContent(saveMessage, 14);
+                hintbox.SetSize(720, 360);
+                return;
+            }
+        }
+
+        if (!int.TryParse(sourceExportMapInput?.inputString, out int mapId))
+        {
+            Hintbox.OpenHintboxWithContent("请输入有效的本体入口地图 ID。", 16);
+            return;
+        }
+        WorkshopStorySourceExportRequest request = new WorkshopStorySourceExportRequest
+        {
+            missionType = sourceMissionTypeDropdown?.value == 1
+                ? WorkshopStorySourceMissionType.Daily
+                : sourceMissionTypeDropdown?.value == 2
+                    ? WorkshopStorySourceMissionType.Event
+                    : WorkshopStorySourceMissionType.Side,
+            title = title,
+            mapId = mapId,
+            replayable = sourceReplayDropdown != null && sourceReplayDropdown.value == 1,
+            rewardMode = sourceRewardModeDropdown != null && sourceRewardModeDropdown.value == 1
+                ? "always"
+                : "once",
+        };
+        for (int index = 0; index < sourceRewardIds.Length; index++)
+        {
+            if (sourceRewardIds[index] == 0)
+                continue;
+            if (!int.TryParse(sourceRewardAmountInputs[index]?.inputString, out int amount) || amount <= 0)
+            {
+                Hintbox.OpenHintboxWithContent("奖励 " + (index + 1) + " 的数量必须大于 0。", 16);
+                return;
+            }
+            request.rewards.Add(new WorkshopStorySourceReward
+            {
+                itemId = sourceRewardIds[index],
+                amount = amount,
+            });
+        }
+
+        if (!controller.ExportSelectedToSource(request, out WorkshopStorySourceExportResult result, out string error))
+        {
+            Hintbox hintbox = Hintbox.OpenHintboxWithContent(error, 14);
+            hintbox.SetSize(720, 360);
+            return;
+        }
+        CloseSourceExport();
+        RefreshView();
+        string action = result.updatedExisting ? "已更新" : "已新增";
+        Hintbox.OpenHintboxWithContent(action + "源码任务 " + result.missionId
+            + "。\n剧本资源：" + result.storyResourcePath
+            + "\n停止并重新进入播放模式后生效。", 16).SetSize(600, 300);
+    }
+
     private void OpenModal(RectTransform overlay)
     {
         if (modalLayer == null || overlay == null)
@@ -1506,6 +1939,10 @@ public class WorkshopStoryBrowserPanel : Panel
             actorManagerOverlay.gameObject.SetActive(actorManagerOverlay == overlay);
         if (actorResourceOverlay != null)
             actorResourceOverlay.gameObject.SetActive(actorResourceOverlay == overlay);
+        if (sourceExportOverlay != null)
+            sourceExportOverlay.gameObject.SetActive(sourceExportOverlay == overlay);
+        if (sourceRewardPickerOverlay != null)
+            sourceRewardPickerOverlay.gameObject.SetActive(sourceRewardPickerOverlay == overlay);
         modalLayer.gameObject.SetActive(true);
         modalLayer.transform.SetAsLastSibling();
         overlay.transform.SetAsLastSibling();
@@ -1517,7 +1954,9 @@ public class WorkshopStoryBrowserPanel : Panel
             || (graphOverlay != null && graphOverlay.gameObject.activeSelf)
             || (nodeManagerOverlay != null && nodeManagerOverlay.gameObject.activeSelf)
             || (actorManagerOverlay != null && actorManagerOverlay.gameObject.activeSelf)
-            || (actorResourceOverlay != null && actorResourceOverlay.gameObject.activeSelf);
+            || (actorResourceOverlay != null && actorResourceOverlay.gameObject.activeSelf)
+            || (sourceExportOverlay != null && sourceExportOverlay.gameObject.activeSelf)
+            || (sourceRewardPickerOverlay != null && sourceRewardPickerOverlay.gameObject.activeSelf);
         if (!hasOpenModal && modalLayer != null)
             modalLayer.gameObject.SetActive(false);
     }

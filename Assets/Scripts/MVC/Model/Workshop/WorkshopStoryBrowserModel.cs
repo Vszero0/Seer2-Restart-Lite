@@ -8,12 +8,14 @@ using UnityEngine.UI;
 public sealed class WorkshopStoryBrowserModel
 {
     private readonly WorkshopStoryRepository repository;
+    private readonly WorkshopStorySourceExporter sourceExporter = new WorkshopStorySourceExporter();
 
     public IReadOnlyList<WorkshopStorySummary> Stories { get; private set; } = Array.Empty<WorkshopStorySummary>();
     public WorkshopStorySummary SelectedStory { get; private set; }
     public StoryDocument SelectedDocument { get; private set; }
     public StoryNodeDocument SelectedNode { get; private set; }
     public bool HasUnsavedChanges { get; private set; }
+    public bool CanExportSource => sourceExporter.CanExport;
 
     public IReadOnlyList<WorkshopStoryChoiceOption> SelectedNodeChoiceOptions => GetSelectedNodeChoiceOptions();
 
@@ -943,6 +945,44 @@ public sealed class WorkshopStoryBrowserModel
         HasUnsavedChanges = false;
         message = saveMessage;
         return true;
+    }
+
+    public IReadOnlyList<WorkshopStorySourceRewardOption> GetSourceRewardOptions(string filter)
+    {
+        string query = (filter ?? string.Empty).Trim();
+        return ItemInfo.database
+            .Where(item => item != null && item.id != 0 && item.getId != 0 && !ItemInfo.IsMod(item.id))
+            .Where(item => string.IsNullOrWhiteSpace(query)
+                || item.id.ToString().Contains(query)
+                || (item.name ?? string.Empty).IndexOf(query, StringComparison.OrdinalIgnoreCase) >= 0)
+            .OrderBy(item => item.id)
+            .Select(item => new WorkshopStorySourceRewardOption
+            {
+                itemId = item.id,
+                name = item.name,
+            })
+            .ToArray();
+    }
+
+    public bool ExportSelectedToSource(
+        WorkshopStorySourceExportRequest request,
+        out WorkshopStorySourceExportResult result,
+        out string error)
+    {
+        result = null;
+        if (!TryGetSelectedDocument(out error))
+            return false;
+        if (HasUnsavedChanges)
+        {
+            error = "当前剧本尚未保存，请先保存到 Mod 后再导出。";
+            return false;
+        }
+        if (SelectedDocument.isDraft)
+        {
+            error = "当前剧本尚未载入 Mod，请先解决运行校验问题并保存到 Mod 后再导出。";
+            return false;
+        }
+        return sourceExporter.TryExport(SelectedDocument, request, out result, out error);
     }
 
     public bool DeleteSelected(out string error)

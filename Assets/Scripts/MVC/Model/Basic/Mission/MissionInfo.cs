@@ -11,6 +11,10 @@ public class MissionInfo
     [XmlAttribute("type")] public int typeId;
     [XmlIgnore] public MissionType type => (MissionType)typeId;
     [XmlAttribute] public bool replayable = false;
+    [XmlAttribute] public string rewardMode = "once";
+    [XmlAttribute] public bool autoCompleteStory = false;
+    [XmlIgnore] public bool rewardEveryCompletion => string.Equals(
+        rewardMode, "always", StringComparison.OrdinalIgnoreCase);
 
     [XmlElement("preMission")] public string preMissionId;    // 前置任務
     [XmlElement("nextMission")] public string nextMissionId;  // 解鎖任務

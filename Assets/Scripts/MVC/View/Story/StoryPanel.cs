@@ -1,5 +1,6 @@
 using System;
 using System.Collections;
+using System.IO;
 using System.Linq;
 using System.Collections.Generic;
 using UnityEngine;
@@ -31,6 +32,8 @@ public class StoryPanel : Panel
     private StoryScript story;
     private StoryActorStage actorStage;
     private string pendingStoryId;
+    private int boundMissionId;
+    private bool boundMissionCompleted;
     private StoryScript pendingPreviewStory;
     private string pendingPreviewStartNodeId;
     private StoryPreviewScope previewScope;
@@ -63,7 +66,7 @@ public class StoryPanel : Panel
     private TextMeshProUGUI previewIndicatorText;
     private DialogInfo lastDialogInfo;
 
-    public static StoryPanel Open(string storyId, int fallbackMapId = 0)
+    public static StoryPanel Open(string storyId, int fallbackMapId = 0, int missionId = 0)
     {
         GameObject canvas = GameObject.Find("Canvas");
         if (canvas == null)
@@ -87,7 +90,7 @@ public class StoryPanel : Panel
         button.transition = Selectable.Transition.None;
 
         StoryPanel panel = obj.GetComponent<StoryPanel>();
-        panel.OpenStory(storyId, fallbackMapId);
+        panel.OpenStory(storyId, fallbackMapId, missionId);
         return panel;
     }
 
@@ -206,11 +209,13 @@ public class StoryPanel : Panel
         onPreviewClosed?.Invoke();
     }
 
-    public void OpenStory(string storyId, int fallbackMapId = 0)
+    public void OpenStory(string storyId, int fallbackMapId = 0, int missionId = 0)
     {
         isPreviewMode = false;
         pendingStoryId = storyId;
         this.fallbackMapId = fallbackMapId;
+        boundMissionId = missionId;
+        boundMissionCompleted = false;
 
         if (isBuilt)
             LoadStory(storyId, fallbackMapId);
@@ -352,14 +357,14 @@ public class StoryPanel : Panel
                 case StoryCommandType.End:
                     if (StoryConditionEvaluator.Evaluate(story, command.condition))
                     {
-                        ClosePanel();
+                        FinishStory();
                         return;
                     }
                     continue;
             }
         }
 
-        ClosePanel();
+        FinishStory();
     }
 
     private bool ShouldFinishNodePreview(StoryCommand command)
@@ -421,22 +426,44 @@ public class StoryPanel : Panel
             return;
 
         string source = story?.GetResourceSource(resourcePath) ?? "auto";
-        string musicIdentity = AudioSystem.BuildResourceMusicIdentity(source, resourcePath);
+        bool explicitMod = resourcePath.TryTrimStart("Mod/", out string modPath);
+        bool explicitBuiltin = resourcePath.TryTrimStart("Builtin/", out string builtinPath);
+        string loadPath = explicitMod ? modPath : explicitBuiltin ? builtinPath : resourcePath;
+        if (explicitMod)
+            source = "mod";
+        else if (explicitBuiltin)
+            source = "builtin";
+        string musicIdentity = AudioSystem.BuildResourceMusicIdentity(source, loadPath);
         if (string.Equals(activeMusicIdentity, musicIdentity, StringComparison.OrdinalIgnoreCase))
             return;
+
+        void LoadEmbeddedBuiltin()
+        {
+            string embeddedPath = Path.ChangeExtension(loadPath, null)?.Replace('\\', '/');
+            AudioClip clip = string.IsNullOrWhiteSpace(embeddedPath)
+                ? null
+                : Resources.Load<AudioClip>(embeddedPath);
+            ApplyResolvedSceneMusic(clip, musicIdentity, requestVersion);
+        }
+
         bool modOnly = source == "mod" || source == "auto";
-        ResourceManager.instance.GetLocalAddressables<AudioClip>(resourcePath, modOnly,
+        Action<string> loadFailure = null;
+        if (source == "auto")
+        {
+            loadFailure = _ => ResourceManager.instance.GetLocalAddressables<AudioClip>(loadPath, false,
+                clip => ApplyResolvedSceneMusic(clip, musicIdentity, requestVersion),
+                _ => LoadEmbeddedBuiltin());
+        }
+        else if (source == "builtin")
+        {
+            loadFailure = _ => LoadEmbeddedBuiltin();
+        }
+        ResourceManager.instance.GetLocalAddressables<AudioClip>(loadPath, modOnly,
             clip =>
             {
                 ApplyResolvedSceneMusic(clip, musicIdentity, requestVersion);
             },
-            modOnly && source == "auto"
-                ? _ => ResourceManager.instance.GetLocalAddressables<AudioClip>(resourcePath, false,
-                    clip =>
-                    {
-                        ApplyResolvedSceneMusic(clip, musicIdentity, requestVersion);
-                    })
-                : null);
+            loadFailure);
     }
 
     private void CaptureMusicContext()
@@ -1004,7 +1031,12 @@ public class StoryPanel : Panel
                 break;
             case "complete":
                 if (mission != null)
-                    Mission.Complete(missionId);
+                {
+                    List<Item> rewards = Mission.Complete(missionId);
+                    if (missionId == boundMissionId)
+                        boundMissionCompleted = true;
+                    ShowGrantedRewards(rewards);
+                }
                 break;
             case "checkpoint":
                 if (tokens.Length >= 3)
@@ -1015,15 +1047,55 @@ public class StoryPanel : Panel
         SaveSystem.SaveData();
     }
 
+    private void FinishStory()
+    {
+        List<Item> rewards = CompleteBoundMission();
+        ClosePanel();
+        ShowGrantedRewards(rewards);
+    }
+
+    private List<Item> CompleteBoundMission()
+    {
+        if (isPreviewMode || boundMissionId == 0 || boundMissionCompleted)
+            return new List<Item>();
+
+        Mission mission = Mission.Find(boundMissionId);
+        if (mission == null)
+            return new List<Item>();
+
+        boundMissionCompleted = true;
+        List<Item> rewards = Mission.Complete(boundMissionId);
+        SaveSystem.SaveData();
+        return rewards;
+    }
+
+    private static void ShowGrantedRewards(IReadOnlyList<Item> rewards)
+    {
+        if (rewards == null || rewards.Count == 0)
+            return;
+
+        string[] lines = rewards
+            .Where(reward => reward != null && reward.info != null)
+            .Select(reward => reward.name + " × " + reward.num)
+            .ToArray();
+        if (lines.Length == 0)
+            return;
+
+        Hintbox.OpenHintboxWithContent("任务完成，奖励已发放：\n" + string.Join("\n", lines), 16)
+            .SetSize(520, 300);
+    }
+
     private void Teleport(string args)
     {
         if (!int.TryParse(args.Trim(), out int mapId))
             return;
 
+        List<Item> rewards = CompleteBoundMission();
         isClosing = true;
         suppressMusicRestore = true;
         ClosePanel();
         TeleportHandler.Teleport(mapId);
+        ShowGrantedRewards(rewards);
     }
 
     private StoryActorDocument BuildLegacyActor(string args)

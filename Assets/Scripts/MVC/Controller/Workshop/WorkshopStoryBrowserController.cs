@@ -10,6 +10,7 @@ public sealed class WorkshopStoryBrowserController
     public StoryDocument SelectedDocument => model.SelectedDocument;
     public StoryNodeDocument SelectedNode => model.SelectedNode;
     public bool HasUnsavedChanges => model.HasUnsavedChanges;
+    public bool CanExportSource => model.CanExportSource;
 
     public WorkshopStoryBrowserController(WorkshopStoryBrowserModel model)
     {
@@ -199,6 +200,19 @@ public sealed class WorkshopStoryBrowserController
     public bool SaveSelectedForRuntime(out bool runtimeReady, out string message)
     {
         return model.SaveSelectedForRuntime(out runtimeReady, out message);
+    }
+
+    public IReadOnlyList<WorkshopStorySourceRewardOption> GetSourceRewardOptions(string filter)
+    {
+        return model.GetSourceRewardOptions(filter);
+    }
+
+    public bool ExportSelectedToSource(
+        WorkshopStorySourceExportRequest request,
+        out WorkshopStorySourceExportResult result,
+        out string error)
+    {
+        return model.ExportSelectedToSource(request, out result, out error);
     }
 
     public bool DeleteSelected(out string error)

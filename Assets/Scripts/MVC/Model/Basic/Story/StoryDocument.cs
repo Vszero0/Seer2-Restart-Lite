@@ -194,6 +194,7 @@ public class StoryDocument
             id = mission.id,
             typeId = (int)MissionType.Mod,
             replayable = replayable && mission.replayable,
+            autoCompleteStory = true,
             title = string.IsNullOrEmpty(title) ? mission.title : title,
             checkpoints = new List<MissionCheckpoint>
             {

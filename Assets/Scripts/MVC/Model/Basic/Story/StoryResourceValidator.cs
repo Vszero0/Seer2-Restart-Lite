@@ -191,6 +191,12 @@ public static class StoryResourceValidator
             normalizedPath = normalizedPath.Substring("Builtin/".Length);
             source = "builtin";
         }
+
+        // 源码导出的自有资源会直接进入 Assets/Resources，而不是外部 Resources 目录。
+        // 本体资源校验必须同时覆盖 Unity Resources 与可替换的外部资源目录。
+        if (source != "mod" && BuiltinResourceExists(normalizedPath, kind))
+            return true;
+
         string[] roots = source == "mod"
             ? new[] { Application.persistentDataPath + "/Mod/" }
             : source == "builtin"
@@ -203,6 +209,16 @@ public static class StoryResourceValidator
 
         string[] extensions = GetExtensions(kind, normalizedPath);
         return roots.Any(root => extensions.Any(extension => File.Exists(root + normalizedPath + extension)));
+    }
+
+    private static bool BuiltinResourceExists(string path, string kind)
+    {
+        string resourcePath = Path.ChangeExtension(path, null)?.Replace('\\', '/');
+        if (string.IsNullOrWhiteSpace(resourcePath))
+            return false;
+        if (string.Equals(kind, "audio", StringComparison.OrdinalIgnoreCase))
+            return Resources.Load<AudioClip>(resourcePath) != null;
+        return Resources.Load<Sprite>(resourcePath) != null;
     }
 
     private static string[] GetExtensions(string kind, string path)

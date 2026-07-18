@@ -75,21 +75,41 @@ public class Mission
         mission.checkPointId = checkpointId;
     }
 
-    public static void Complete(int id = 0) {
+    public static List<Item> Complete(int id = 0) {
+        List<Item> grantedRewards = new List<Item>();
         Mission mission = Mission.Find(id);
         if (mission == null)
-            return;
+            return grantedRewards;
 
+        bool wasDone = mission.isDone;
         mission.isDone = true;
         mission.checkPointId = "complete";
 
         MissionInfo missionInfo = mission.info;
-        if (missionInfo == null || string.IsNullOrEmpty(missionInfo.nextMissionId))
-            return;
+        if (missionInfo == null)
+            return grantedRewards;
+
+        if (!wasDone || missionInfo.rewardEveryCompletion)
+        {
+            foreach (Item reward in missionInfo.rewards ?? new List<Item>())
+            {
+                if (Item.IsNullOrEmpty(reward) || reward.info == null)
+                    continue;
+
+                Item granted = new Item(reward.info.getId, reward.num);
+                Item.AddTo(granted, Item.itemStorage);
+                grantedRewards.Add(granted);
+            }
+        }
+
+        if (string.IsNullOrEmpty(missionInfo.nextMissionId))
+            return grantedRewards;
 
         foreach (var nextId in missionInfo.nextMissions) {
             Mission.Start(nextId);
         }
+
+        return grantedRewards;
     }
 
     public static void VersionUpdate() {
@@ -103,8 +123,10 @@ public class Mission
             }   
         }
 
-        var sideMissions = Database.instance.missionInfos.FindAll(x => 
-            ((x.type == MissionType.Side) || (x.type == MissionType.Event) || (x.type == MissionType.Mod)) && (Mission.Find(x.id) == null));
+        var sideMissions = Database.instance.missionInfos.FindAll(x =>
+            ((x.type == MissionType.Side) || (x.type == MissionType.Daily)
+                || (x.type == MissionType.Event) || (x.type == MissionType.Mod))
+            && (Mission.Find(x.id) == null));
 
         foreach (var mission in sideMissions)
             Mission.Start(mission.id);
