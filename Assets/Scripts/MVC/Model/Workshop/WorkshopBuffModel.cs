@@ -74,8 +74,8 @@ public class WorkshopBuffModel : Module
     {
         const int lastType = (int)BuffType.Item;
         var typeValue = typeDropdown.value + 1;
-        if (typeValue >= lastType)
-            return (BuffType)(-typeValue - 2 + lastType);
+        if (typeValue > lastType)
+            return (BuffType)(-typeValue - 1 + lastType);
         
         return (BuffType)typeValue;
     }

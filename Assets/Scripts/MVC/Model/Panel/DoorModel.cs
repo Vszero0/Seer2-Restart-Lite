@@ -17,6 +17,7 @@ public class DoorModel : Module
     public string floorKey => door + modeWithParentheses + "[floor]";
     public string floorData => activity.GetData(floorKey, "1");
     public int floorNum => int.Parse(floorData);
+    public int maxFloorNum => GetMaxFloorNum();
 
     public string maxFloorKey => door + modeWithParentheses + "[max]";
     public string maxFloorData => activity.GetData(maxFloorKey, "0");
@@ -42,6 +43,15 @@ public class DoorModel : Module
             "twin" => 2,
             "new_basic" => 1,
             _ => 6
+        };
+    }
+
+    public int GetMaxFloorNum()
+    {
+        return door switch
+        {
+            "new_basic" => 30,
+            _ => 21
         };
     }
 
@@ -71,6 +81,7 @@ public class DoorModel : Module
                         petId = 10000 + floorNum,
                         level = 10 + (floorNum - 1) * 3,
                         initBuffIds = "-3",
+                        loopSkillIds = Pet.GetPetInfo(10000 + floorNum).skills.skillIdList.Select(x => x.ToString()).ConcatToString(","),
                     }.SingleToList(),
                 };
         }
@@ -156,6 +167,7 @@ public class DoorModel : Module
                         petId = 10000 + floorNum,
                         level = 10 + (floorNum - 1) * 3,
                         initBuffIds = "-3",
+                        loopSkillIds = Pet.GetPetInfo(10000 + floorNum).skills.skillIdList.Select(x => x.ToString()).ConcatToString(","),
                     }.SingleToList(),
                     winHandler = NpcButtonHandler.Callback(WinHandler).SingleToList(),
                     loseHandler = new List<NpcButtonHandler>(),

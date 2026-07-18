@@ -269,6 +269,10 @@ public static class SaveSystem
 
             var npcPath = FileBrowserHelpers.CreateFolderInDirectory(modPath, "Npc");
             var storyPath = FileBrowserHelpers.CreateFolderInDirectory(modPath, "Stories");
+
+            var spritePath = FileBrowserHelpers.CreateFolderInDirectory(modPath, "Sprites");
+            var spriteMapPath = FileBrowserHelpers.CreateFolderInDirectory(spritePath, "Map");
+            var talkBubblePath = FileBrowserHelpers.CreateFolderInDirectory(spriteMapPath, "talk bubble");
         }
         catch (Exception)
         {
@@ -1021,6 +1025,7 @@ public static class SaveSystem
         try
         {
             string infoPath = elementPath + "info.csv";
+            string effectPath = elementPath + "effect.csv";
 
             if (!FileBrowserHelpers.FileExists(infoPath))
                 return false;
@@ -1038,6 +1043,12 @@ public static class SaveSystem
                     continue;
 
                 ResourceManager.instance.Set<Sprite>(spritePath + i, sprite);
+            }
+
+            if (FileBrowserHelpers.FileExists(effectPath))
+            {
+                var effectData = ResourceManager.GetCSV(FileBrowserHelpers.ReadTextFromFile(effectPath));
+                ResourceManager.instance.GetElementEffect(effectData);
             }
         }
         catch (Exception e)

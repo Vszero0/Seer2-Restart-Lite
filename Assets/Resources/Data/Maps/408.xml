@@ -10,15 +10,39 @@
 			<wild>
 				<movement mode="wander" radius="220" speed="34" idle="2,3" step="12,26" moveTick="0.05" snap="1" bob="1.25" bobSpeed="2" originalFacesRight="true" />
 				<talk chance="0.3" duration="2.5">
+					<self image="emoji/toon/alert" />
+					<self image="emoji/toon/angry" />
+					<self image="emoji/toon/annoyed" />
+					<self image="emoji/toon/cool" />
+					<self image="emoji/toon/cry" />
+					<self image="emoji/toon/dizzy" />
+					<self image="emoji/toon/grin" />
+					<self image="emoji/toon/happy" />
+					<self image="emoji/toon/hypno" />
+					<self image="emoji/toon/laugh" />
+					<self image="emoji/toon/love" />
+					<self image="emoji/toon/mute" />
+					<self image="emoji/toon/shocked" />
+					<self image="emoji/toon/shy" />
+					<self image="emoji/toon/sick" />
+					<self image="emoji/toon/silly" />
+					<self image="emoji/toon/skull" />
+					<self image="emoji/toon/sleepy" />
+					<self image="emoji/toon/smug" />
+					<self image="emoji/toon/star_eyes" />
+					<self image="emoji/toon/sunglasses" />
+					<self image="emoji/toon/surprised" />
+					<self image="emoji/toon/sweat" />
+					<self image="emoji/toon/worried" />
 					<self>我身上的襁褓有咒文哦！具体是什么……我也不清楚。</self>
 					<self>雪球！来打雪仗吧~</self>
 					<self>原始雪森林的雪好白好软~</self>
-									<self>原始雪森林雪质报告：松软度五星，适合打滚和埋宝藏。</self>
+					<self>原始雪森林雪质报告：松软度五星，适合打滚和埋宝藏。</self>
 					<self>襁褓上的咒文今天又闪了一下，是不是在提醒我什么？</self>
 					<self>雪球大战冠军在此！谁敢与我一战？……算了，我先堆个雪人。</self>
 					<self>保暖模式启动！20%概率效果翻倍，今天运气不错~</self>
 					<self>雪森林里的树都穿着白衣服，像在开星际化妆舞会。</self>
-</talk>
+				</talk>
 			</wild>
 			<battle>
 				<branch id="default">
@@ -28,6 +52,23 @@
 							<loopSkill>10050</loopSkill>
 						</pet>
 					</enemy>
+					<winHandler>
+						<button type="auto">
+							<action>setItem</action>
+							<param>add</param>
+							<param>22035,1</param>
+							<condition>random[old]&lt;10</condition>
+						</button>
+						<button type="auto">
+							<action>openHintbox</action>
+							<param>type=Item</param>
+							<param>title=提示</param>
+							<param>content=1个雪球已经放入背包</param>
+							<param>item_icon=buff[420035]</param>
+							<param>option_num=1</param>
+							<condition>random[old]&lt;10</condition>
+						</button>
+					</winHandler>
 				</branch>
 			</battle>
 			<eventHandler>
@@ -42,15 +83,39 @@
 			<wild>
 				<movement mode="wander" radius="220" speed="34" idle="2,3" step="12,26" moveTick="0.05" snap="1" bob="1.25" bobSpeed="2" originalFacesRight="true" />
 				<talk chance="0.3" duration="2.5">
+					<self image="emoji/toon/alert" />
+					<self image="emoji/toon/angry" />
+					<self image="emoji/toon/annoyed" />
+					<self image="emoji/toon/cool" />
+					<self image="emoji/toon/cry" />
+					<self image="emoji/toon/dizzy" />
+					<self image="emoji/toon/grin" />
+					<self image="emoji/toon/happy" />
+					<self image="emoji/toon/hypno" />
+					<self image="emoji/toon/laugh" />
+					<self image="emoji/toon/love" />
+					<self image="emoji/toon/mute" />
+					<self image="emoji/toon/shocked" />
+					<self image="emoji/toon/shy" />
+					<self image="emoji/toon/sick" />
+					<self image="emoji/toon/silly" />
+					<self image="emoji/toon/skull" />
+					<self image="emoji/toon/sleepy" />
+					<self image="emoji/toon/smug" />
+					<self image="emoji/toon/star_eyes" />
+					<self image="emoji/toon/sunglasses" />
+					<self image="emoji/toon/surprised" />
+					<self image="emoji/toon/sweat" />
+					<self image="emoji/toon/worried" />
 					<self>我身上的襁褓有咒文哦！具体是什么……我也不清楚。</self>
 					<self>雪球！来打雪仗吧~</self>
 					<self>原始雪森林的雪好白好软~</self>
-									<self>原始雪森林雪质报告：松软度五星，适合打滚和埋宝藏。</self>
+					self>原始雪森林雪质报告：松软度五星，适合打滚和埋宝藏。</self>
 					<self>襁褓上的咒文今天又闪了一下，是不是在提醒我什么？</self>
 					<self>雪球大战冠军在此！谁敢与我一战？……算了，我先堆个雪人。</self>
 					<self>保暖模式启动！20%概率效果翻倍，今天运气不错~</self>
 					<self>雪森林里的树都穿着白衣服，像在开星际化妆舞会。</self>
-</talk>
+					</talk>
 			</wild>
 			<battle>
 				<branch id="default">
@@ -70,12 +135,8 @@
 			</eventHandler>
 		</npc>
 		-->
-			<teleport id="1" name="冰沁宫殿" pos="800,240" targetMapId="405"/>
-			<teleport id="2" name="雪之湖泊" pos="300,80" targetMapId="409"/>
-
-
+		<teleport id="1" name="冰沁宫殿" pos="800,240" targetMapId="405"/>
+		<teleport id="2" name="雪之湖泊" pos="300,80" targetMapId="409"/>
 	</entities>
-
-
 </map>
 

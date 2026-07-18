@@ -129,7 +129,7 @@ public static class EffectAbilityHandler
         // On before pet change
         var tmpPhase = state.phase;
         state.phase = EffectTiming.OnBeforePetChange;
-        state.ApplyBuffs();
+        state.GetEffectHandler(petChangeUnit, false).CheckAndApply(state);
         state.phase = tmpPhase;
 
         // Inherit Buffs: 主動換場繼承
@@ -156,7 +156,7 @@ public static class EffectAbilityHandler
 
         // On after pet change
         state.phase = EffectTiming.OnAfterPetChange;
-        state.ApplyBuffs();
+        state.GetEffectHandler(petChangeUnit, false).CheckAndApply(state);
         state.phase = tmpPhase;
 
         return true;
@@ -186,6 +186,8 @@ public static class EffectAbilityHandler
         Unit lhsUnit = (who == "me") ? state.GetUnitById(invokeUnit.id) : state.GetRhsUnitById(invokeUnit.id);
         Unit rhsUnit = state.GetRhsUnitById(lhsUnit.id);
         List<BattlePet> targetList = Parser.GetBattlePetTargetList(state, effect, lhsUnit, rhsUnit);
+
+        bool isSuccess = false;
 
         for (int i = 0; i < targetList.Count; i++)
         {
@@ -252,6 +254,7 @@ public static class EffectAbilityHandler
                 }
 
                 targetList[i].hp = setHp;
+                isSuccess = true;
                 continue;
             }
 
@@ -269,6 +272,7 @@ public static class EffectAbilityHandler
                     continue;
 
                 targetList[i].maxHp = maxHp;
+                isSuccess = true;
                 continue;
             }
 
@@ -339,9 +343,10 @@ public static class EffectAbilityHandler
             }
 
             targetList[i].hp += healAdd;
+            isSuccess = true;
         }
 
-        return true;
+        return isSuccess;
     }
 
     public static bool Rage(this Effect effect, BattleState state)
@@ -769,8 +774,9 @@ public static class EffectAbilityHandler
                     {
                         foreach (var op in optionList)
                         {
-                            var num = Parser.ParseEffectOperation(op.Split(':')[1], effect, lhsUnit, rhsUnit);
-                            newBuff.options.Set(op.Split(':')[0], (num == float.MinValue) ? op.Split(':')[1] : num.ToString());
+                            var split = op.Split(':', 2);
+                            var num = Parser.ParseEffectOperation(split[1], effect, lhsUnit, rhsUnit);
+                            newBuff.options.Set(split[0], (num == float.MinValue) ? split[1] : num.ToString());
                         }
                     }
                 }
@@ -920,6 +926,7 @@ public static class EffectAbilityHandler
         string target = effect.abilityOptionDict.Get("target", "me");
         string transfer = effect.abilityOptionDict.Get("transfer", "false");
         string reverse = effect.abilityOptionDict.Get("reverse", "false");
+        string mult = effect.abilityOptionDict.Get("mult", "1");
 
         Unit invokeUnit = (Unit)effect.invokeUnit;
         Unit lhsUnit = (source == "me") ? state.GetUnitById(invokeUnit.id) : state.GetRhsUnitById(invokeUnit.id);
@@ -974,11 +981,8 @@ public static class EffectAbilityHandler
         if (!isId && !isType)
             return false;
 
-        if (!bool.TryParse(transfer, out bool isTransfer))
+        if (!bool.TryParse(transfer, out bool isTransfer) || !bool.TryParse(reverse, out bool isReverse))
             return false;
-
-        var isReverse = reverse.ToLower() != "false";
-        var reverseMult = (int)Identifier.GetNumIdentifier(reverse);
 
         if (isId)
         {
@@ -1004,7 +1008,8 @@ public static class EffectAbilityHandler
                 }
 
                 int type = buff.id.IsWithin(-9, -10) ? 5 : (buff.id - 1) / 2;
-                status[type] = (isReverse ? -reverseMult : 1) * powerup[type];
+                int statusMult = (int)Parser.ParseEffectOperation(mult, effect, lhsUnit, rhsUnit);
+                status[type] = (isReverse ? -1 : 1) * statusMult * powerup[type];
 
                 if (isTransfer || isReverse)
                 {
@@ -1454,7 +1459,13 @@ public static class EffectAbilityHandler
                 else if (normalSkillExpr == "secret")
                 {
                     var secretPet = Pet.GetExamplePet(newPet.id);
-                    normalSkills = secretPet.skills.secretSkill.Where(x => x.type != SkillType.必杀).TakeLast(4).ToArray();
+                    var secretSkills = secretPet.skills.secretSkill.Where(x => x.type != SkillType.必杀).TakeLast(4).ToArray();
+                    if (secretSkills.Length < 4)
+                    {
+                        var otherSkills = secretPet.ownSkill.Where(x => (x.type != SkillType.必杀) && (!secretSkills.Contains(x))).ToList();
+                        secretSkills = secretSkills.Concat(otherSkills.Random(4 - secretSkills.Length, false)).ToArray();
+                    }
+                    normalSkills = secretSkills;
                 }
                 else if (normalSkillExpr.TryTrimStart("shift", out var normalTrim) &&
                     normalTrim.TryTrimParentheses(out var normalShift) &&

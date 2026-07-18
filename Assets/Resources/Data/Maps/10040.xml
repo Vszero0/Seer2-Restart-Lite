@@ -1,0 +1,335 @@
+<map name="塞西利亚星冰原" category="102" id="10040" weather="4">
+	<fightMapColor>64,64,64,255</fightMapColor>
+	<initialPoint>480,90</initialPoint>
+	<music category="102">
+		<bgm>BGM_40</bgm>
+	</music>
+	<entities>
+		<npc id="1004000" resId="1001" name="" size="200,200" pos="90,340" namePos="0,0" color="0,0,0,0" target="false">
+			<!-- <description>寒冰溶洞</description> -->
+			<!-- <transport>210,380</transport> -->
+			<eventHandler>
+				<!--
+				<button type="click">
+					<action>teleport</action>
+					<param>10041</param>
+				</button>
+				-->
+				<button type="auto">
+					<action>openHintbox</action>
+					<param>type=Item</param>
+					<param>content=塞西利亚星很冷，穿上防寒套装再来吧！</param>
+					<param>item_icon=item[37010]</param>
+					<param>option_num=1</param>
+					<param>callback=teleport</param>
+					<condition>player.achievementNOT37010</condition>
+				</button>
+			</eventHandler>
+			<callbackHandler>
+				<button type="teleport">
+					<action>teleport</action>
+					<param>10001</param>
+				</button>
+			</callbackHandler>
+		</npc>
+		<npc id="1004001" resId="Pets/pet/10116" name="Lv61 卡卡" size="24,35" pos="390,90" namePos="0,0">
+			<wild>
+				<movement mode="wander" radius="220" speed="34" idle="2,6" step="12,26" moveTick="0.05" snap="1" bob="1.25" bobSpeed="2" originalFacesRight="true" />
+				<talk chance="0.3" duration="4">
+					<self image="emoji/meme/question" />
+					<self image="emoji/meme/cute" />
+					<self image="emoji/meme/haha" />
+					<self image="emoji/meme/heyhey" />
+					<self image="emoji/meme/yeah" />
+					<self image="emoji/meme/tf" />
+					<self image="emoji/meme/ys" />
+					<self image="emoji/toon/alert" />
+					<self image="emoji/toon/angry" />
+					<self image="emoji/toon/annoyed" />
+					<self image="emoji/toon/cool" />
+					<self image="emoji/toon/cry" />
+					<self image="emoji/toon/dizzy" />
+					<self image="emoji/toon/grin" />
+					<self image="emoji/toon/happy" />
+					<self image="emoji/toon/hypno" />
+					<self image="emoji/toon/laugh" />
+					<self image="emoji/toon/love" />
+					<self image="emoji/toon/mute" />
+					<self image="emoji/toon/shocked" />
+					<self image="emoji/toon/shy" />
+					<self image="emoji/toon/sick" />
+					<self image="emoji/toon/silly" />
+					<self image="emoji/toon/skull" />
+					<self image="emoji/toon/sleepy" />
+					<self image="emoji/toon/smug" />
+					<self image="emoji/toon/star_eyes" />
+					<self image="emoji/toon/sunglasses" />
+					<self image="emoji/toon/surprised" />
+					<self image="emoji/toon/sweat" />
+					<self image="emoji/toon/worried" />
+				</talk>
+			</wild>
+			<battle>
+				<branch id="default">
+					<settings count="6" capture="true">
+						<weather>4</weather>
+					</settings>
+					<enemy>
+						<pet id="10116" level="61">
+							<loopSkill>14675</loopSkill>
+						</pet>
+					</enemy>
+				</branch>
+			</battle>
+			<eventHandler>
+				<button type="click">
+					<action>battle</action>
+					<param>default</param>
+				</button>
+			</eventHandler>
+		</npc>
+		<npc id="1004002" resId="Pets/pet/10116" name="Lv62 卡卡" size="24,35" pos="300,280" namePos="0,0">
+			<wild>
+				<movement mode="wander" radius="220" speed="34" idle="2,6" step="12,26" moveTick="0.05" snap="1" bob="1.25" bobSpeed="2" originalFacesRight="true" />
+				<talk chance="0.3" duration="4">
+					<self image="emoji/meme/question" />
+					<self image="emoji/meme/cute" />
+					<self image="emoji/meme/haha" />
+					<self image="emoji/meme/heyhey" />
+					<self image="emoji/meme/yeah" />
+					<self image="emoji/meme/tf" />
+					<self image="emoji/meme/ys" />
+					<self image="emoji/toon/alert" />
+					<self image="emoji/toon/angry" />
+					<self image="emoji/toon/annoyed" />
+					<self image="emoji/toon/cool" />
+					<self image="emoji/toon/cry" />
+					<self image="emoji/toon/dizzy" />
+					<self image="emoji/toon/grin" />
+					<self image="emoji/toon/happy" />
+					<self image="emoji/toon/hypno" />
+					<self image="emoji/toon/laugh" />
+					<self image="emoji/toon/love" />
+					<self image="emoji/toon/mute" />
+					<self image="emoji/toon/shocked" />
+					<self image="emoji/toon/shy" />
+					<self image="emoji/toon/sick" />
+					<self image="emoji/toon/silly" />
+					<self image="emoji/toon/skull" />
+					<self image="emoji/toon/sleepy" />
+					<self image="emoji/toon/smug" />
+					<self image="emoji/toon/star_eyes" />
+					<self image="emoji/toon/sunglasses" />
+					<self image="emoji/toon/surprised" />
+					<self image="emoji/toon/sweat" />
+					<self image="emoji/toon/worried" />
+				</talk>
+			</wild>
+			<battle>
+				<branch id="default">
+					<settings count="6" capture="true">
+						<weather>4</weather>
+					</settings>
+					<enemy>
+						<pet id="10116" level="62">
+							<loopSkill>14675</loopSkill>
+						</pet>
+					</enemy>
+				</branch>
+			</battle>
+			<eventHandler>
+				<button type="click">
+					<action>battle</action>
+					<param>default</param>
+				</button>
+			</eventHandler>
+		</npc>
+		<!--
+		<npc id="1004003" resId="Pets/pet/10908" name="Lv50 卡卡★" size="38,41" pos="815,365" namePos="0,0" active="false">
+			<description>稀有精灵</description>
+			<battle>
+				<branch id="default">
+					<settings count="6" capture="true">
+						<weather>8</weather>
+					</settings>
+					<enemy>
+						<pet id="10908" level="50">
+							<initBuff>-2</initBuff>
+							<loopSkill>14016</loopSkill>
+						</pet>
+					</enemy>
+					<winHandler>
+						<button type="auto">
+							<action>setItem</action>
+							<param>add</param>
+							<param>400000,1</param>
+							<condition>battle.result.state=1</condition>
+						</button>
+						<button type="auto">
+							<action>openHintbox</action>
+							<param>type=Item</param>
+							<param>title=提示</param>
+							<param>content=1个陨石碎片已经放入背包</param>
+							<param>item_icon=item[400000]</param>
+							<param>option_num=1</param>
+							<condition>battle.result.state=1</condition>
+						</button>
+					</winHandler>
+				</branch>
+			</battle>
+			<eventHandler>
+				<button type="click">
+					<action>battle</action>
+					<param>default</param>
+				</button>
+				<button type="auto">
+					<action>setNpcParam</action>
+					<param>1003003</param>
+					<param>active=true</param>
+					<condition>random[0~4096]&lt;1</condition>
+				</button>
+			</eventHandler>
+		</npc>
+		-->
+		<npc id="1004004" resId="Pets/pet/10050" name="Lv100 阿克希亚" size="106,138" pos="85,400" namePos="0,-160">
+			<description>SPT</description>
+			<dialog>
+				<branch id="default" name="阿克希亚" icon="Pets/pet/10050" size="106,138" pos="10,35">
+					<content><![CDATA[离开这里！]]></content>
+					<functionHandler>
+						<func type="click">
+							<description><![CDATA[挑战阿克希亚]]></description>
+							<action>battle</action>
+							<param>default</param>
+						</func>
+						<func type="click">
+							<description><![CDATA[冰之祝福]]></description>
+							<action>battle</action>
+							<param>evolve</param>
+							<condition>firstPet.id=10050</condition>
+						</func>
+						<func type="branch">
+							<action>openHintbox</action>
+							<param>type=Item</param>
+							<param>title=提示</param>
+							<param>content=把阿克希亚设为首发之后再来挑战吧</param>
+							<param>option_num=1</param>
+							<param>item_icon=pet[10050]</param>
+							<condition>firstPet.idNOT10050</condition>
+						</func>
+					</functionHandler>
+					<replyHandler>
+						<reply type="click">
+							<description><![CDATA[我带来了雷伊]]></description>
+							<action>openDialog</action>
+							<param>null</param>
+						</reply>
+					</replyHandler>
+				</branch>
+			</dialog>
+			<battle>
+				<branch id="default">
+					<settings count="6">
+						<mode>3</mode>
+						<weather>4</weather>
+					</settings>
+					<enemy>
+						<pet id="10050" level="100">
+							<status>
+								<hp>5000</hp>
+							</status>
+							<initBuff>13,14,17,20,68,98,-3000,-3058</initBuff>
+							<loopSkill>14667,14668,14669</loopSkill>
+							<superSkill>14665</superSkill>
+						</pet>
+					</enemy>
+					<winHandler>
+						<button type="auto">
+							<action>getPet</action>
+							<param>10048,1</param>
+							<condition>activity[spt].done[new][6][default]=[bool]false[default]false</condition>
+						</button>
+						<button type="auto">
+							<action>openHintbox</action>
+							<param>type=Item</param>
+							<param>title=提示</param>
+							<param>content=【索拉】已经放入精灵仓库</param>
+							<param>item_icon=pet[10048]</param>
+							<param>option_num=1</param>
+							<condition>activity[spt].done[new][6][default]=[bool]false[default]false</condition>
+						</button>
+						<button type="auto">
+							<action>setActivity</action>
+							<param>spt</param>
+							<param>done[new][6][default]=true</param>
+							<condition>activity[spt].done[new][6][default]=[bool]false[default]false</condition>
+						</button>
+					</winHandler>
+				</branch>
+				<branch id="evolve">
+					<settings count="1">
+						<mode>3</mode>
+						<weather>4</weather>
+						<initBuff>(rule:600000)</initBuff>
+					</settings>
+					<enemy>
+						<pet id="11361" level="105">
+							<status>
+								<hp>5000</hp>
+							</status>
+							<initBuff>13,20,19,98,2041</initBuff>
+							<loopSkill>14730,14733,14732,14734,14731</loopSkill>
+						</pet>
+					</enemy>
+					<winHandler>
+						<button type="auto">
+							<action>evolvePet</action>
+							<param>11361</param>
+						</button>
+						<button type="auto">
+							<action>openHintbox</action>
+							<param>type=Item</param>
+							<param>title=提示</param>
+							<param>content=【阿克希亚】已成功超进化</param>
+							<param>item_icon=pet[11361]</param>
+							<param>option_num=1</param>
+						</button>
+					</winHandler>
+				</branch>
+			</battle>
+			<eventHandler>
+				<button type="click">
+					<action>openDialog</action>
+					<param>default</param>
+				</button>
+			</eventHandler>
+		</npc>
+		<npc id="1004005" resId="Pets/pet/10555" name="Lv65 宾克" size="48,59" pos="290,160" namePos="0,0" active="false">
+			<description>稀有精灵</description>
+			<battle>
+				<branch id="default">
+					<settings count="6" capture="true"/>
+					<enemy>
+						<pet id="10555" level="65">
+							<initBuff>-2</initBuff>
+							<loopSkill>14691,14693,14691,14693,14693,-4</loopSkill>
+						</pet>
+					</enemy>
+				</branch>
+			</battle>
+			<eventHandler>
+				<button type="auto">
+					<action>setNpcParam</action>
+					<param>1004005</param>
+					<param>active=true</param>
+					<condition>random[0~256]&lt;1</condition>
+				</button>
+				<button type="click">
+					<action>battle</action>
+					<param>default</param>
+				</button>
+			</eventHandler>
+		</npc>
+		<teleport id="1" name="传送室" pos="695,130" targetMapId="10001"/>
+	</entities>
+</map>

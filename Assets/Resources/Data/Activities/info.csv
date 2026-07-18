@@ -107,6 +107,7 @@ main_pet_wakeup,Maps/bg/60,主宠神迹觉醒,resident,全天候,60,Pets/icon/64
 20016,Maps/bg/125,五月五庆端午,resident,全天候,125,Pets/icon/407.png,2026-07-03,none,五月五庆端午，制作粽子获得粽子精灵！
 30001,Maps/bg/2,精灵王约瑟,daily,全天候,2,Pets/icon/990,2025-12-12,none,找寻希望之光，获得精灵王约瑟吧！
 30002,Maps/bg/2,绝望之影,resident,全天候,-2,none,2024-07-08,none,找寻奎尔斯的绝望之影，追溯过往双王对战的记忆吧！
+20017,20017,凛冰枪骑,resident,全天候,-10010,Pets/icon/13385,2026-07-17,none,你的最佳伙伴来了！
 evolve_608,Maps/bg/121,法拉神迹觉醒,resident,全天候,121,Pets/icon/608&Pets/icon/1136&Pets/icon/20008,2026-01-30,none,法拉的神迹形态登场！
 evolve_940,Maps/bg/413,米咔神迹觉醒,resident,全天候,413,Pets/icon/940&Pets/icon/12639&Pets/icon/12939,2025-06-13,none,米咔的神迹形态登场！
 evolve_971,Maps/bg/1,星影系列超进化,resident,全天候,1,Pets/icon/971&Pets/icon/972&Pets/icon/973,2025-10-01,none,星海殒影系列超进化！
