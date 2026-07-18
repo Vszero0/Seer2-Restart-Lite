@@ -424,6 +424,8 @@ public static class SaveSystem
 
                 SaveData(data, id);
             }
+
+            Mission.ReloadRuntimeModMissions(null);
         }
         catch (Exception e)
         {

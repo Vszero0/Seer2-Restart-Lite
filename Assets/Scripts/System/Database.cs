@@ -189,6 +189,9 @@ public class Database : Singleton<Database>
         foreach (int id in modMissionIds)
             missionInfoDict.Remove(id);
 
+        missionInfos = missionInfoDict.Select(entry => entry.Value).ToList();
+        Mission.ReloadRuntimeModMissions(missionInfos);
+
         if (!SaveSystem.TryLoadStoryMod(out string error, out var storyDict))
         {
             if (!string.IsNullOrEmpty(error))
@@ -208,6 +211,7 @@ public class Database : Singleton<Database>
         }
 
         missionInfos = missionInfoDict.Select(entry => entry.Value).ToList();
+        Mission.ReloadRuntimeModMissions(missionInfos);
     }
 
     public PetHitInfo GetPetHitInfo(int skinId)

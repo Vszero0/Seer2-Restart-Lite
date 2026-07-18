@@ -7,6 +7,8 @@ using System;
 
 public class Mission
 {
+    private static readonly List<Mission> runtimeModStorage = new List<Mission>();
+
     public MissionInfo info => GetMissionInfo(id);
     public MissionCheckpoint checkpointInfo
     {
@@ -40,12 +42,40 @@ public class Mission
     }
 
     public static List<Mission> Filter(Predicate<Mission> pred) {
-        return Player.instance.gameData.missionStorage.FindAll(pred);
+        return GetStorage().FindAll(pred);
+    }
+
+    public static List<Mission> GetStorage() {
+        var storage = Player.instance?.gameData?.missionStorage != null
+            ? new List<Mission>(Player.instance.gameData.missionStorage)
+            : new List<Mission>();
+        storage.AddRange(runtimeModStorage);
+        return storage;
+    }
+
+    public static void ReloadRuntimeModMissions(IEnumerable<MissionInfo> missionInfos) {
+        runtimeModStorage.Clear();
+        if (missionInfos == null)
+            return;
+
+        foreach (MissionInfo missionInfo in missionInfos) {
+            if (missionInfo == null || missionInfo.type != MissionType.Mod)
+                continue;
+
+            runtimeModStorage.Add(new Mission(missionInfo.id));
+        }
+    }
+
+    public static void RemoveLegacyModEntries() {
+        Player.instance?.gameData?.missionStorage?.RemoveAll(x => (x?.id ?? 0) < 0);
     }
 
     public static Mission Find(int id = 0) {
         id = (id == 0) ? Player.instance.currentMissionId : id;
-        Mission mission = Player.instance.gameData.missionStorage.Find(x => x.id == id);
+        List<Mission> storage = id < 0
+            ? runtimeModStorage
+            : Player.instance.gameData.missionStorage;
+        Mission mission = storage.Find(x => x.id == id);
         return mission;
     }
 
@@ -63,6 +93,15 @@ public class Mission
                 }
             }
         }
+        if (missionInfo.type == MissionType.Mod) {
+            Mission runtimeMission = runtimeModStorage.Find(x => x.id == id);
+            if (runtimeMission != null)
+                return runtimeMission;
+
+            runtimeModStorage.Add(mission);
+            return mission;
+        }
+
         Player.instance.gameData.missionStorage.Add(mission);
         return mission;
     }
@@ -125,7 +164,7 @@ public class Mission
 
         var sideMissions = Database.instance.missionInfos.FindAll(x =>
             ((x.type == MissionType.Side) || (x.type == MissionType.Daily)
-                || (x.type == MissionType.Event) || (x.type == MissionType.Mod))
+                || (x.type == MissionType.Event))
             && (Mission.Find(x.id) == null));
 
         foreach (var mission in sideMissions)
