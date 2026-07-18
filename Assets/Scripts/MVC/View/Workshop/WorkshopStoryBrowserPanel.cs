@@ -267,12 +267,15 @@ public class WorkshopStoryBrowserPanel : Panel
             new Vector2(80f, 30f), PreviewStory);
         if (controller.CanExportSource)
         {
-            CreateText("Source Export Label", infoSection, "源码开发", 14, TextAnchor.MiddleLeft, HintColor,
-                new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(358f, -220f), new Vector2(74f, 30f));
-            CreateActionButton(infoSection, "导出为……", new Vector2(438f, -220f),
-                new Vector2(106f, 30f), OpenSourceExport);
-            CreateText("Source Export Hint", infoSection, "仅 Unity Editor 可用", 11, TextAnchor.MiddleLeft, HintColor,
-                new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(552f, -220f), new Vector2(66f, 30f));
+            CreateText("Source Export Label", infoSection, "源码开发", 14, TextAnchor.MiddleLeft, Cyan,
+                new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(358f, -214f), new Vector2(74f, 30f));
+            CreateActionButton(infoSection, "导出为……", new Vector2(438f, -214f),
+                new Vector2(176f, 30f), OpenSourceExport);
+            Text sourceExportHint = CreateText("Source Export Hint", infoSection,
+                "仅 Unity Editor · 可导出支线 / 日常 / 活动任务", 11, TextAnchor.MiddleCenter, HintColor,
+                new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(358f, -248f), new Vector2(256f, 22f));
+            sourceExportHint.horizontalOverflow = HorizontalWrapMode.Wrap;
+            sourceExportHint.verticalOverflow = VerticalWrapMode.Truncate;
         }
 
         GameObject overviewObject = new GameObject("Story Overview", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image), typeof(Outline));

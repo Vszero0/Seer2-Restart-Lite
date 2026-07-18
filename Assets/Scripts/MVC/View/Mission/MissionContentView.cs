@@ -31,4 +31,10 @@ public class MissionContentView : Module
         }
     }
 
+    public void SetEmptyState(string title, string description) {
+        Clear();
+        titleText?.SetText(title);
+        contentText?.SetText(description);
+    }
+
 }
