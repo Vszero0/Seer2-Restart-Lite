@@ -79,7 +79,7 @@ public class MissionController : Module
             }
 
             int boundMissionId = missionInfo != null && missionInfo.autoCompleteStory ? missionInfo.id : 0;
-            StoryPanel.Open(checkpoint.storyId, checkpoint.mapId, boundMissionId);
+            StoryPanel.Open(checkpoint.storyId, fallbackMapId: 0, missionId: boundMissionId);
             return;
         }
 

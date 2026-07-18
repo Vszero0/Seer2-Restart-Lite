@@ -32,7 +32,6 @@ public sealed class WorkshopStorySourceExportRequest
 {
     public WorkshopStorySourceMissionType missionType = WorkshopStorySourceMissionType.Side;
     public string title;
-    public int mapId;
     public bool replayable;
     public string rewardMode = "once";
     public List<WorkshopStorySourceReward> rewards = new List<WorkshopStorySourceReward>();
@@ -51,6 +50,8 @@ public sealed class WorkshopStorySourceExportResult
 /// </summary>
 public sealed class WorkshopStorySourceExporter
 {
+    private const int StoryMissionMapPlaceholder = 0;
+
     private sealed class AssetCopy
     {
         public string sourcePath;
@@ -181,17 +182,6 @@ public sealed class WorkshopStorySourceExporter
             return false;
         }
 
-        if (request.mapId <= 0 || Map.IsMod(request.mapId))
-        {
-            error = "源码任务入口必须使用有效的本体地图 ID。";
-            return false;
-        }
-        if (Resources.Load<TextAsset>("Data/Maps/" + request.mapId) == null)
-        {
-            error = "找不到入口地图对应的本体地图 XML：" + request.mapId;
-            return false;
-        }
-
         request.title = (request.title ?? string.Empty).Trim();
         if (string.IsNullOrWhiteSpace(request.title))
         {
@@ -248,7 +238,7 @@ public sealed class WorkshopStorySourceExporter
         document.mission ??= new StoryMissionDocument();
         document.mission.title = request.title;
         document.mission.summary = document.summary;
-        document.mission.mapId = request.mapId;
+        document.mission.mapId = StoryMissionMapPlaceholder;
         document.mission.replayable = request.replayable;
         RemoveOwnMissionCompletionCommands(document, source.mission?.id ?? 0);
 
@@ -530,7 +520,7 @@ public sealed class WorkshopStorySourceExporter
                 new MissionCheckpoint
                 {
                     id = "default",
-                    mapId = request.mapId,
+                    mapId = StoryMissionMapPlaceholder,
                     storyId = storyResourcePath,
                     intro = document.summary ?? string.Empty,
                 },

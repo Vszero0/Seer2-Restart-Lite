@@ -105,7 +105,6 @@ public class WorkshopStoryBrowserPanel : Panel
     private Text nodeManagerMarkerFilterValueText;
     private IInputField nodeManagerSearchInput;
     private IInputField sourceExportTitleInput;
-    private IInputField sourceExportMapInput;
     private IInputField sourceRewardSearchInput;
     private readonly IInputField[] sourceRewardAmountInputs = new IInputField[3];
     private readonly Text[] sourceRewardLabels = new Text[3];
@@ -751,18 +750,10 @@ public class WorkshopStoryBrowserPanel : Panel
             "Source Mission Title", "任务标题", string.Empty, new Vector2(390f, -62f),
             new Vector2(326f, 28f), _ => { });
 
-        CreateText("Source Map Label", sourceExportOverlay, "入口地图 ID：", 14, TextAnchor.MiddleLeft, HintColor,
-            new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(28f, -102f), new Vector2(104f, 28f));
-        sourceExportMapInput = CreateInputField(petNameInputFieldPrefab, sourceExportOverlay,
-            "Source Mission Map", "本体地图 ID", string.Empty, new Vector2(132f, -102f),
-            new Vector2(150f, 28f), _ => { });
-        if (sourceExportMapInput?.inputField != null)
-            sourceExportMapInput.inputField.contentType = InputField.ContentType.IntegerNumber;
-
         sourceReplayLabel = CreateText("Source Replay Label", sourceExportOverlay, "允许重复体验：", 14,
             TextAnchor.MiddleLeft, HintColor, new Vector2(0f, 1f), new Vector2(0f, 1f),
-            new Vector2(306f, -102f), new Vector2(112f, 28f));
-        sourceReplayDropdown = CreateDropdown(sourceExportOverlay, new Vector2(418f, -102f),
+            new Vector2(28f, -102f), new Vector2(112f, 28f));
+        sourceReplayDropdown = CreateDropdown(sourceExportOverlay, new Vector2(140f, -102f),
             new Vector2(116f, 28f), OnSourceReplayChanged);
         if (sourceReplayDropdown != null)
         {
@@ -777,14 +768,14 @@ public class WorkshopStoryBrowserPanel : Panel
 
         sourceRewardModeLabel = CreateText("Source Reward Mode Label", sourceExportOverlay, "奖励领取：", 14,
             TextAnchor.MiddleLeft, HintColor, new Vector2(0f, 1f), new Vector2(0f, 1f),
-            new Vector2(28f, -148f), new Vector2(92f, 28f));
-        sourceRewardModeDropdown = CreateDropdown(sourceExportOverlay, new Vector2(120f, -148f),
+            new Vector2(306f, -102f), new Vector2(92f, 28f));
+        sourceRewardModeDropdown = CreateDropdown(sourceExportOverlay, new Vector2(398f, -102f),
             new Vector2(190f, 28f), _ => RefreshSourceExportSemantics());
         if (sourceRewardModeDropdown != null)
             sourceRewardModeValueText = CreateSelectorValueText(sourceRewardModeDropdown);
         CreateText("Source Reward Hint", sourceExportOverlay, "最多三项本体道具奖励", 12,
             TextAnchor.MiddleLeft, HintColor, new Vector2(0f, 1f), new Vector2(0f, 1f),
-            new Vector2(332f, -148f), new Vector2(220f, 28f));
+            new Vector2(28f, -148f), new Vector2(300f, 28f));
 
         for (int index = 0; index < 3; index++)
         {
@@ -1701,17 +1692,6 @@ public class WorkshopStoryBrowserPanel : Panel
         }
 
         sourceExportTitleInput?.SetInputString(document.title ?? string.Empty);
-        int mapId = document.mission?.mapId ?? 0;
-        if (mapId <= 0 || Map.IsMod(mapId))
-        {
-            mapId = (document.nodes ?? Array.Empty<StoryNodeDocument>())
-                .Where(node => node != null)
-                .SelectMany(node => node.scenes ?? Array.Empty<StorySceneDocument>())
-                .Where(scene => scene != null && scene.mapId > 0 && !Map.IsMod(scene.mapId))
-                .Select(scene => scene.mapId)
-                .FirstOrDefault();
-        }
-        sourceExportMapInput?.SetInputString(mapId > 0 ? mapId.ToString() : string.Empty);
         sourceMissionTypeDropdown?.SetValueWithoutNotify(0);
         sourceReplayDropdown?.SetValueWithoutNotify(document.replayable ? 1 : 0);
         sourceRewardModeDropdown?.SetValueWithoutNotify(0);
@@ -1878,11 +1858,6 @@ public class WorkshopStoryBrowserPanel : Panel
             }
         }
 
-        if (!int.TryParse(sourceExportMapInput?.inputString, out int mapId))
-        {
-            Hintbox.OpenHintboxWithContent("请输入有效的本体入口地图 ID。", 16);
-            return;
-        }
         WorkshopStorySourceExportRequest request = new WorkshopStorySourceExportRequest
         {
             missionType = sourceMissionTypeDropdown?.value == 1
@@ -1891,7 +1866,6 @@ public class WorkshopStoryBrowserPanel : Panel
                     ? WorkshopStorySourceMissionType.Event
                     : WorkshopStorySourceMissionType.Side,
             title = title,
-            mapId = mapId,
             replayable = sourceReplayDropdown != null && sourceReplayDropdown.value == 1,
             rewardMode = sourceRewardModeDropdown != null && sourceRewardModeDropdown.value == 1
                 ? "always"
