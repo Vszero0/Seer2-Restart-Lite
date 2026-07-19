@@ -10,9 +10,9 @@ public class DialogController : Module
 
     private Action backgroundClickHandler;
 
-    public void OpenDialog(DialogInfo info) {
+    public void OpenDialog(DialogInfo info, bool animateStoryText = true) {
         dialogModel.OpenDialog(info);
-        dialogView.OpenDialog(info);
+        dialogView.OpenDialog(info, animateStoryText);
     }
 
     public void SetBackgroundClickHandler(Action handler) {
@@ -31,7 +31,18 @@ public class DialogController : Module
         dialogView.SetStorySpeakerHint(hint);
     }
 
+    public bool RunAfterStoryTextReveal(Action handler) {
+        return dialogView.RunAfterStoryTextReveal(handler);
+    }
+
+    public void CancelStoryTextReveal() {
+        dialogView.CancelStoryTextReveal();
+    }
+
     public void OnBackgroundClick() {
+        if (dialogView.CompleteStoryTextReveal())
+            return;
+
         if (backgroundClickHandler != null)
         {
             backgroundClickHandler.Invoke();

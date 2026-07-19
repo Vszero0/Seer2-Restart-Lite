@@ -39,6 +39,9 @@ public class DialogView : Module
     private CanvasGroup storyContentCanvasGroup;
     private CanvasGroup storyIconCanvasGroup;
     private Coroutine storyFadeCoroutine;
+    private Coroutine storyTextRevealCoroutine;
+    private Action storyTextRevealCompletedHandler;
+    private bool isStoryTextRevealing;
     private Vector2 defaultContentAnchorMin;
     private Vector2 defaultContentAnchorMax;
     private Vector2 defaultContentPivot;
@@ -61,6 +64,10 @@ public class DialogView : Module
     private string storySpeakerHint;
     private static readonly Color32 StorySpeakerHintColor = new Color32(145, 190, 200, 210);
     private static readonly Color32 StorySpeakerHintHoverColor = new Color32(82, 229, 249, 255);
+    private const float StoryTextInitialDelay = 0.12f;
+    private const float StoryTextCharacterInterval = 0.03f;
+    private const float StoryTextCharacterDuration = 0.12f;
+    private const float StoryTextRiseDistance = 6f;
 
     protected override void Awake()
     {
@@ -74,7 +81,7 @@ public class DialogView : Module
         replyClickHandler = handler;
     }
 
-    public void OpenDialog(DialogInfo info)
+    public void OpenDialog(DialogInfo info, bool animateStoryText = true)
     {
         bool useStoryLayout = info?.id == "story";
         bool hasIcon = info?.icon != null && info.icon != SpriteSet.Empty && info.size.x > 0 && info.size.y > 0;
@@ -89,6 +96,10 @@ public class DialogView : Module
 
         SetFunction(info.functionHandler);
         SetReply(info.replyHandler);
+        if (useStoryLayout && animateStoryText)
+            StartStoryTextReveal();
+        else
+            CancelStoryTextReveal();
     }
 
     private void SetIconAndName(Sprite sprite, Vector2 iconPos, Vector2 iconSize, string name)
@@ -124,6 +135,185 @@ public class DialogView : Module
         content?.SetText(text);
         content?.text.ForceMeshUpdate();
         content?.text.rectTransform.SetSizeWithCurrentAnchors(RectTransform.Axis.Vertical, content.size.y);
+    }
+
+    public bool CompleteStoryTextReveal()
+    {
+        if (!isStoryTextRevealing)
+            return false;
+
+        FinishStoryTextReveal(true);
+        return true;
+    }
+
+    public bool RunAfterStoryTextReveal(Action handler)
+    {
+        if (!isStoryTextRevealing || handler == null)
+            return false;
+
+        storyTextRevealCompletedHandler += handler;
+        return true;
+    }
+
+    public void CancelStoryTextReveal()
+    {
+        FinishStoryTextReveal(false);
+    }
+
+    private void StartStoryTextReveal()
+    {
+        FinishStoryTextReveal(false);
+        TMP_Text text = content?.text;
+        if (text == null || string.IsNullOrEmpty(text.text))
+            return;
+
+        text.ForceMeshUpdate();
+        TMP_TextInfo textInfo = text.textInfo;
+        int characterCount = textInfo?.characterCount ?? 0;
+        if (characterCount == 0 || !Enumerable.Range(0, characterCount).Any(i => textInfo.characterInfo[i].isVisible))
+            return;
+
+        TMP_MeshInfo[] sourceMeshInfo = textInfo.CopyMeshInfoVertexData();
+        float[] characterStartTimes = BuildStoryCharacterStartTimes(textInfo, characterCount, out float totalDuration);
+        isStoryTextRevealing = true;
+        storyTextRevealCoroutine = StartCoroutine(StoryTextRevealCoroutine(
+            text, sourceMeshInfo, characterStartTimes, totalDuration));
+    }
+
+    private static float[] BuildStoryCharacterStartTimes(TMP_TextInfo textInfo, int characterCount,
+        out float totalDuration)
+    {
+        float[] startTimes = new float[characterCount];
+        float time = StoryTextInitialDelay;
+        float lastVisibleStart = time;
+
+        for (int i = 0; i < characterCount; i++)
+        {
+            startTimes[i] = time;
+            TMP_CharacterInfo characterInfo = textInfo.characterInfo[i];
+            char character = characterInfo.character;
+            if (characterInfo.isVisible)
+            {
+                lastVisibleStart = time;
+                time += StoryTextCharacterInterval + GetStoryPunctuationPause(character);
+            }
+            else if (character == '\n' || character == '\r')
+            {
+                time += 0.08f;
+            }
+        }
+
+        totalDuration = lastVisibleStart + StoryTextCharacterDuration;
+        return startTimes;
+    }
+
+    private static float GetStoryPunctuationPause(char character)
+    {
+        return character switch
+        {
+            '、' or '，' or ',' or '；' or ';' or '：' or ':' => 0.06f,
+            '。' or '.' or '！' or '!' or '？' or '?' or '…' => 0.12f,
+            _ => 0f,
+        };
+    }
+
+    private IEnumerator StoryTextRevealCoroutine(TMP_Text text, TMP_MeshInfo[] sourceMeshInfo,
+        float[] characterStartTimes, float totalDuration)
+    {
+        float elapsed = 0f;
+        while (elapsed < totalDuration)
+        {
+            ApplyStoryTextRevealFrame(text, sourceMeshInfo, characterStartTimes, elapsed);
+            elapsed += Time.unscaledDeltaTime;
+            yield return null;
+        }
+
+        storyTextRevealCoroutine = null;
+        RestoreStoryTextMesh(text, sourceMeshInfo);
+        isStoryTextRevealing = false;
+        InvokeStoryTextRevealCompleted();
+    }
+
+    private static void ApplyStoryTextRevealFrame(TMP_Text text, TMP_MeshInfo[] sourceMeshInfo,
+        float[] characterStartTimes, float elapsed)
+    {
+        TMP_TextInfo textInfo = text.textInfo;
+        RestoreStoryTextMeshArrays(textInfo, sourceMeshInfo);
+
+        int characterCount = Mathf.Min(textInfo.characterCount, characterStartTimes.Length);
+        for (int i = 0; i < characterCount; i++)
+        {
+            TMP_CharacterInfo characterInfo = textInfo.characterInfo[i];
+            if (!characterInfo.isVisible)
+                continue;
+
+            float progress = Mathf.Clamp01((elapsed - characterStartTimes[i]) / StoryTextCharacterDuration);
+            float easedProgress = 1f - Mathf.Pow(1f - progress, 3f);
+            int materialIndex = characterInfo.materialReferenceIndex;
+            int vertexIndex = characterInfo.vertexIndex;
+            Vector3[] vertices = textInfo.meshInfo[materialIndex].vertices;
+            Color32[] colors = textInfo.meshInfo[materialIndex].colors32;
+            Vector3 offset = Vector3.down * (StoryTextRiseDistance * (1f - easedProgress));
+
+            for (int vertex = 0; vertex < 4; vertex++)
+            {
+                int index = vertexIndex + vertex;
+                vertices[index] += offset;
+                Color32 color = colors[index];
+                color.a = (byte)Mathf.RoundToInt(color.a * easedProgress);
+                colors[index] = color;
+            }
+        }
+
+        text.UpdateVertexData(TMP_VertexDataUpdateFlags.Vertices | TMP_VertexDataUpdateFlags.Colors32);
+    }
+
+    private void FinishStoryTextReveal(bool notifyCompleted)
+    {
+        bool wasRevealing = isStoryTextRevealing;
+        if (storyTextRevealCoroutine != null)
+        {
+            StopCoroutine(storyTextRevealCoroutine);
+            storyTextRevealCoroutine = null;
+        }
+
+        if (wasRevealing && content?.text != null)
+        {
+            content.text.ForceMeshUpdate();
+            content.text.UpdateVertexData(TMP_VertexDataUpdateFlags.All);
+        }
+
+        isStoryTextRevealing = false;
+        if (notifyCompleted && wasRevealing)
+            InvokeStoryTextRevealCompleted();
+        else
+            storyTextRevealCompletedHandler = null;
+    }
+
+    private static void RestoreStoryTextMesh(TMP_Text text, TMP_MeshInfo[] sourceMeshInfo)
+    {
+        if (text == null || sourceMeshInfo == null)
+            return;
+
+        RestoreStoryTextMeshArrays(text.textInfo, sourceMeshInfo);
+        text.UpdateVertexData(TMP_VertexDataUpdateFlags.Vertices | TMP_VertexDataUpdateFlags.Colors32);
+    }
+
+    private static void RestoreStoryTextMeshArrays(TMP_TextInfo textInfo, TMP_MeshInfo[] sourceMeshInfo)
+    {
+        int meshCount = Mathf.Min(textInfo.meshInfo.Length, sourceMeshInfo.Length);
+        for (int i = 0; i < meshCount; i++)
+        {
+            Array.Copy(sourceMeshInfo[i].vertices, textInfo.meshInfo[i].vertices, sourceMeshInfo[i].vertices.Length);
+            Array.Copy(sourceMeshInfo[i].colors32, textInfo.meshInfo[i].colors32, sourceMeshInfo[i].colors32.Length);
+        }
+    }
+
+    private void InvokeStoryTextRevealCompleted()
+    {
+        Action handler = storyTextRevealCompletedHandler;
+        storyTextRevealCompletedHandler = null;
+        handler?.Invoke();
     }
 
     private void StoreDefaultLayout()

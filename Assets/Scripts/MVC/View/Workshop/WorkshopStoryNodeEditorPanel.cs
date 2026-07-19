@@ -818,7 +818,7 @@ public class WorkshopStoryNodeEditorPanel : Panel
             rawContent = content,
             functionHandler = new List<NpcButtonHandler>(),
             replyHandler = new List<NpcButtonHandler>(),
-        });
+        }, false);
         if (sourceDialogueText != null)
             sourceDialogueVisibleColor = sourceDialogueText.color;
 

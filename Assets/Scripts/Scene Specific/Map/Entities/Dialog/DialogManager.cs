@@ -164,7 +164,10 @@ public class DialogManager : Manager<DialogManager>
         if (storyTextBar != null)
             storyTextBar.gameObject.SetActive(visible);
         if (!visible)
+        {
+            dialogStoryController.CancelStoryTextReveal();
             ClearStoryChoices();
+        }
     }
 
     public void ResetStoryDialogBackground() {
@@ -184,6 +187,10 @@ public class DialogManager : Manager<DialogManager>
     }
 
     public void ShowStoryChoices(IReadOnlyList<string> choices, Action<int> onChoiceSelected, string speakerSide = "left") {
+        if (dialogStoryController.RunAfterStoryTextReveal(
+            () => ShowStoryChoices(choices, onChoiceSelected, speakerSide)))
+            return;
+
         ClearStoryChoices();
         if (choices == null || choices.Count == 0)
             return;
@@ -279,6 +286,7 @@ public class DialogManager : Manager<DialogManager>
     }
   
     public void CloseDialog() {
+        dialogStoryController.CancelStoryTextReveal();
         dialogController.SetBackgroundClickHandler(null);
         dialogController.SetReplyClickHandler(null);
         dialogStoryController.SetBackgroundClickHandler(null);
