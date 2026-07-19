@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Security.Cryptography;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -179,10 +180,13 @@ public sealed class WorkshopStoryBrowserModel
             return false;
         }
 
-        bool saved = WriteStoryAsset(sceneId, "Audio", "default" + extension, bytes, "audio",
+        string contentHash;
+        using (SHA256 sha256 = SHA256.Create())
+            contentHash = BitConverter.ToString(sha256.ComputeHash(bytes)).Replace("-", string.Empty).ToLowerInvariant();
+        bool saved = WriteStoryAsset("Shared", "Audio", contentHash + extension, bytes, "audio",
             path => scene.defaultBgmResourcePath = path, out error);
         if (saved && !string.Equals(previousPath, scene.defaultBgmResourcePath, StringComparison.OrdinalIgnoreCase))
-            RemoveStoryResource(previousPath, true);
+            RemoveStoryResource(previousPath, true, scene.id);
         return saved;
     }
 
@@ -190,7 +194,7 @@ public sealed class WorkshopStoryBrowserModel
     {
         if (!TryGetStoryScene(sceneId, out StorySceneResourceDocument scene, out error))
             return false;
-        RemoveStoryResource(scene.defaultBgmResourcePath, true);
+        RemoveStoryResource(scene.defaultBgmResourcePath, true, scene.id);
         scene.defaultBgmResourcePath = null;
         MarkUnsaved();
         error = string.Empty;
@@ -210,8 +214,8 @@ public sealed class WorkshopStoryBrowserModel
             error = "该自制场景已被剧情点引用，请先更换相关场景。";
             return false;
         }
-        RemoveStoryResource(scene.backgroundResourcePath, true);
-        RemoveStoryResource(scene.defaultBgmResourcePath, true);
+        RemoveStoryResource(scene.backgroundResourcePath, true, scene.id);
+        RemoveStoryResource(scene.defaultBgmResourcePath, true, scene.id);
         SelectedDocument.sceneResources = (SelectedDocument.sceneResources ?? Array.Empty<StorySceneResourceDocument>())
             .Where(value => value != null && value != scene)
             .ToArray();
@@ -507,9 +511,17 @@ public sealed class WorkshopStoryBrowserModel
         SelectedDocument.resourceDefinitions = resources.ToArray();
     }
 
-    private void RemoveStoryResource(string path, bool deleteFile)
+    private void RemoveStoryResource(string path, bool deleteFile, string excludedSceneId = null)
     {
         if (string.IsNullOrWhiteSpace(path) || SelectedDocument == null)
+            return;
+
+        bool stillReferenced = (SelectedDocument.sceneResources ?? Array.Empty<StorySceneResourceDocument>())
+            .Where(scene => scene != null
+                && !string.Equals(scene.id, excludedSceneId, StringComparison.OrdinalIgnoreCase))
+            .Any(scene => string.Equals(scene.backgroundResourcePath, path, StringComparison.OrdinalIgnoreCase)
+                || string.Equals(scene.defaultBgmResourcePath, path, StringComparison.OrdinalIgnoreCase));
+        if (stillReferenced)
             return;
 
         SelectedDocument.resourceDefinitions = (SelectedDocument.resourceDefinitions
