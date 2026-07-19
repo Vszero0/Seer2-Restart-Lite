@@ -52,6 +52,12 @@ public sealed class WorkshopStoryNodeEditorController
         return model.GetMapOptions(filter);
     }
 
+    public List<WorkshopStoryCustomSceneOption> GetCustomSceneOptions(string filter)
+        => model.GetCustomSceneOptions(filter);
+
+    public StorySceneResourceDocument GetStorySceneResource(string resourceId)
+        => model.GetStorySceneResource(resourceId);
+
     public List<WorkshopStoryPointResourceOption> GetSelectedMapOptions()
     {
         return model.GetSelectedMapOptions();
@@ -86,6 +92,9 @@ public sealed class WorkshopStoryNodeEditorController
     {
         return model.CreateScene(mapId, out scene, out error);
     }
+
+    public bool CreateScene(string sceneResourceId, out StorySceneDocument scene, out string error)
+        => model.CreateScene(sceneResourceId, out scene, out error);
 
     public bool RemoveScene(string sceneId, out string error)
     {
@@ -151,6 +160,9 @@ public sealed class WorkshopStoryNodeEditorController
     {
         return model.SetSceneMap(sceneId, mapId, out error);
     }
+
+    public bool SetSceneResource(string sceneId, string sceneResourceId, out string error)
+        => model.SetSceneResource(sceneId, sceneResourceId, out error);
 
     public bool SetSceneTransition(string sceneId, string type, float duration, out string error)
     {

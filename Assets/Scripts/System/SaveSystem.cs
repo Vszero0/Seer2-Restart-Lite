@@ -906,14 +906,17 @@ public static class SaveSystem
 
     private static IEnumerable<string> GetStoryJsonPaths(string storyPath)
     {
-        var entries = FileBrowserHelpers.GetEntriesInDirectory(storyPath, true);
-        foreach (var entry in entries)
-        {
-            if (entry.IsDirectory)
-                continue;
+        if (!Directory.Exists(storyPath))
+            yield break;
 
-            if (entry.Path.EndsWith(".json", StringComparison.OrdinalIgnoreCase))
-                yield return entry.Path;
+        foreach (string path in Directory.GetFiles(storyPath, "*.json", SearchOption.TopDirectoryOnly))
+            yield return path;
+
+        foreach (string directory in Directory.GetDirectories(storyPath))
+        {
+            string packageStory = Path.Combine(directory, "story.json");
+            if (File.Exists(packageStory))
+                yield return packageStory;
         }
     }
 

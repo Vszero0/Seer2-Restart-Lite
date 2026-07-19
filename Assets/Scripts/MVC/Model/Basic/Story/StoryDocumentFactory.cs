@@ -24,6 +24,7 @@ public static class StoryDocumentFactory
                 summary = string.Empty,
             },
             resourceDefinitions = Array.Empty<StoryResourceDefinition>(),
+            sceneResources = Array.Empty<StorySceneResourceDocument>(),
             actors = Array.Empty<StoryActorDocument>(),
             nodes = new[]
             {

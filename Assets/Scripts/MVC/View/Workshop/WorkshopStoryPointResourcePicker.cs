@@ -39,7 +39,9 @@ public sealed class WorkshopStoryPointResourcePicker
     }
 
     public void OpenMaps(Func<string, List<WorkshopStoryPointResourceOption>> getOptions,
-        Action<int> onSelected)
+        Action<int> onSelected,
+        Func<string, List<WorkshopStoryCustomSceneOption>> getCustomScenes = null,
+        Action<string> onCustomSceneSelected = null)
     {
         bool canUseModResources = HasModResources(getOptions);
         Open("选择本剧情点地图", "输入地图名称或 ID", query =>
@@ -47,7 +49,32 @@ public sealed class WorkshopStoryPointResourcePicker
             List<WorkshopStoryPointResourceOption> options = getOptions?.Invoke(query)
                 ?? new List<WorkshopStoryPointResourceOption>();
             BuildResourceItems(FilterResourceSource(options), option => onSelected?.Invoke(option.id));
-        }, null, null, true, canUseModResources);
+        }, getCustomScenes == null ? null : "自制场景",
+        getCustomScenes == null ? null : (Action)(() => OpenCustomScenes(
+            getOptions, onSelected, getCustomScenes, onCustomSceneSelected)),
+        true, canUseModResources);
+    }
+
+    private void OpenCustomScenes(
+        Func<string, List<WorkshopStoryPointResourceOption>> getMaps,
+        Action<int> onMapSelected,
+        Func<string, List<WorkshopStoryCustomSceneOption>> getOptions,
+        Action<string> onSelected)
+    {
+        Open("选择自制场景", "输入场景名称或 ID", query =>
+        {
+            ClearList();
+            int index = 0;
+            foreach (WorkshopStoryCustomSceneOption option in getOptions?.Invoke(query)
+                     ?? new List<WorkshopStoryCustomSceneOption>())
+            {
+                if (option == null)
+                    continue;
+                WorkshopStoryCustomSceneOption captured = option;
+                CreateListButton(option.displayName, index++, () => onSelected?.Invoke(captured.sceneResourceId));
+            }
+            FinishList(index, "当前剧本还没有已配置背景的自制场景。");
+        }, "返回地图", () => OpenMaps(getMaps, onMapSelected, getOptions, onSelected));
     }
 
     public void OpenPets(Func<string, List<WorkshopStoryPointResourceOption>> getOptions, Action<int> onSelected)
@@ -202,14 +229,17 @@ public sealed class WorkshopStoryPointResourcePicker
             new Vector2(.5f, 1f), new Vector2(.5f, 1f), new Vector2(0f, -22f), new Vector2(300f, 28f));
         CreateActionButton("关闭", new Vector2(-16f, -12f), new Vector2(72f, 26f), Close, true);
 
-        float searchWidth = showSourceButton ? 334f : 282f;
+        float searchWidth = showSourceButton && !string.IsNullOrWhiteSpace(directActionLabel)
+            ? 218f
+            : showSourceButton ? 334f : 282f;
         searchInput = CreateInput(placeholder, new Vector2(18f, -54f), new Vector2(searchWidth, 26f));
         if (searchInput != null)
             searchInput.onValueChanged.AddListener(value => refresh?.Invoke(value));
 
         if (showSourceButton)
         {
-            sourceButton = CreateActionButton("本体资源", new Vector2(-16f, -54f), new Vector2(116f, 26f),
+            float sourceX = string.IsNullOrWhiteSpace(directActionLabel) ? -16f : -140f;
+            sourceButton = CreateActionButton("本体资源", new Vector2(sourceX, -54f), new Vector2(116f, 26f),
                 ToggleResourceSource, true);
             sourceButtonText = sourceButton?.GetComponentInChildren<Text>(true);
             RefreshSourceButton();

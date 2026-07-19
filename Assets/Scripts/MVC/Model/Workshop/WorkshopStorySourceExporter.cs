@@ -329,6 +329,15 @@ public sealed class WorkshopStorySourceExporter
                 resource.source = "builtin";
         }
 
+        foreach (StorySceneResourceDocument scene in document.sceneResources ?? Array.Empty<StorySceneResourceDocument>())
+        {
+            if (scene == null)
+                continue;
+            if (!TryRewritePath(ref scene.backgroundResourcePath, storyId, safeStoryId, copyBySource, out error)
+                || !TryRewritePath(ref scene.defaultBgmResourcePath, storyId, safeStoryId, copyBySource, out error))
+                return false;
+        }
+
         copies.AddRange(copyBySource.Values);
         return true;
     }
@@ -345,10 +354,20 @@ public sealed class WorkshopStorySourceExporter
             return true;
 
         string normalized = path.Replace('\\', '/').Trim();
-        string ownedPrefix = "Mod/Stories/Assets/" + storyId + "/";
+        string ownedPrefix = "Mod/Stories/" + storyId + "/Assets/";
         if (normalized.StartsWith(ownedPrefix, StringComparison.OrdinalIgnoreCase))
         {
             if (!TryBuildOwnedAssetCopy(normalized, ownedPrefix, safeStoryId, out AssetCopy copy, out error))
+                return false;
+            copyBySource[copy.sourcePath] = copy;
+            path = copy.resourcePath;
+            return true;
+        }
+
+        string legacyPrefix = "Mod/Stories/Assets/" + storyId + "/";
+        if (normalized.StartsWith(legacyPrefix, StringComparison.OrdinalIgnoreCase))
+        {
+            if (!TryBuildOwnedAssetCopy(normalized, legacyPrefix, safeStoryId, out AssetCopy copy, out error))
                 return false;
             copyBySource[copy.sourcePath] = copy;
             path = copy.resourcePath;

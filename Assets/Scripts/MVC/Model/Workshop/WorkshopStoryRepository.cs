@@ -23,7 +23,7 @@ public sealed class WorkshopStoryRepository
             if (!Directory.Exists(directory))
                 Directory.CreateDirectory(directory);
 
-            return Directory.GetFiles(directory, "*.json")
+            return EnumerateStoryPaths(directory)
                 .OrderBy(path => path, StringComparer.OrdinalIgnoreCase)
                 .Select(ReadSummary)
                 .ToList();
@@ -83,7 +83,7 @@ public sealed class WorkshopStoryRepository
                 Directory.CreateDirectory(directory);
 
             string storyId = CreateAvailableStoryId(directory);
-            string path = Path.Combine(directory, storyId + StoryFileExtension);
+            string path = GetPackageStoryPath(directory, storyId);
             StoryDocument document = StoryDocumentFactory.CreateDraft(storyId, CreateAvailableMissionId(null));
             if (!TrySave(path, document, out error))
                 return false;
@@ -122,7 +122,7 @@ public sealed class WorkshopStoryRepository
 
             string sourceId = source.id;
             string storyId = CreateAvailableStoryId(directory);
-            string path = Path.Combine(directory, storyId + StoryFileExtension);
+            string path = GetPackageStoryPath(directory, storyId);
             CopyOwnedAssets(sourceId, storyId);
             RewriteOwnedAssetPaths(copy, sourceId, storyId);
 
@@ -261,7 +261,10 @@ public sealed class WorkshopStoryRepository
 
         try
         {
-            FileBrowserHelpers.DeleteFile(path);
+            if (TryGetPackageDirectory(path, out string packageDirectory))
+                Directory.Delete(packageDirectory, true);
+            else
+                FileBrowserHelpers.DeleteFile(path);
             return true;
         }
         catch (Exception exception)
@@ -379,7 +382,7 @@ public sealed class WorkshopStoryRepository
         if (!Directory.Exists(directory))
             return usedMissionIds;
 
-        foreach (string storyPath in Directory.GetFiles(directory, "*.json"))
+        foreach (string storyPath in EnumerateStoryPaths(directory))
         {
             if (!string.IsNullOrWhiteSpace(excludedPath)
                 && string.Equals(Path.GetFullPath(storyPath), Path.GetFullPath(excludedPath), StringComparison.OrdinalIgnoreCase))
@@ -409,7 +412,8 @@ public sealed class WorkshopStoryRepository
         string baseId = "story_" + DateTime.Now.ToString("yyyyMMddHHmmssfff");
         string storyId = baseId;
         int suffix = 1;
-        while (FileBrowserHelpers.FileExists(Path.Combine(directory, storyId + StoryFileExtension)))
+        while (FileBrowserHelpers.FileExists(Path.Combine(directory, storyId + StoryFileExtension))
+            || Directory.Exists(Path.Combine(directory, storyId)))
             storyId = baseId + "_" + suffix++;
 
         return storyId;
@@ -420,13 +424,12 @@ public sealed class WorkshopStoryRepository
         if (string.IsNullOrWhiteSpace(sourceId) || string.IsNullOrWhiteSpace(targetId))
             return;
 
-        string sourceDirectory = Path.Combine(Application.persistentDataPath,
-            "Mod", "Stories", "Assets", sourceId);
+        string sourceDirectory = GetOwnedAssetDirectory(sourceId);
         if (!Directory.Exists(sourceDirectory))
             return;
 
         string targetDirectory = Path.Combine(Application.persistentDataPath,
-            "Mod", "Stories", "Assets", targetId);
+            "Mod", "Stories", targetId, "Assets");
         foreach (string sourcePath in Directory.GetFiles(sourceDirectory, "*", SearchOption.AllDirectories))
         {
             string relativePath = sourcePath.Substring(sourceDirectory.Length)
@@ -448,6 +451,14 @@ public sealed class WorkshopStoryRepository
         {
             if (resource != null)
                 resource.path = RewriteOwnedAssetPath(resource.path, sourceId, targetId);
+        }
+
+        foreach (StorySceneResourceDocument sceneResource in document.sceneResources ?? Array.Empty<StorySceneResourceDocument>())
+        {
+            if (sceneResource == null)
+                continue;
+            sceneResource.backgroundResourcePath = RewriteOwnedAssetPath(sceneResource.backgroundResourcePath, sourceId, targetId);
+            sceneResource.defaultBgmResourcePath = RewriteOwnedAssetPath(sceneResource.defaultBgmResourcePath, sourceId, targetId);
         }
 
         foreach (StoryActorDocument actor in document.actors ?? Array.Empty<StoryActorDocument>())
@@ -486,10 +497,14 @@ public sealed class WorkshopStoryRepository
         if (string.IsNullOrWhiteSpace(path))
             return path;
 
-        string sourcePrefix = "Mod/Stories/Assets/" + sourceId + "/";
-        if (!path.StartsWith(sourcePrefix, StringComparison.OrdinalIgnoreCase))
-            return path;
-        return "Mod/Stories/Assets/" + targetId + "/" + path.Substring(sourcePrefix.Length);
+        string packagePrefix = "Mod/Stories/" + sourceId + "/Assets/";
+        if (path.StartsWith(packagePrefix, StringComparison.OrdinalIgnoreCase))
+            return "Mod/Stories/" + targetId + "/Assets/" + path.Substring(packagePrefix.Length);
+
+        string legacyPrefix = "Mod/Stories/Assets/" + sourceId + "/";
+        if (path.StartsWith(legacyPrefix, StringComparison.OrdinalIgnoreCase))
+            return "Mod/Stories/" + targetId + "/Assets/" + path.Substring(legacyPrefix.Length);
+        return path;
     }
 
     private bool IsStoryPath(string path)
@@ -501,13 +516,63 @@ public sealed class WorkshopStoryRepository
         {
             string directory = Path.GetFullPath(GetStoryDirectory()).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
             string fullPath = Path.GetFullPath(path);
-            return string.Equals(Path.GetDirectoryName(fullPath), directory, StringComparison.OrdinalIgnoreCase)
-                && string.Equals(Path.GetExtension(fullPath), StoryFileExtension, StringComparison.OrdinalIgnoreCase);
+            if (!string.Equals(Path.GetExtension(fullPath), StoryFileExtension, StringComparison.OrdinalIgnoreCase))
+                return false;
+            if (string.Equals(Path.GetDirectoryName(fullPath), directory, StringComparison.OrdinalIgnoreCase))
+                return true;
+            string parent = Path.GetDirectoryName(fullPath);
+            return string.Equals(Path.GetFileName(fullPath), "story.json", StringComparison.OrdinalIgnoreCase)
+                && string.Equals(Path.GetDirectoryName(parent), directory, StringComparison.OrdinalIgnoreCase);
         }
         catch (Exception)
         {
             return false;
         }
+    }
+
+    private static IEnumerable<string> EnumerateStoryPaths(string directory)
+    {
+        if (!Directory.Exists(directory))
+            return Array.Empty<string>();
+
+        IEnumerable<string> legacy = Directory.GetFiles(directory, "*.json", SearchOption.TopDirectoryOnly);
+        IEnumerable<string> packages = Directory.GetDirectories(directory)
+            .Select(value => Path.Combine(value, "story.json"))
+            .Where(File.Exists);
+        return legacy.Concat(packages);
+    }
+
+    private static string GetPackageStoryPath(string directory, string storyId)
+    {
+        string packageDirectory = Path.Combine(directory, storyId);
+        Directory.CreateDirectory(packageDirectory);
+        return Path.Combine(packageDirectory, "story.json");
+    }
+
+    private static string GetOwnedAssetDirectory(string storyId)
+    {
+        string packageDirectory = Path.Combine(Application.persistentDataPath,
+            "Mod", "Stories", storyId, "Assets");
+        if (Directory.Exists(packageDirectory))
+            return packageDirectory;
+        return Path.Combine(Application.persistentDataPath, "Mod", "Stories", "Assets", storyId);
+    }
+
+    private bool TryGetPackageDirectory(string storyPath, out string packageDirectory)
+    {
+        packageDirectory = null;
+        if (!string.Equals(Path.GetFileName(storyPath), "story.json", StringComparison.OrdinalIgnoreCase))
+            return false;
+
+        string root = Path.GetFullPath(GetStoryDirectory())
+            .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        string parent = Path.GetFullPath(Path.GetDirectoryName(storyPath) ?? string.Empty)
+            .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        if (!string.Equals(Path.GetDirectoryName(parent), root, StringComparison.OrdinalIgnoreCase))
+            return false;
+
+        packageDirectory = parent;
+        return true;
     }
 }
 

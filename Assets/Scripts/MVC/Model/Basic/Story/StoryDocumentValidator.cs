@@ -56,6 +56,11 @@ public static class StoryValidator
 
         Dictionary<string, StoryActorDocument> actorDict = StoryResourceValidator.ValidateActors(document, errors);
         StoryResourceValidator.ValidateResources(document, errors);
+        HashSet<string> sceneResourceIds = new HashSet<string>(
+            (document.sceneResources ?? Array.Empty<StorySceneResourceDocument>())
+                .Where(value => value != null && !string.IsNullOrWhiteSpace(value.id))
+                .Select(value => value.id),
+            StringComparer.OrdinalIgnoreCase);
         Dictionary<string, StoryNodeDocument> nodeDict = ValidateNodes(document, errors);
 
         string entry = string.IsNullOrWhiteSpace(document.entry) ? "start" : document.entry;
@@ -65,7 +70,7 @@ public static class StoryValidator
         foreach (StoryNodeDocument node in document.nodes ?? Array.Empty<StoryNodeDocument>())
         {
             ValidateNodeFlow(node, nodeDict, entry, errors);
-            ValidateNodeScenes(node, actorDict, errors);
+            ValidateNodeScenes(node, actorDict, sceneResourceIds, errors);
             ValidateNodeCommands(node, actorDict, nodeDict, errors);
             ValidateNodeTransitions(node, nodeDict, errors);
         }
@@ -150,7 +155,8 @@ public static class StoryValidator
         }
     }
 
-    private static void ValidateNodeScenes(StoryNodeDocument node, Dictionary<string, StoryActorDocument> actorDict, List<string> errors)
+    private static void ValidateNodeScenes(StoryNodeDocument node, Dictionary<string, StoryActorDocument> actorDict,
+        HashSet<string> sceneResourceIds, List<string> errors)
     {
         if (node?.scenes == null)
             return;
@@ -165,10 +171,12 @@ public static class StoryValidator
             if (string.IsNullOrWhiteSpace(scene.id) || !sceneIds.Add(scene.id))
                 errors.Add(location + " 存在重复或为空的场景 id");
 
-            if (scene.mapId == 0)
-                errors.Add(location + ".mapId 必须是有效地图 ID");
-            else
+            if (scene.mapId == 0 && string.IsNullOrWhiteSpace(scene.sceneResourceId))
+                errors.Add(location + " 必须引用地图 ID 或自制场景");
+            else if (scene.mapId != 0)
                 StoryResourceValidator.ValidateMap(scene.mapId, errors, location + ".mapId");
+            else if (!sceneResourceIds.Contains(scene.sceneResourceId))
+                errors.Add(location + ".sceneResourceId 引用了不存在的自制场景：" + scene.sceneResourceId);
             StoryResourceValidator.ValidatePath(scene.bgmResourcePath, "audio", "auto", errors, location + ".bgmResourcePath");
             ValidateTransition(scene.transition, false, errors, location + ".transition");
 

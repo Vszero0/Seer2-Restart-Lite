@@ -36,6 +36,13 @@ public sealed class WorkshopStoryPointActorOption
     public string displayName => string.IsNullOrWhiteSpace(name) ? actorId : name;
 }
 
+public sealed class WorkshopStoryCustomSceneOption
+{
+    public string sceneResourceId;
+    public string name;
+    public string displayName => "[自制] " + (string.IsNullOrWhiteSpace(name) ? sceneResourceId : name);
+}
+
 public sealed class WorkshopStoryPointAddActorOption
 {
     public string actorId;
@@ -136,6 +143,29 @@ public sealed class WorkshopStoryNodeEditorModel
             .FirstOrDefault(value => value != null
                 && string.Equals(value.path, resourcePath, StringComparison.OrdinalIgnoreCase));
         return string.IsNullOrWhiteSpace(resource?.source) ? "auto" : resource.source;
+    }
+
+    public StorySceneResourceDocument GetStorySceneResource(string resourceId)
+    {
+        return DraftDocument?.GetSceneResource(resourceId);
+    }
+
+    public List<WorkshopStoryCustomSceneOption> GetCustomSceneOptions(string filter)
+    {
+        string query = (filter ?? string.Empty).Trim();
+        return (DraftDocument?.sceneResources ?? Array.Empty<StorySceneResourceDocument>())
+            .Where(scene => scene != null
+                && !string.IsNullOrWhiteSpace(scene.id)
+                && !string.IsNullOrWhiteSpace(scene.backgroundResourcePath)
+                && (string.IsNullOrWhiteSpace(query)
+                    || scene.displayName.IndexOf(query, StringComparison.OrdinalIgnoreCase) >= 0
+                    || scene.id.IndexOf(query, StringComparison.OrdinalIgnoreCase) >= 0))
+            .Select(scene => new WorkshopStoryCustomSceneOption
+            {
+                sceneResourceId = scene.id,
+                name = scene.displayName,
+            })
+            .ToList();
     }
 
     public bool RenameNode(string displayName, out string error)
@@ -420,6 +450,29 @@ public sealed class WorkshopStoryNodeEditorModel
         EnsureMapReference(mapId);
 
         scene = CreateSceneInternal(mapId);
+        DraftNode.scenes = (DraftNode.scenes ?? Array.Empty<StorySceneDocument>()).Append(scene).ToArray();
+        InsertCommand((DraftNode.commands ?? Array.Empty<StoryCommandDocument>()).Length, new StoryCommandDocument
+        {
+            commandId = CreateCommandId(),
+            type = "scene",
+            sceneId = scene.id,
+        });
+        HasUnsavedChanges = true;
+        error = string.Empty;
+        return true;
+    }
+
+    public bool CreateScene(string sceneResourceId, out StorySceneDocument scene, out string error)
+    {
+        scene = null;
+        StorySceneResourceDocument resource = DraftDocument?.GetSceneResource(sceneResourceId);
+        if (DraftNode == null || resource == null || string.IsNullOrWhiteSpace(resource.backgroundResourcePath))
+        {
+            error = "请选择一个已配置背景的自制场景。";
+            return false;
+        }
+
+        scene = CreateSceneInternal(sceneResourceId);
         DraftNode.scenes = (DraftNode.scenes ?? Array.Empty<StorySceneDocument>()).Append(scene).ToArray();
         InsertCommand((DraftNode.commands ?? Array.Empty<StoryCommandDocument>()).Length, new StoryCommandDocument
         {
@@ -786,9 +839,27 @@ public sealed class WorkshopStoryNodeEditorModel
         if (scene.mapId != mapId)
         {
             scene.mapId = mapId;
+            scene.sceneResourceId = null;
             EnsureMapReference(mapId);
             HasUnsavedChanges = true;
         }
+        error = string.Empty;
+        return true;
+    }
+
+    public bool SetSceneResource(string sceneId, string sceneResourceId, out string error)
+    {
+        StorySceneDocument scene = DraftNode?.GetScene(sceneId);
+        StorySceneResourceDocument resource = DraftDocument?.GetSceneResource(sceneResourceId);
+        if (scene == null || resource == null || string.IsNullOrWhiteSpace(resource.backgroundResourcePath))
+        {
+            error = "场景或自制场景资源无效。";
+            return false;
+        }
+
+        scene.mapId = 0;
+        scene.sceneResourceId = resource.id;
+        HasUnsavedChanges = true;
         error = string.Empty;
         return true;
     }
@@ -1413,6 +1484,16 @@ public sealed class WorkshopStoryNodeEditorModel
         };
     }
 
+    private StorySceneDocument CreateSceneInternal(string sceneResourceId)
+    {
+        return new StorySceneDocument
+        {
+            id = CreateUniqueSceneId(sceneResourceId),
+            sceneResourceId = sceneResourceId,
+            actors = Array.Empty<StorySceneActorLayoutDocument>(),
+        };
+    }
+
     private static StorySceneActorLayoutDocument CreateDefaultActorLayout(StorySceneDocument scene, string actorId)
     {
         StorySceneActorLayoutDocument[] layouts = scene.actors ?? Array.Empty<StorySceneActorLayoutDocument>();
@@ -1656,6 +1737,19 @@ public sealed class WorkshopStoryNodeEditorModel
     private string CreateUniqueSceneId(int mapId)
     {
         string baseId = "scene_" + mapId.ToString().Replace('-', 'm');
+        string sceneId = baseId;
+        int suffix = 2;
+        while (DraftNode.GetScene(sceneId) != null)
+            sceneId = baseId + "_" + suffix++;
+        return sceneId;
+    }
+
+    private string CreateUniqueSceneId(string sceneResourceId)
+    {
+        string safeId = new string((sceneResourceId ?? "custom")
+            .Select(value => char.IsLetterOrDigit(value) || value == '_' || value == '-' ? value : '_')
+            .ToArray());
+        string baseId = "scene_" + (string.IsNullOrWhiteSpace(safeId) ? "custom" : safeId);
         string sceneId = baseId;
         int suffix = 2;
         while (DraftNode.GetScene(sceneId) != null)

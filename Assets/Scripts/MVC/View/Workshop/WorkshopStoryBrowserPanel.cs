@@ -70,6 +70,9 @@ public class WorkshopStoryBrowserPanel : Panel
     private RectTransform transitionContent;
     private RectTransform graphOverlay;
     private RectTransform graphContent;
+    private RectTransform contentManagerOverlay;
+    private RectTransform sceneManagerOverlay;
+    private RectTransform sceneManagerContent;
     private RectTransform actorManagerOverlay;
     private RectTransform actorManagerContent;
     private RectTransform actorResourceOverlay;
@@ -91,6 +94,10 @@ public class WorkshopStoryBrowserPanel : Panel
     private Text actorIconPathText;
     private Image actorPortraitPreview;
     private Image actorIconPreview;
+    private IInputField sceneNameInput;
+    private Image sceneBackgroundPreview;
+    private Text sceneBackgroundPathText;
+    private Text sceneBgmPathText;
     private Text connectionNodeTitle;
     private Text connectionDefaultText;
     private Text nodeManagerCountText;
@@ -137,6 +144,7 @@ public class WorkshopStoryBrowserPanel : Panel
     private int nodeManagerMarkerFilterIndex;
     private float nodeManagerScrollPosition = 1f;
     private bool returnToNodeManagerAfterConnection;
+    private string selectedCustomSceneId;
     private string selectedActorId;
     private bool actorResourceIsMod;
     private bool selectingActorIcon;
@@ -188,6 +196,16 @@ public class WorkshopStoryBrowserPanel : Panel
         if (actorManagerOverlay != null && actorManagerOverlay.gameObject.activeSelf)
         {
             CloseActorManager();
+            return;
+        }
+        if (sceneManagerOverlay != null && sceneManagerOverlay.gameObject.activeSelf)
+        {
+            CloseSceneManager();
+            return;
+        }
+        if (contentManagerOverlay != null && contentManagerOverlay.gameObject.activeSelf)
+        {
+            CloseContentManager();
             return;
         }
         if (connectionOverlay != null && connectionOverlay.gameObject.activeSelf)
@@ -258,8 +276,8 @@ public class WorkshopStoryBrowserPanel : Panel
         IButton manageButton = CreateActionButton(infoSection, "管理剧情点", new Vector2(358f, -100f),
             new Vector2(256f, 62f), OpenNodeManager);
         EmphasizePrimaryAction(manageButton);
-        CreateActionButton(infoSection, "自制角色", new Vector2(358f, -170f),
-            new Vector2(80f, 30f), OpenActorManager);
+        CreateActionButton(infoSection, "自制内容", new Vector2(358f, -170f),
+            new Vector2(80f, 30f), OpenContentManager);
         CreateActionButton(infoSection, "查看结构", new Vector2(446f, -170f),
             new Vector2(80f, 30f), OpenGraphViewer);
         CreateActionButton(infoSection, "剧本预览", new Vector2(534f, -170f),
@@ -311,6 +329,8 @@ public class WorkshopStoryBrowserPanel : Panel
         BuildNodeManager(modalLayer);
         BuildConnectionEditor(modalLayer);
         BuildGraphViewer(modalLayer);
+        BuildContentManager(modalLayer);
+        BuildSceneManager(modalLayer);
         BuildActorManager(modalLayer);
         BuildActorResourcePicker(modalLayer);
         BuildSourceExport(modalLayer);
@@ -544,6 +564,97 @@ public class WorkshopStoryBrowserPanel : Panel
         overlayObject.SetActive(false);
     }
 
+    private void BuildContentManager(RectTransform root)
+    {
+        GameObject overlayObject = new GameObject("Story Content Manager",
+            typeof(RectTransform), typeof(CanvasRenderer), typeof(Image), typeof(Outline));
+        overlayObject.transform.SetParent(root, false);
+        contentManagerOverlay = overlayObject.GetComponent<RectTransform>();
+        contentManagerOverlay.anchorMin = new Vector2(.5f, .5f);
+        contentManagerOverlay.anchorMax = new Vector2(.5f, .5f);
+        contentManagerOverlay.pivot = new Vector2(.5f, .5f);
+        contentManagerOverlay.anchoredPosition = Vector2.zero;
+        contentManagerOverlay.sizeDelta = new Vector2(620f, 300f);
+        overlayObject.GetComponent<Image>().color = new Color32(0, 8, 12, 255);
+        Outline outline = overlayObject.GetComponent<Outline>();
+        outline.effectColor = Cyan;
+        outline.effectDistance = new Vector2(2f, -2f);
+
+        CreateText("Content Manager Heading", contentManagerOverlay, "自制内容", 24,
+            TextAnchor.MiddleCenter, Cyan, new Vector2(.5f, 1f), new Vector2(.5f, 1f),
+            new Vector2(0f, -28f), new Vector2(260f, 34f));
+        CreateText("Content Manager Hint", contentManagerOverlay,
+            "资源随剧本保存在 Stories 目录中，不依赖地图 XML 或旧 Mod 资源结构。", 14,
+            TextAnchor.MiddleCenter, HintColor, new Vector2(.5f, 1f), new Vector2(.5f, 1f),
+            new Vector2(0f, -78f), new Vector2(520f, 30f));
+        IButton sceneButton = CreateActionButton(contentManagerOverlay, "自制场景",
+            new Vector2(74f, -128f), new Vector2(220f, 92f), OpenSceneManager);
+        EmphasizePrimaryAction(sceneButton);
+        CreateActionButton(contentManagerOverlay, "自制角色",
+            new Vector2(326f, -128f), new Vector2(220f, 92f), OpenActorManager);
+        CreateText("Scene Content Hint", contentManagerOverlay, "背景图片与默认 BGM", 13,
+            TextAnchor.MiddleCenter, HintColor, new Vector2(0f, 1f), new Vector2(0f, 1f),
+            new Vector2(74f, -224f), new Vector2(220f, 24f));
+        CreateText("Actor Content Hint", contentManagerOverlay, "NPC 立绘、头像与朝向", 13,
+            TextAnchor.MiddleCenter, HintColor, new Vector2(0f, 1f), new Vector2(0f, 1f),
+            new Vector2(326f, -224f), new Vector2(220f, 24f));
+        CreateModalCloseButton(contentManagerOverlay, CloseContentManager);
+        overlayObject.SetActive(false);
+    }
+
+    private void BuildSceneManager(RectTransform root)
+    {
+        GameObject overlayObject = new GameObject("Story Scene Manager",
+            typeof(RectTransform), typeof(CanvasRenderer), typeof(Image), typeof(Outline));
+        overlayObject.transform.SetParent(root, false);
+        sceneManagerOverlay = overlayObject.GetComponent<RectTransform>();
+        sceneManagerOverlay.anchorMin = new Vector2(.5f, .5f);
+        sceneManagerOverlay.anchorMax = new Vector2(.5f, .5f);
+        sceneManagerOverlay.pivot = new Vector2(.5f, .5f);
+        sceneManagerOverlay.anchoredPosition = Vector2.zero;
+        sceneManagerOverlay.sizeDelta = new Vector2(892f, 472f);
+        overlayObject.GetComponent<Image>().color = new Color32(0, 8, 12, 252);
+        Outline outline = overlayObject.GetComponent<Outline>();
+        outline.effectColor = new Color(Cyan.r, Cyan.g, Cyan.b, .86f);
+        outline.effectDistance = new Vector2(2f, -2f);
+
+        CreateText("Scene Manager Heading", sceneManagerOverlay, "自制场景", 22,
+            TextAnchor.MiddleCenter, Cyan, new Vector2(.5f, 1f), new Vector2(.5f, 1f),
+            new Vector2(0f, -18f), new Vector2(260f, 30f));
+        CreateActionButton(sceneManagerOverlay, "新建场景", new Vector2(18f, -52f),
+            new Vector2(104f, 28f), CreateCustomScene);
+        CreateActionButton(sceneManagerOverlay, "删除场景", new Vector2(130f, -52f),
+            new Vector2(104f, 28f), DeleteCustomScene);
+        CreateActionButton(sceneManagerOverlay, "保存", new Vector2(-58f, -52f),
+            new Vector2(88f, 28f), SaveStory, TextAnchor.UpperRight);
+        CreateModalCloseButton(sceneManagerOverlay, CloseSceneManager);
+
+        sceneManagerContent = CreateScrollContent(sceneManagerOverlay,
+            new Vector2(16f, 16f), new Vector2(-594f, -94f));
+        CreateText("Scene Name Label", sceneManagerOverlay, "场景名称：", 14,
+            TextAnchor.MiddleLeft, Cyan, new Vector2(0f, 1f), new Vector2(0f, 1f),
+            new Vector2(316f, -56f), new Vector2(80f, 28f));
+        sceneNameInput = CreateInputField(petNameInputFieldPrefab, sceneManagerOverlay,
+            "Scene Name Input", "场景名称", string.Empty, new Vector2(398f, -56f),
+            new Vector2(280f, 28f), OnCustomSceneNameEdited);
+
+        sceneBackgroundPreview = CreateActorPreview("Scene Background Preview", sceneManagerOverlay,
+            new Vector2(316f, -98f), new Vector2(540f, 304f));
+        CreateActionButton(sceneManagerOverlay, "导入背景", new Vector2(316f, -414f),
+            new Vector2(96f, 28f), ImportCustomSceneBackground);
+        sceneBackgroundPathText = CreateText("Scene Background Path", sceneManagerOverlay, string.Empty, 12,
+            TextAnchor.MiddleLeft, HintColor, new Vector2(0f, 1f), new Vector2(0f, 1f),
+            new Vector2(420f, -414f), new Vector2(260f, 28f));
+        CreateActionButton(sceneManagerOverlay, "导入 BGM", new Vector2(688f, -414f),
+            new Vector2(82f, 28f), ImportCustomSceneBgm);
+        CreateActionButton(sceneManagerOverlay, "清除", new Vector2(778f, -414f),
+            new Vector2(78f, 28f), ClearCustomSceneBgm);
+        sceneBgmPathText = CreateText("Scene BGM Path", sceneManagerOverlay, string.Empty, 12,
+            TextAnchor.MiddleLeft, HintColor, new Vector2(0f, 1f), new Vector2(0f, 1f),
+            new Vector2(688f, -446f), new Vector2(168f, 20f));
+        overlayObject.SetActive(false);
+    }
+
     private void BuildActorManager(RectTransform root)
     {
         GameObject overlayObject = new GameObject("Story Actor Manager",
@@ -560,7 +671,7 @@ public class WorkshopStoryBrowserPanel : Panel
         outline.effectColor = new Color(Cyan.r, Cyan.g, Cyan.b, .86f);
         outline.effectDistance = new Vector2(2f, -2f);
 
-        CreateText("Actor Manager Heading", actorManagerOverlay, "剧本角色管理", 22, TextAnchor.MiddleCenter, Cyan,
+        CreateText("Actor Manager Heading", actorManagerOverlay, "自制角色", 22, TextAnchor.MiddleCenter, Cyan,
             new Vector2(.5f, 1f), new Vector2(.5f, 1f), new Vector2(0f, -18f), new Vector2(260f, 30f));
         CreateActionButton(actorManagerOverlay, "新建 NPC 角色", new Vector2(18f, -52f),
             new Vector2(126f, 28f), CreateNpcActor);
@@ -1176,6 +1287,10 @@ public class WorkshopStoryBrowserPanel : Panel
                 hintbox.SetSize(720, 360);
         }
         RefreshView();
+        if (sceneManagerOverlay != null && sceneManagerOverlay.gameObject.activeSelf)
+            RefreshSceneManager();
+        if (actorManagerOverlay != null && actorManagerOverlay.gameObject.activeSelf)
+            RefreshActorManager();
     }
 
     private void SelectStory(string path)
@@ -1285,6 +1400,184 @@ public class WorkshopStoryBrowserPanel : Panel
             Hintbox.OpenHintboxWithContent("无法打开剧本预览。", 16);
     }
 
+    private void OpenContentManager()
+    {
+        if (controller.SelectedDocument == null)
+        {
+            Hintbox.OpenHintboxWithContent("请先选择要管理自制内容的剧本。", 16);
+            return;
+        }
+        OpenModal(contentManagerOverlay);
+    }
+
+    private void CloseContentManager()
+    {
+        if (contentManagerOverlay != null)
+            contentManagerOverlay.gameObject.SetActive(false);
+        HideModalLayer();
+        RefreshStoryInfo();
+    }
+
+    private void OpenSceneManager()
+    {
+        if (controller.SelectedDocument == null)
+            return;
+        OpenModal(sceneManagerOverlay);
+        RefreshSceneManager();
+    }
+
+    private void CloseSceneManager()
+    {
+        if (sceneManagerOverlay != null)
+            sceneManagerOverlay.gameObject.SetActive(false);
+        OpenModal(contentManagerOverlay);
+        RefreshStoryInfo();
+    }
+
+    private void CreateCustomScene()
+    {
+        if (!controller.CreateStoryScene(out StorySceneResourceDocument scene, out string error))
+        {
+            Hintbox.OpenHintboxWithContent(error, 16);
+            return;
+        }
+        selectedCustomSceneId = scene.id;
+        RefreshSceneManager();
+    }
+
+    private void DeleteCustomScene()
+    {
+        StorySceneResourceDocument scene = GetSelectedCustomScene();
+        if (scene == null)
+        {
+            Hintbox.OpenHintboxWithContent("请先选择要删除的自制场景。", 16);
+            return;
+        }
+        string sceneId = scene.id;
+        OpenDeleteConfirmation(
+            "确定删除自制场景“" + scene.displayName + "”（" + sceneId + "）吗？\n"
+            + "已被剧情点引用的场景需要先移除相关引用。",
+            () => ConfirmDeleteCustomScene(sceneId));
+    }
+
+    private void ConfirmDeleteCustomScene(string sceneId)
+    {
+        if (!controller.DeleteStoryScene(sceneId, out string error))
+        {
+            Hintbox.OpenHintboxWithContent(error, 16);
+            return;
+        }
+        selectedCustomSceneId = null;
+        RefreshSceneManager();
+    }
+
+    private void SelectCustomScene(string sceneId)
+    {
+        selectedCustomSceneId = sceneId;
+        RefreshSceneManager();
+    }
+
+    private StorySceneResourceDocument GetSelectedCustomScene()
+    {
+        return controller.GetStoryScenes().FirstOrDefault(scene => scene != null
+            && string.Equals(scene.id, selectedCustomSceneId, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private void RefreshSceneManager()
+    {
+        if (sceneManagerContent == null)
+            return;
+
+        StorySceneResourceDocument[] scenes = controller.GetStoryScenes()
+            .Where(scene => scene != null).ToArray();
+        if (scenes.Length > 0 && !scenes.Any(scene => string.Equals(
+                scene.id, selectedCustomSceneId, StringComparison.OrdinalIgnoreCase)))
+            selectedCustomSceneId = scenes[0].id;
+
+        ClearChildren(sceneManagerContent);
+        for (int index = 0; index < scenes.Length; index++)
+        {
+            StorySceneResourceDocument scene = scenes[index];
+            bool selected = string.Equals(scene.id, selectedCustomSceneId, StringComparison.OrdinalIgnoreCase);
+            CreateListButton(sceneManagerContent, "场景 · " + scene.displayName, selected, index,
+                () => SelectCustomScene(scene.id));
+        }
+        if (scenes.Length == 0)
+            CreateHint(sceneManagerContent, "尚未建立自制场景");
+        else
+            sceneManagerContent.sizeDelta = new Vector2(0f, 12f + scenes.Length * 42f);
+
+        StorySceneResourceDocument selectedScene = GetSelectedCustomScene();
+        bool hasScene = selectedScene != null;
+        SetInputFieldValue(sceneNameInput, selectedScene?.name, hasScene);
+        SetActorPreview(sceneBackgroundPreview,
+            hasScene ? StorySpriteResolver.Load(selectedScene.backgroundResourcePath) : null);
+        if (sceneBackgroundPathText != null)
+            sceneBackgroundPathText.text = hasScene
+                ? Shorten(selectedScene.backgroundResourcePath ?? "尚未导入背景", 34)
+                : string.Empty;
+        if (sceneBgmPathText != null)
+            sceneBgmPathText.text = hasScene
+                ? "BGM  " + Shorten(selectedScene.defaultBgmResourcePath ?? "未设置", 20)
+                : string.Empty;
+    }
+
+    private void OnCustomSceneNameEdited(string value)
+    {
+        StorySceneResourceDocument scene = GetSelectedCustomScene();
+        if (scene == null)
+            return;
+        if (!controller.UpdateStoryScene(scene.id, value, out string error))
+            Hintbox.OpenHintboxWithContent(error, 16);
+        RefreshSceneManager();
+    }
+
+    private void ImportCustomSceneBackground()
+    {
+        if (GetSelectedCustomScene() == null)
+        {
+            Hintbox.OpenHintboxWithContent("请先新建或选择一个自制场景。", 16);
+            return;
+        }
+        FileBrowser.SetFilters(false, new FileBrowser.Filter("PNG 图片", ".png"));
+        FileBrowser.ShowLoadDialog(paths =>
+        {
+            if (paths == null || paths.Length == 0)
+                return;
+            if (!controller.ImportStorySceneBackground(selectedCustomSceneId, paths[0], out string error))
+                Hintbox.OpenHintboxWithContent(error, 16);
+            RefreshSceneManager();
+        }, () => { }, FileBrowser.PickMode.Files, title: "选择自制场景背景");
+    }
+
+    private void ImportCustomSceneBgm()
+    {
+        if (GetSelectedCustomScene() == null)
+        {
+            Hintbox.OpenHintboxWithContent("请先新建或选择一个自制场景。", 16);
+            return;
+        }
+        FileBrowser.SetFilters(false, new FileBrowser.Filter("MP3 音频", ".mp3"));
+        FileBrowser.ShowLoadDialog(paths =>
+        {
+            if (paths == null || paths.Length == 0)
+                return;
+            if (!controller.ImportStorySceneBgm(selectedCustomSceneId, paths[0], out string error))
+                Hintbox.OpenHintboxWithContent(error, 16);
+            RefreshSceneManager();
+        }, () => { }, FileBrowser.PickMode.Files, title: "选择自制场景默认 BGM");
+    }
+
+    private void ClearCustomSceneBgm()
+    {
+        if (!controller.ClearStorySceneBgm(selectedCustomSceneId, out string error))
+        {
+            Hintbox.OpenHintboxWithContent(error, 16);
+            return;
+        }
+        RefreshSceneManager();
+    }
+
     private void OpenActorManager()
     {
         if (controller.SelectedDocument == null)
@@ -1301,7 +1594,7 @@ public class WorkshopStoryBrowserPanel : Panel
     {
         if (actorManagerOverlay != null)
             actorManagerOverlay.gameObject.SetActive(false);
-        HideModalLayer();
+        OpenModal(contentManagerOverlay);
         RefreshStoryInfo();
     }
 
@@ -1970,6 +2263,10 @@ public class WorkshopStoryBrowserPanel : Panel
             graphOverlay.gameObject.SetActive(graphOverlay == overlay);
         if (nodeManagerOverlay != null)
             nodeManagerOverlay.gameObject.SetActive(nodeManagerOverlay == overlay);
+        if (contentManagerOverlay != null)
+            contentManagerOverlay.gameObject.SetActive(contentManagerOverlay == overlay);
+        if (sceneManagerOverlay != null)
+            sceneManagerOverlay.gameObject.SetActive(sceneManagerOverlay == overlay);
         if (actorManagerOverlay != null)
             actorManagerOverlay.gameObject.SetActive(actorManagerOverlay == overlay);
         if (actorResourceOverlay != null)
@@ -1988,6 +2285,8 @@ public class WorkshopStoryBrowserPanel : Panel
         bool hasOpenModal = (connectionOverlay != null && connectionOverlay.gameObject.activeSelf)
             || (graphOverlay != null && graphOverlay.gameObject.activeSelf)
             || (nodeManagerOverlay != null && nodeManagerOverlay.gameObject.activeSelf)
+            || (contentManagerOverlay != null && contentManagerOverlay.gameObject.activeSelf)
+            || (sceneManagerOverlay != null && sceneManagerOverlay.gameObject.activeSelf)
             || (actorManagerOverlay != null && actorManagerOverlay.gameObject.activeSelf)
             || (actorResourceOverlay != null && actorResourceOverlay.gameObject.activeSelf)
             || (sourceExportOverlay != null && sourceExportOverlay.gameObject.activeSelf)

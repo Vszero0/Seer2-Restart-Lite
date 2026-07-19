@@ -26,6 +26,7 @@ public static class StoryResourceValidator
         "auto",
         "mod",
         "builtin",
+        "story",
     };
 
     public static void ValidateResources(StoryDocument document, List<string> errors)
@@ -54,6 +55,22 @@ public static class StoryResourceValidator
                 errors.Add("资源 source 不支持：" + resource.source + "，路径：" + path);
 
             ValidatePath(path, resource.kind, source, errors, "resourceDefinitions[" + path + "]");
+        }
+
+        HashSet<string> sceneResourceIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (StorySceneResourceDocument scene in document.sceneResources ?? Array.Empty<StorySceneResourceDocument>())
+        {
+            if (scene == null)
+                continue;
+            string location = "sceneResources[" + (scene.id ?? string.Empty) + "]";
+            if (string.IsNullOrWhiteSpace(scene.id) || !sceneResourceIds.Add(scene.id))
+                errors.Add(location + " 的 id 不能为空且不能重复");
+            if (string.IsNullOrWhiteSpace(scene.backgroundResourcePath))
+                errors.Add(location + " 必须导入背景图片");
+            ValidatePath(scene.backgroundResourcePath, "mapBackground", "story", errors,
+                location + ".backgroundResourcePath");
+            ValidatePath(scene.defaultBgmResourcePath, "audio", "story", errors,
+                location + ".defaultBgmResourcePath");
         }
     }
 
@@ -191,6 +208,9 @@ public static class StoryResourceValidator
             normalizedPath = normalizedPath.Substring("Builtin/".Length);
             source = "builtin";
         }
+
+        if (string.Equals(source, "story", StringComparison.OrdinalIgnoreCase))
+            source = "mod";
 
         // 源码导出的自有资源会直接进入 Assets/Resources，而不是外部 Resources 目录。
         // 本体资源校验必须同时覆盖 Unity Resources 与可替换的外部资源目录。

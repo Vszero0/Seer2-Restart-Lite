@@ -25,10 +25,22 @@ public class StoryMapReferenceDocument
 }
 
 [Serializable]
+public class StorySceneResourceDocument
+{
+    public string id;
+    public string name;
+    public string backgroundResourcePath;
+    public string defaultBgmResourcePath;
+
+    public string displayName => string.IsNullOrWhiteSpace(name) ? id : name;
+}
+
+[Serializable]
 public class StorySceneDocument
 {
     public string id;
     public int mapId;
+    public string sceneResourceId;
     public string bgmResourcePath;
     // 进入当前场景时使用的背景转场。
     public StoryTransitionDocument transition;
@@ -163,7 +175,7 @@ public class StoryTextStyleDocument
 [Serializable]
 public class StoryDocument
 {
-    public int schemaVersion = 8;
+    public int schemaVersion = 9;
     public string status = "published";
     public string id;
     public string title;
@@ -174,6 +186,7 @@ public class StoryDocument
     public StoryMissionDocument mission;
     public bool replayable = true;
     public StoryResourceDefinition[] resourceDefinitions;
+    public StorySceneResourceDocument[] sceneResources;
     public StoryActorDocument[] actors;
     public StoryNodeDocument[] nodes;
 
@@ -285,6 +298,15 @@ public class StoryDocument
             return null;
 
         return actors.FirstOrDefault(x => x != null && x.id == actorId);
+    }
+
+    public StorySceneResourceDocument GetSceneResource(string resourceId)
+    {
+        if (string.IsNullOrWhiteSpace(resourceId) || sceneResources == null)
+            return null;
+
+        return sceneResources.FirstOrDefault(value => value != null
+            && string.Equals(value.id, resourceId, StringComparison.OrdinalIgnoreCase));
     }
 
     private List<StoryNodeDocument> GetOrderedNodes()
@@ -538,13 +560,20 @@ public class StoryCommandDocument
             case "scene":
                 command.type = StoryCommandType.Scene;
                 StorySceneDocument scene = node?.GetScene(sceneId);
-                command.mapId = scene != null && scene.mapId != 0 ? scene.mapId : mapId;
-                command.bgmResourcePath = string.IsNullOrEmpty(scene?.bgmResourcePath)
-                    ? bgmResourcePath
-                    : scene.bgmResourcePath;
-                command.args = string.IsNullOrEmpty(bg)
-                    ? (command.mapId != 0 ? "Maps/bg/" + command.mapId : args)
-                    : bg;
+                StorySceneResourceDocument sceneResource = document?.GetSceneResource(scene?.sceneResourceId);
+                command.mapId = sceneResource != null
+                    ? 0
+                    : scene != null && scene.mapId != 0 ? scene.mapId : mapId;
+                command.bgmResourcePath = !string.IsNullOrEmpty(scene?.bgmResourcePath)
+                    ? scene.bgmResourcePath
+                    : !string.IsNullOrEmpty(sceneResource?.defaultBgmResourcePath)
+                        ? sceneResource.defaultBgmResourcePath
+                        : bgmResourcePath;
+                command.args = !string.IsNullOrEmpty(sceneResource?.backgroundResourcePath)
+                    ? sceneResource.backgroundResourcePath
+                    : string.IsNullOrEmpty(bg)
+                        ? (command.mapId != 0 ? "Maps/bg/" + command.mapId : args)
+                        : bg;
                 command.layout = scene?.layout ?? GetSceneLayout();
                 command.actorLayouts = scene?.actors;
                 command.transition = scene?.transition ?? transition;

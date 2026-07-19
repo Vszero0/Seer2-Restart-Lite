@@ -75,6 +75,7 @@ public class WorkshopStoryNodeEditorPanel : Panel
     private bool sourceDialogueIsHidden;
     private WorkshopStoryPointResourcePicker resourcePicker;
     private int renderedMapId = int.MinValue;
+    private string renderedSceneResourceId;
     private string renderedActorSignature;
     private string requestedSceneMusicSignature;
     private string activeMusicIdentity;
@@ -383,6 +384,7 @@ public class WorkshopStoryNodeEditorPanel : Panel
         activeSceneId = null;
         activeDialogueCommand = null;
         renderedMapId = int.MinValue;
+        renderedSceneResourceId = null;
         renderedActorSignature = null;
         requestedSceneMusicSignature = null;
         RefreshCanvas();
@@ -638,12 +640,24 @@ public class WorkshopStoryNodeEditorPanel : Panel
             return;
 
         int mapId = scene?.mapId ?? 0;
-        if (renderedMapId == mapId)
+        string sceneResourceId = scene?.sceneResourceId ?? string.Empty;
+        if (renderedMapId == mapId
+            && string.Equals(renderedSceneResourceId, sceneResourceId, StringComparison.OrdinalIgnoreCase))
             return;
 
         renderedMapId = mapId;
+        renderedSceneResourceId = sceneResourceId;
 
         int requestVersion = ++sceneVisualRequestVersion;
+        StorySceneResourceDocument customScene = controller.GetStorySceneResource(sceneResourceId);
+        if (customScene != null && !string.IsNullOrWhiteSpace(customScene.backgroundResourcePath))
+        {
+            Sprite sprite = StorySpriteResolver.Load(customScene.backgroundResourcePath,
+                controller.GetResourceSource(customScene.backgroundResourcePath));
+            sceneImage.sprite = sprite;
+            sceneImage.color = sprite == null ? StageFallbackColor : Color.white;
+            return;
+        }
         if (scene == null || scene.mapId == 0)
         {
             sceneImage.sprite = null;
@@ -674,14 +688,21 @@ public class WorkshopStoryNodeEditorPanel : Panel
         if (AudioSystem.instance == null || scene == null)
             return;
 
-        string sceneMusicSignature = scene.mapId + "|" + (scene.bgmResourcePath ?? string.Empty);
+        StorySceneResourceDocument customScene = controller.GetStorySceneResource(scene.sceneResourceId);
+        string resourcePath = !string.IsNullOrWhiteSpace(scene.bgmResourcePath)
+            ? scene.bgmResourcePath
+            : customScene?.defaultBgmResourcePath;
+        string sceneMusicSignature = scene.mapId + "|" + (scene.sceneResourceId ?? string.Empty)
+            + "|" + (resourcePath ?? string.Empty);
         if (string.Equals(requestedSceneMusicSignature, sceneMusicSignature, StringComparison.Ordinal))
             return;
         requestedSceneMusicSignature = sceneMusicSignature;
 
         int requestVersion = ++sceneMusicRequestVersion;
-        if (string.IsNullOrWhiteSpace(scene.bgmResourcePath))
+        if (string.IsNullOrWhiteSpace(resourcePath))
         {
+            if (scene.mapId == 0)
+                return;
             Map.GetMap(scene.mapId, map =>
             {
                 if (requestVersion == sceneMusicRequestVersion && map?.resources?.bgm != null)
@@ -690,20 +711,27 @@ public class WorkshopStoryNodeEditorPanel : Panel
             return;
         }
 
-        string source = controller.GetResourceSource(scene.bgmResourcePath);
-        string musicIdentity = AudioSystem.BuildResourceMusicIdentity(source, scene.bgmResourcePath);
+        string source = controller.GetResourceSource(resourcePath);
+        bool explicitMod = resourcePath.TryTrimStart("Mod/", out string modPath);
+        bool explicitBuiltin = resourcePath.TryTrimStart("Builtin/", out string builtinPath);
+        string loadPath = explicitMod ? modPath : explicitBuiltin ? builtinPath : resourcePath;
+        if (explicitMod || string.Equals(source, "story", StringComparison.OrdinalIgnoreCase))
+            source = "mod";
+        else if (explicitBuiltin)
+            source = "builtin";
+        string musicIdentity = AudioSystem.BuildResourceMusicIdentity(source, loadPath);
         if (string.Equals(activeMusicIdentity, musicIdentity, StringComparison.OrdinalIgnoreCase))
         {
             return;
         }
         bool modOnly = source == "mod" || source == "auto";
-        ResourceManager.instance.GetLocalAddressables<AudioClip>(scene.bgmResourcePath, modOnly,
+        ResourceManager.instance.GetLocalAddressables<AudioClip>(loadPath, modOnly,
             clip =>
             {
                 ApplyResolvedSceneMusic(clip, musicIdentity, requestVersion);
             },
             modOnly && source == "auto"
-                ? _ => ResourceManager.instance.GetLocalAddressables<AudioClip>(scene.bgmResourcePath, false,
+                ? _ => ResourceManager.instance.GetLocalAddressables<AudioClip>(loadPath, false,
                     clip =>
                     {
                         ApplyResolvedSceneMusic(clip, musicIdentity, requestVersion);
@@ -1080,12 +1108,27 @@ public class WorkshopStoryNodeEditorPanel : Panel
 
     private void OpenCreateScenePicker()
     {
-        resourcePicker?.OpenMaps(controller.GetMapOptions, CreateSceneFromMap);
+        resourcePicker?.OpenMaps(controller.GetMapOptions, CreateSceneFromMap,
+            controller.GetCustomSceneOptions, CreateSceneFromCustomResource);
     }
 
     private void CreateSceneFromMap(int mapId)
     {
         if (!controller.CreateScene(mapId, out StorySceneDocument scene, out string error))
+        {
+            Hintbox.OpenHintboxWithContent(error, 16);
+            return;
+        }
+
+        resourcePicker?.Close();
+        activeSceneId = scene.id;
+        activeDialogueCommand = null;
+        RefreshCanvas();
+    }
+
+    private void CreateSceneFromCustomResource(string sceneResourceId)
+    {
+        if (!controller.CreateScene(sceneResourceId, out StorySceneDocument scene, out string error))
         {
             Hintbox.OpenHintboxWithContent(error, 16);
             return;
@@ -1105,12 +1148,25 @@ public class WorkshopStoryNodeEditorPanel : Panel
             return;
         }
 
-        resourcePicker?.OpenMaps(controller.GetMapOptions, ChangeSceneMap);
+        resourcePicker?.OpenMaps(controller.GetMapOptions, ChangeSceneMap,
+            controller.GetCustomSceneOptions, ChangeSceneResource);
     }
 
     private void ChangeSceneMap(int mapId)
     {
         if (!controller.SetSceneMap(activeSceneId, mapId, out string error))
+        {
+            Hintbox.OpenHintboxWithContent(error, 16);
+            return;
+        }
+
+        resourcePicker?.Close();
+        RefreshCanvas();
+    }
+
+    private void ChangeSceneResource(string sceneResourceId)
+    {
+        if (!controller.SetSceneResource(activeSceneId, sceneResourceId, out string error))
         {
             Hintbox.OpenHintboxWithContent(error, 16);
             return;
@@ -1559,6 +1615,13 @@ public class WorkshopStoryNodeEditorPanel : Panel
 
     private void ResolveSceneSprite(StorySceneDocument scene, Action<Sprite> onResolved)
     {
+        StorySceneResourceDocument customScene = controller.GetStorySceneResource(scene?.sceneResourceId);
+        if (customScene != null && !string.IsNullOrWhiteSpace(customScene.backgroundResourcePath))
+        {
+            onResolved?.Invoke(StorySpriteResolver.Load(customScene.backgroundResourcePath,
+                controller.GetResourceSource(customScene.backgroundResourcePath)));
+            return;
+        }
         if (scene == null || scene.mapId == 0)
         {
             onResolved?.Invoke(null);
@@ -1714,6 +1777,7 @@ public class WorkshopStoryNodeEditorPanel : Panel
             return;
 
         renderedMapId = int.MinValue;
+        renderedSceneResourceId = null;
         SetSceneBackground(controller.DraftNode?.GetScene(activeSceneId));
     }
 
@@ -1872,7 +1936,11 @@ public class WorkshopStoryNodeEditorPanel : Panel
     private string GetSceneMapLabel(StorySceneDocument scene)
     {
         if (scene == null)
-            return "请先新建场景并选择地图";
+            return "请先新建场景并选择地图或自制场景";
+
+        StorySceneResourceDocument customScene = controller.GetStorySceneResource(scene.sceneResourceId);
+        if (customScene != null)
+            return "当前场景：自制｜" + customScene.displayName;
 
         WorkshopStoryPointResourceOption map = controller.GetSelectedMapOptions()
             .FirstOrDefault(option => option != null && option.id == scene.mapId);

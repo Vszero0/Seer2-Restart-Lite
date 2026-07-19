@@ -103,6 +103,123 @@ public sealed class WorkshopStoryBrowserModel
             .ToArray();
     }
 
+    public IReadOnlyList<StorySceneResourceDocument> GetStoryScenes()
+    {
+        return (SelectedDocument?.sceneResources ?? Array.Empty<StorySceneResourceDocument>())
+            .Where(scene => scene != null)
+            .OrderBy(scene => scene.displayName, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+    }
+
+    public bool CreateStoryScene(out StorySceneResourceDocument scene, out string error)
+    {
+        scene = null;
+        if (!TryGetSelectedDocument(out error))
+            return false;
+
+        int index = 1;
+        string sceneId;
+        do { sceneId = "custom_scene_" + index++; }
+        while ((SelectedDocument.sceneResources ?? Array.Empty<StorySceneResourceDocument>())
+            .Any(value => value != null && string.Equals(value.id, sceneId, StringComparison.OrdinalIgnoreCase)));
+
+        scene = new StorySceneResourceDocument { id = sceneId, name = "未命名场景" };
+        SelectedDocument.sceneResources = (SelectedDocument.sceneResources ?? Array.Empty<StorySceneResourceDocument>())
+            .Where(value => value != null)
+            .Append(scene)
+            .ToArray();
+        MarkUnsaved();
+        error = string.Empty;
+        return true;
+    }
+
+    public bool UpdateStoryScene(string sceneId, string name, out string error)
+    {
+        if (!TryGetStoryScene(sceneId, out StorySceneResourceDocument scene, out error))
+            return false;
+        scene.name = string.IsNullOrWhiteSpace(name) ? "未命名场景" : name.Trim();
+        MarkUnsaved();
+        error = string.Empty;
+        return true;
+    }
+
+    public bool ImportStorySceneBackground(string sceneId, string sourcePath, out string error)
+    {
+        if (!TryGetStoryScene(sceneId, out StorySceneResourceDocument scene, out error))
+            return false;
+        if (!SaveSystem.TryLoadAllBytes(sourcePath, out byte[] bytes)
+            || !SpriteSet.TryCreateSpriteFromBytes(bytes, out Sprite sprite))
+        {
+            error = "选择的背景无法读取，请使用 PNG 图片。";
+            return false;
+        }
+
+        return WriteStoryAsset(sceneId, "Scenes", "background.png", bytes, "mapBackground",
+            path =>
+            {
+                scene.backgroundResourcePath = path;
+                ResourceManager.instance?.Set(Path.ChangeExtension(path, null)?.Replace('\\', '/'), sprite);
+            }, out error);
+    }
+
+    public bool ImportStorySceneBgm(string sceneId, string sourcePath, out string error)
+    {
+        if (!TryGetStoryScene(sceneId, out StorySceneResourceDocument scene, out error))
+            return false;
+        string previousPath = scene.defaultBgmResourcePath;
+        string extension = Path.GetExtension(sourcePath)?.ToLowerInvariant();
+        if (extension != ".mp3")
+        {
+            error = "请选择 MP3 音频。";
+            return false;
+        }
+        if (!SaveSystem.TryLoadAllBytes(sourcePath, out byte[] bytes) || bytes == null || bytes.Length == 0)
+        {
+            error = "选择的 BGM 无法读取。";
+            return false;
+        }
+
+        bool saved = WriteStoryAsset(sceneId, "Audio", "default" + extension, bytes, "audio",
+            path => scene.defaultBgmResourcePath = path, out error);
+        if (saved && !string.Equals(previousPath, scene.defaultBgmResourcePath, StringComparison.OrdinalIgnoreCase))
+            RemoveStoryResource(previousPath, true);
+        return saved;
+    }
+
+    public bool ClearStorySceneBgm(string sceneId, out string error)
+    {
+        if (!TryGetStoryScene(sceneId, out StorySceneResourceDocument scene, out error))
+            return false;
+        RemoveStoryResource(scene.defaultBgmResourcePath, true);
+        scene.defaultBgmResourcePath = null;
+        MarkUnsaved();
+        error = string.Empty;
+        return true;
+    }
+
+    public bool DeleteStoryScene(string sceneId, out string error)
+    {
+        if (!TryGetStoryScene(sceneId, out StorySceneResourceDocument scene, out error))
+            return false;
+        bool referenced = (SelectedDocument.nodes ?? Array.Empty<StoryNodeDocument>())
+            .SelectMany(node => node?.scenes ?? Array.Empty<StorySceneDocument>())
+            .Any(value => value != null
+                && string.Equals(value.sceneResourceId, sceneId, StringComparison.OrdinalIgnoreCase));
+        if (referenced)
+        {
+            error = "该自制场景已被剧情点引用，请先更换相关场景。";
+            return false;
+        }
+        RemoveStoryResource(scene.backgroundResourcePath, true);
+        RemoveStoryResource(scene.defaultBgmResourcePath, true);
+        SelectedDocument.sceneResources = (SelectedDocument.sceneResources ?? Array.Empty<StorySceneResourceDocument>())
+            .Where(value => value != null && value != scene)
+            .ToArray();
+        MarkUnsaved();
+        error = string.Empty;
+        return true;
+    }
+
     public bool CreateNpcActor(out StoryActorDocument actor, out string error)
     {
         actor = null;
@@ -214,8 +331,8 @@ public sealed class WorkshopStoryBrowserModel
         {
             string storyId = MakeSafePathSegment(SelectedDocument.id, "story");
             string safeActorId = MakeSafePathSegment(actor.id, "actor");
-            string kind = isIcon ? "icon" : "portrait";
-            string relativePath = Path.Combine("Stories", "Assets", storyId, "Actors", safeActorId, kind)
+            string kind = isIcon ? "icon" : "sprite";
+            string relativePath = Path.Combine("Stories", storyId, "Assets", "Characters", safeActorId, kind)
                 .Replace('\\', '/');
             string absolutePath = Path.Combine(Application.persistentDataPath, "Mod", relativePath + ".png");
             Directory.CreateDirectory(Path.GetDirectoryName(absolutePath));
@@ -223,6 +340,7 @@ public sealed class WorkshopStoryBrowserModel
 
             string resourcePath = "Mod/" + relativePath;
             ResourceManager.instance?.Set("Mod/" + relativePath, sprite);
+            RegisterStoryResource(resourcePath, isIcon ? "actorIcon" : "actorSprite");
             if (isIcon)
             {
                 actor.independentIcon = resourcePath;
@@ -331,6 +449,96 @@ public sealed class WorkshopStoryBrowserModel
         foreach (char invalid in Path.GetInvalidFileNameChars())
             result = result.Replace(invalid, '_');
         return string.IsNullOrWhiteSpace(result) ? fallback : result;
+    }
+
+    private bool TryGetStoryScene(string sceneId, out StorySceneResourceDocument scene, out string error)
+    {
+        scene = (SelectedDocument?.sceneResources ?? Array.Empty<StorySceneResourceDocument>())
+            .FirstOrDefault(value => value != null
+                && string.Equals(value.id, sceneId, StringComparison.OrdinalIgnoreCase));
+        if (scene == null)
+        {
+            error = "找不到要编辑的自制场景。";
+            return false;
+        }
+        error = string.Empty;
+        return true;
+    }
+
+    private bool WriteStoryAsset(string resourceId, string category, string fileName, byte[] bytes,
+        string resourceKind, Action<string> apply, out string error)
+    {
+        try
+        {
+            string storyId = MakeSafePathSegment(SelectedDocument.id, "story");
+            string safeResourceId = MakeSafePathSegment(resourceId, "resource");
+            string relativePath = Path.Combine("Stories", storyId, "Assets", category, safeResourceId, fileName)
+                .Replace('\\', '/');
+            string absolutePath = Path.Combine(Application.persistentDataPath, "Mod", relativePath);
+            Directory.CreateDirectory(Path.GetDirectoryName(absolutePath));
+            File.WriteAllBytes(absolutePath, bytes);
+            string resourcePath = "Mod/" + relativePath;
+            RegisterStoryResource(resourcePath, resourceKind);
+            apply?.Invoke(resourcePath);
+            MarkUnsaved();
+            error = string.Empty;
+            return true;
+        }
+        catch (Exception exception)
+        {
+            error = "导入剧本资源失败：" + exception.Message;
+            return false;
+        }
+    }
+
+    private void RegisterStoryResource(string path, string kind)
+    {
+        List<StoryResourceDefinition> resources = (SelectedDocument.resourceDefinitions
+            ?? Array.Empty<StoryResourceDefinition>()).Where(value => value != null).ToList();
+        StoryResourceDefinition resource = resources.FirstOrDefault(value =>
+            string.Equals(value.path, path, StringComparison.OrdinalIgnoreCase));
+        if (resource == null)
+        {
+            resource = new StoryResourceDefinition { path = path };
+            resources.Add(resource);
+        }
+        resource.kind = kind;
+        resource.source = "story";
+        SelectedDocument.resourceDefinitions = resources.ToArray();
+    }
+
+    private void RemoveStoryResource(string path, bool deleteFile)
+    {
+        if (string.IsNullOrWhiteSpace(path) || SelectedDocument == null)
+            return;
+
+        SelectedDocument.resourceDefinitions = (SelectedDocument.resourceDefinitions
+            ?? Array.Empty<StoryResourceDefinition>())
+            .Where(value => value != null
+                && !string.Equals(value.path, path, StringComparison.OrdinalIgnoreCase))
+            .ToArray();
+        if (!deleteFile)
+            return;
+
+        string normalized = path.Replace('\\', '/').TrimStart('/');
+        string ownedPrefix = "Mod/Stories/" + MakeSafePathSegment(SelectedDocument.id, "story") + "/Assets/";
+        if (!normalized.StartsWith(ownedPrefix, StringComparison.OrdinalIgnoreCase))
+            return;
+
+        try
+        {
+            string modRoot = Path.GetFullPath(Path.Combine(Application.persistentDataPath, "Mod"))
+                .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
+                + Path.DirectorySeparatorChar;
+            string absolutePath = Path.GetFullPath(Path.Combine(Application.persistentDataPath,
+                normalized.Replace('/', Path.DirectorySeparatorChar)));
+            if (absolutePath.StartsWith(modRoot, StringComparison.OrdinalIgnoreCase) && File.Exists(absolutePath))
+                File.Delete(absolutePath);
+        }
+        catch (Exception exception)
+        {
+            Debug.LogWarning("清理旧剧本资源失败：" + exception.Message);
+        }
     }
 
     public bool CreateNode(out string error)

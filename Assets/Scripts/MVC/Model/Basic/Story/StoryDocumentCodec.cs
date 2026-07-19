@@ -59,7 +59,7 @@ public static class StoryDocumentCodec
         int sourceVersion = document.schemaVersion;
         if (sourceVersion < 6)
             MigrateConnectionTransitionsToScenes(document);
-        document.schemaVersion = Math.Max(8, document.schemaVersion);
+        document.schemaVersion = Math.Max(9, document.schemaVersion);
         foreach (StoryActorDocument actor in document.actors ?? Array.Empty<StoryActorDocument>())
         {
             if (actor == null)

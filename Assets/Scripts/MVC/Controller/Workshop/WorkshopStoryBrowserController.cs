@@ -42,6 +42,26 @@ public sealed class WorkshopStoryBrowserController
         return model.GetStoryActors();
     }
 
+    public IReadOnlyList<StorySceneResourceDocument> GetStoryScenes() => model.GetStoryScenes();
+
+    public bool CreateStoryScene(out StorySceneResourceDocument scene, out string error)
+        => model.CreateStoryScene(out scene, out error);
+
+    public bool UpdateStoryScene(string sceneId, string name, out string error)
+        => model.UpdateStoryScene(sceneId, name, out error);
+
+    public bool ImportStorySceneBackground(string sceneId, string sourcePath, out string error)
+        => model.ImportStorySceneBackground(sceneId, sourcePath, out error);
+
+    public bool ImportStorySceneBgm(string sceneId, string sourcePath, out string error)
+        => model.ImportStorySceneBgm(sceneId, sourcePath, out error);
+
+    public bool ClearStorySceneBgm(string sceneId, out string error)
+        => model.ClearStorySceneBgm(sceneId, out error);
+
+    public bool DeleteStoryScene(string sceneId, out string error)
+        => model.DeleteStoryScene(sceneId, out error);
+
     public bool CreateNpcActor(out StoryActorDocument actor, out string error)
     {
         return model.CreateNpcActor(out actor, out error);
