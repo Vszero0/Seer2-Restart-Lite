@@ -61,6 +61,10 @@ public class WorkshopStoryNodeEditorPanel : Panel
     private Text sceneTransitionDropdownValueText;
     private Text sceneActorDropdownValueText;
     private Text sceneContentDropdownValueText;
+    private IButton previousSceneButton;
+    private IButton nextSceneButton;
+    private IButton previousContentButton;
+    private IButton nextContentButton;
     private Text layoutModeButtonText;
     private Text restoreChoiceButtonText;
     private Text sceneTransitionDurationText;
@@ -245,11 +249,15 @@ public class WorkshopStoryNodeEditorPanel : Panel
             new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(10f, -7f), new Vector2(34f, 20f));
         sceneDropdown = CreateDropdown(editorActions, new Vector2(46f, -5f), new Vector2(200f, 25f), OnSceneDropdownChanged);
         sceneDropdownValueText = CreateSelectorValueText(sceneDropdown);
-        CreateToolbarButton(editorActions, "新建", new Vector2(254f, -5f), new Vector2(58f, 25f), OpenCreateScenePicker, false);
-        CreateToolbarButton(editorActions, "删除", new Vector2(320f, -5f), new Vector2(58f, 25f), RemoveActiveScene, false);
-        CreateToolbarButton(editorActions, "更换背景", new Vector2(386f, -5f), new Vector2(82f, 25f), OpenChangeSceneMapPicker, false);
+        previousSceneButton = CreateToolbarNavigationButton(editorActions, "◀", new Vector2(254f, -5f),
+            () => SelectAdjacentScene(-1));
+        nextSceneButton = CreateToolbarNavigationButton(editorActions, "▶", new Vector2(290f, -5f),
+            () => SelectAdjacentScene(1));
+        CreateToolbarButton(editorActions, "新建", new Vector2(328f, -5f), new Vector2(58f, 25f), OpenCreateScenePicker, false);
+        CreateToolbarButton(editorActions, "删除", new Vector2(394f, -5f), new Vector2(58f, 25f), RemoveActiveScene, false);
+        CreateToolbarButton(editorActions, "更换背景", new Vector2(460f, -5f), new Vector2(82f, 25f), OpenChangeSceneMapPicker, false);
         sceneStateText = CreateText("Scene State", editorActions, string.Empty, 13, TextAnchor.MiddleLeft, Color.white,
-            new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(476f, -7f), new Vector2(228f, 20f));
+            new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(550f, -7f), new Vector2(228f, 20f));
         dirtyStateText = CreateText("Dirty State", editorActions, string.Empty, 15, TextAnchor.MiddleRight,
             WarningColor, new Vector2(1f, 1f), new Vector2(1f, 1f), new Vector2(-14f, -6f), new Vector2(118f, 22f));
 
@@ -269,14 +277,18 @@ public class WorkshopStoryNodeEditorPanel : Panel
             new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(10f, -63f), new Vector2(34f, 20f));
         sceneContentDropdown = CreateDropdown(editorActions, new Vector2(46f, -61f), new Vector2(200f, 25f), OnSceneContentDropdownChanged);
         sceneContentDropdownValueText = CreateSelectorValueText(sceneContentDropdown);
-        CreateToolbarButton(editorActions, "+旁白", new Vector2(254f, -61f), new Vector2(54f, 25f), CreateNarration, false);
-        CreateToolbarButton(editorActions, "+对白", new Vector2(316f, -61f), new Vector2(54f, 25f), OpenSayActorPicker, false);
-        CreateToolbarButton(editorActions, "+选项", new Vector2(378f, -61f), new Vector2(60f, 25f), ConvertActiveContentToChoice, false);
-        restoreChoiceButtonText = CreateToolbarButton(editorActions, "还原内容", new Vector2(446f, -61f), new Vector2(76f, 25f),
+        previousContentButton = CreateToolbarNavigationButton(editorActions, "◀", new Vector2(254f, -61f),
+            () => SelectAdjacentContent(-1));
+        nextContentButton = CreateToolbarNavigationButton(editorActions, "▶", new Vector2(290f, -61f),
+            () => SelectAdjacentContent(1));
+        CreateToolbarButton(editorActions, "+旁白", new Vector2(328f, -61f), new Vector2(54f, 25f), CreateNarration, false);
+        CreateToolbarButton(editorActions, "+对白", new Vector2(390f, -61f), new Vector2(54f, 25f), OpenSayActorPicker, false);
+        CreateToolbarButton(editorActions, "+选项", new Vector2(452f, -61f), new Vector2(60f, 25f), ConvertActiveContentToChoice, false);
+        restoreChoiceButtonText = CreateToolbarButton(editorActions, "还原内容", new Vector2(520f, -61f), new Vector2(76f, 25f),
             RestoreActiveChoiceToContent, false);
-        CreateToolbarButton(editorActions, "上移", new Vector2(530f, -61f), new Vector2(42f, 25f), () => MoveActiveSceneContent(false), false);
-        CreateToolbarButton(editorActions, "下移", new Vector2(580f, -61f), new Vector2(42f, 25f), () => MoveActiveSceneContent(true), false);
-        CreateToolbarButton(editorActions, "删除", new Vector2(630f, -61f), new Vector2(60f, 25f), RemoveActiveSceneContent, false);
+        CreateToolbarButton(editorActions, "上移", new Vector2(604f, -61f), new Vector2(42f, 25f), () => MoveActiveSceneContent(false), false);
+        CreateToolbarButton(editorActions, "下移", new Vector2(654f, -61f), new Vector2(42f, 25f), () => MoveActiveSceneContent(true), false);
+        CreateToolbarButton(editorActions, "删除", new Vector2(704f, -61f), new Vector2(60f, 25f), RemoveActiveSceneContent, false);
         CreateText("Transition Group", editorActions, "进入转场", 13, TextAnchor.MiddleLeft, Cyan,
             new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(10f, -91f), new Vector2(58f, 20f));
         sceneTransitionDropdown = CreateDropdown(editorActions, new Vector2(72f, -89f), new Vector2(174f, 25f), OnSceneTransitionChanged);
@@ -1476,10 +1488,14 @@ public class WorkshopStoryNodeEditorPanel : Panel
             {
                 sceneDropdown.ClearOptions();
                 sceneDropdown.AddOptions(sections.Select((section, index) => "场景 " + (index + 1)).ToList());
-                sceneDropdown.value = Mathf.Max(0, scenes.FindIndex(scene => scene.id == activeScene?.id));
+                int activeSceneIndex = scenes.FindIndex(scene => scene.id == activeScene?.id);
+                sceneDropdown.value = Mathf.Max(0, activeSceneIndex);
                 sceneDropdown.RefreshShownValue();
                 sceneDropdown.interactable = scenes.Count > 0;
                 SetSelectorValueText(sceneDropdownValueText, sceneDropdown, "未选择场景");
+                SetNavigationButtonAvailable(previousSceneButton, activeSceneIndex > 0);
+                SetNavigationButtonAvailable(nextSceneButton,
+                    activeSceneIndex >= 0 && activeSceneIndex < scenes.Count - 1);
             }
 
             if (sceneTransitionDropdown != null)
@@ -1519,6 +1535,23 @@ public class WorkshopStoryNodeEditorPanel : Panel
 
         StopSceneTransitionPreview(true);
         activeSceneId = sections[index].scene.id;
+        activeDialogueCommand = null;
+        RefreshCanvas();
+    }
+
+    private void SelectAdjacentScene(int offset)
+    {
+        List<WorkshopStorySceneSection> sections = controller.GetSceneSections()
+            .Where(section => section?.scene != null)
+            .ToList();
+        int currentIndex = sections.FindIndex(section => string.Equals(
+            section.scene.id, activeSceneId, StringComparison.OrdinalIgnoreCase));
+        int targetIndex = currentIndex + offset;
+        if (currentIndex < 0 || targetIndex < 0 || targetIndex >= sections.Count)
+            return;
+
+        StopSceneTransitionPreview(true);
+        activeSceneId = sections[targetIndex].scene.id;
         activeDialogueCommand = null;
         RefreshCanvas();
     }
@@ -1902,6 +1935,9 @@ public class WorkshopStoryNodeEditorPanel : Panel
             sceneContentDropdown.RefreshShownValue();
             sceneContentDropdown.interactable = content.Count > 0;
             SetSelectorValueText(sceneContentDropdownValueText, sceneContentDropdown, "暂无内容");
+            SetNavigationButtonAvailable(previousContentButton, activeIndex > 0);
+            SetNavigationButtonAvailable(nextContentButton,
+                activeIndex >= 0 && activeIndex < content.Count - 1);
         }
         finally
         {
@@ -1920,6 +1956,21 @@ public class WorkshopStoryNodeEditorPanel : Panel
             return;
 
         activeDialogueCommand = commands[index];
+        RefreshCanvas();
+    }
+
+    private void SelectAdjacentContent(int offset)
+    {
+        List<StoryCommandDocument> commands = controller.GetSceneCommands(activeSceneId)
+            .Where(IsSceneContentCommand)
+            .ToList();
+        int currentIndex = commands.FindIndex(command => command != null && activeDialogueCommand != null
+            && string.Equals(command.commandId, activeDialogueCommand.commandId, StringComparison.OrdinalIgnoreCase));
+        int targetIndex = currentIndex + offset;
+        if (currentIndex < 0 || targetIndex < 0 || targetIndex >= commands.Count)
+            return;
+
+        activeDialogueCommand = commands[targetIndex];
         RefreshCanvas();
     }
 
@@ -2129,6 +2180,26 @@ public class WorkshopStoryNodeEditorPanel : Panel
             text.raycastTarget = false;
         }
         return text;
+    }
+
+    private IButton CreateToolbarNavigationButton(Transform parent, string label, Vector2 position, Action callback)
+    {
+        Text text = CreateToolbarButton(parent, label, position, new Vector2(30f, 25f), callback, false);
+        IButton button = text == null ? null : text.GetComponentInParent<IButton>();
+        if (button?.button != null)
+            button.button.navigation = new Navigation { mode = Navigation.Mode.None };
+        SetNavigationButtonAvailable(button, false);
+        return button;
+    }
+
+    private static void SetNavigationButtonAvailable(IButton button, bool available)
+    {
+        if (button == null)
+            return;
+
+        Text text = button.GetComponentInChildren<Text>(true);
+        if (text != null)
+            text.color = available ? Cyan : new Color(Cyan.r, Cyan.g, Cyan.b, .38f);
     }
 
     private Dropdown CreateDropdown(Transform parent, Vector2 position, Vector2 dimensions, UnityAction<int> onChanged)
