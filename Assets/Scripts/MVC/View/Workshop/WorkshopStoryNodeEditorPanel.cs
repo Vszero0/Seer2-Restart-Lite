@@ -838,9 +838,7 @@ public class WorkshopStoryNodeEditorPanel : Panel
             && (commandType == "say" || commandType == "choice")
             && !string.IsNullOrWhiteSpace(command.actor);
         dialogController.SetStorySpeakerIconClickHandler(canSelectExpression ? OpenExpressionPicker : null);
-        dialogController.SetStorySpeakerHint(canSelectExpression
-            ? (string.IsNullOrWhiteSpace(command.expression) ? "点击头像设置表情" : "点击头像更换表情")
-            : null);
+        dialogController.SetStorySpeakerHint(null);
 
         dialogController.OpenDialog(new DialogInfo
         {
