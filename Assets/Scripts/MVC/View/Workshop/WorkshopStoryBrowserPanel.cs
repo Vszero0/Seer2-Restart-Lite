@@ -1146,6 +1146,21 @@ public class WorkshopStoryBrowserPanel : Panel
 
     private void DeleteStory()
     {
+        WorkshopStorySummary story = controller.SelectedStory;
+        if (story == null)
+        {
+            Hintbox.OpenHintboxWithContent("请先选择要删除的剧本。", 16);
+            return;
+        }
+
+        string title = string.IsNullOrWhiteSpace(story.title) ? story.fileName : story.title;
+        OpenDeleteConfirmation(
+            "确定删除剧本《" + title + "》吗？\n剧本及其中的全部剧情点将被删除，此操作无法撤销。",
+            ConfirmDeleteStory);
+    }
+
+    private void ConfirmDeleteStory()
+    {
         if (!controller.DeleteSelected(out string error) && !string.IsNullOrEmpty(error))
             Hintbox.OpenHintboxWithContent(error, 16);
         RefreshView();
@@ -1195,6 +1210,23 @@ public class WorkshopStoryBrowserPanel : Panel
     }
 
     private void DeleteNode()
+    {
+        StoryNodeDocument node = controller.SelectedNode;
+        if (node == null)
+        {
+            Hintbox.OpenHintboxWithContent("请先选择要删除的剧情点。", 16);
+            return;
+        }
+
+        string displayName = string.IsNullOrWhiteSpace(node.displayName) ? node.id : node.displayName;
+        string nodeId = node.id;
+        OpenDeleteConfirmation(
+            "确定删除剧情点“" + displayName + "”（" + nodeId + "）吗？\n"
+            + "相关默认流程会自动衔接；显式条件引用仍需先处理。",
+            ConfirmDeleteNode);
+    }
+
+    private void ConfirmDeleteNode()
     {
         bool success = controller.DeleteSelectedNode(out string error);
         if (!success && !string.IsNullOrEmpty(error))
@@ -1291,13 +1323,39 @@ public class WorkshopStoryBrowserPanel : Panel
             Hintbox.OpenHintboxWithContent("请先选择要删除的剧本角色。", 16);
             return;
         }
-        if (!controller.DeleteNpcActor(selectedActorId, out string error))
+
+        StoryActorDocument actor = GetSelectedNpcActor();
+        if (actor == null)
+        {
+            Hintbox.OpenHintboxWithContent("未找到要删除的剧本角色。", 16);
+            return;
+        }
+
+        string actorId = actor.id;
+        OpenDeleteConfirmation(
+            "确定删除自制角色“" + actor.displayName + "”（" + actorId + "）吗？\n"
+            + "已被剧情点引用的角色需要先移除相关引用。",
+            () => ConfirmDeleteNpcActor(actorId));
+    }
+
+    private void ConfirmDeleteNpcActor(string actorId)
+    {
+        if (!controller.DeleteNpcActor(actorId, out string error))
         {
             Hintbox.OpenHintboxWithContent(error, 16);
             return;
         }
         selectedActorId = null;
         RefreshActorManager();
+    }
+
+    private static void OpenDeleteConfirmation(string content, Action confirmAction)
+    {
+        Hintbox hintbox = Hintbox.OpenHintbox();
+        hintbox.SetTitle("确认删除");
+        hintbox.SetContent(content, 16, FontOption.Arial);
+        hintbox.SetOptionNum(2);
+        hintbox.SetOptionCallback(confirmAction);
     }
 
     private void SelectNpcActor(string actorId)
