@@ -453,7 +453,12 @@ public class WorkshopStoryNodeEditorPanel : Panel
         bool isChoice = activeDialogueCommand != null
             && string.Equals(activeDialogueCommand.type, "choice", StringComparison.OrdinalIgnoreCase);
         if (restoreChoiceButtonText != null)
-            restoreChoiceButtonText.transform.parent.gameObject.SetActive(isChoice);
+        {
+            restoreChoiceButtonText.transform.parent.gameObject.SetActive(true);
+            restoreChoiceButtonText.color = isChoice
+                ? Cyan
+                : new Color(Cyan.r, Cyan.g, Cyan.b, .38f);
+        }
         choiceEditor.gameObject.SetActive(isChoice);
         if (!isChoice)
             return;
@@ -1292,11 +1297,10 @@ public class WorkshopStoryNodeEditorPanel : Panel
 
     private void RestoreActiveChoiceToContent()
     {
-        if (activeDialogueCommand == null || string.IsNullOrWhiteSpace(activeDialogueCommand.commandId))
-        {
-            Hintbox.OpenHintboxWithContent("请先选择要还原的选项问题。", 16);
+        if (activeDialogueCommand == null
+            || !string.Equals(activeDialogueCommand.type, "choice", StringComparison.OrdinalIgnoreCase)
+            || string.IsNullOrWhiteSpace(activeDialogueCommand.commandId))
             return;
-        }
 
         if (!controller.RestoreChoiceToSceneContent(activeSceneId, activeDialogueCommand.commandId,
                 out activeDialogueCommand, out string error))
