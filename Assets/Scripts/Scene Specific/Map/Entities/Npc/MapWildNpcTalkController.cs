@@ -294,6 +294,16 @@ public class MapWildNpcTalkController : MonoBehaviour
 /// Shared catalog for the built-in small expressions used by map NPC bubbles and story portraits.
 /// Story JSON stores the stable emoji/toon/... id and never treats these built-in sprites as Mod resources.
 /// </summary>
+public enum StoryExpressionMotion
+{
+    Neutral,
+    Bounce,
+    Shake,
+    Surprise,
+    Tilt,
+    Sink,
+}
+
 public static class StoryExpressionCatalog
 {
     private const string ExternalPathPrefix = "Map/talk bubble/";
@@ -335,5 +345,48 @@ public static class StoryExpressionCatalog
         }
 
         return fallbackLibrary?.GetTalkImage(normalized);
+    }
+
+    public static StoryExpressionMotion GetMotion(string id)
+    {
+        string normalized = Normalize(id);
+        if (normalized == null)
+            return StoryExpressionMotion.Neutral;
+
+        string name = normalized.Substring(normalized.LastIndexOf('/') + 1);
+        switch (name)
+        {
+            case "angry":
+            case "annoyed":
+            case "sick":
+                return StoryExpressionMotion.Shake;
+            case "alert":
+            case "dizzy":
+            case "hypno":
+            case "shocked":
+            case "skull":
+            case "surprised":
+                return StoryExpressionMotion.Surprise;
+            case "cool":
+            case "shy":
+            case "smug":
+            case "sunglasses":
+                return StoryExpressionMotion.Tilt;
+            case "cry":
+            case "mute":
+            case "sleepy":
+            case "sweat":
+            case "worried":
+                return StoryExpressionMotion.Sink;
+            case "grin":
+            case "happy":
+            case "laugh":
+            case "love":
+            case "silly":
+            case "star_eyes":
+                return StoryExpressionMotion.Bounce;
+            default:
+                return StoryExpressionMotion.Neutral;
+        }
     }
 }

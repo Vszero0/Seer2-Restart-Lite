@@ -39,6 +39,7 @@ public class DialogView : Module
     private CanvasGroup storyContentCanvasGroup;
     private CanvasGroup storyIconCanvasGroup;
     private Coroutine storyFadeCoroutine;
+    private Coroutine storyExpressionCoroutine;
     private Coroutine storyTextRevealCoroutine;
     private Action storyTextRevealCompletedHandler;
     private bool isStoryTextRevealing;
@@ -62,6 +63,7 @@ public class DialogView : Module
     private bool hasDefaultLayout;
     private Action storySpeakerIconClickHandler;
     private string storySpeakerHint;
+    private Vector2 storySpeakerExpressionBasePosition;
     private static readonly Color32 StorySpeakerHintColor = new Color32(145, 190, 200, 210);
     private static readonly Color32 StorySpeakerHintHoverColor = new Color32(82, 229, 249, 255);
     private const float StoryTextInitialDelay = 0.12f;
@@ -90,7 +92,7 @@ public class DialogView : Module
         SetGif(info.gifInfo, info.icon);
         SetContent(info.content);
         if (useStoryLayout)
-            ApplyStoryLayout(info, hasIcon);
+            ApplyStoryLayout(info, hasIcon, animateStoryText);
         else
             ResetStoryLayout();
 
@@ -437,7 +439,7 @@ public class DialogView : Module
         content.text.outlineWidth = defaultOutlineWidth;
     }
 
-    private void ApplyStoryLayout(DialogInfo info, bool isActiveSpeaker)
+    private void ApplyStoryLayout(DialogInfo info, bool isActiveSpeaker, bool animateExpression)
     {
         if (contentRect == null || content == null)
             return;
@@ -462,9 +464,6 @@ public class DialogView : Module
             storySpeakerIcon.sprite = null;
         storySpeakerIcon.color = isActiveSpeaker ? Color.white : new Color32(150, 150, 150, 255);
 
-        Sprite expression = hasSpeakerIcon ? StoryExpressionCatalog.Load(info.storyExpression) : null;
-        storySpeakerExpression.gameObject.SetActive(expression != null);
-        storySpeakerExpression.sprite = expression;
         RefreshStorySpeakerIconButton();
 
         bool showSpeakerHint = hasSpeakerIcon && storySpeakerIconClickHandler != null
@@ -536,10 +535,14 @@ public class DialogView : Module
         storySpeakerExpressionRect.anchorMin = new Vector2(0.5f, 0.5f);
         storySpeakerExpressionRect.anchorMax = new Vector2(0.5f, 0.5f);
         storySpeakerExpressionRect.pivot = new Vector2(0.5f, 0.5f);
-        storySpeakerExpressionRect.anchoredPosition = storySpeakerIconRect.anchoredPosition + new Vector2(16f, -14f);
-        storySpeakerExpressionRect.sizeDelta = new Vector2(30f, 30f);
+        storySpeakerExpressionBasePosition = storySpeakerIconRect.anchoredPosition
+            + new Vector2(speakerOnRight ? 25f : -25f, 19f);
+        storySpeakerExpressionRect.anchoredPosition = storySpeakerExpressionBasePosition;
+        storySpeakerExpressionRect.sizeDelta = new Vector2(34f, 34f);
         storySpeakerExpressionRect.localScale = Vector3.one;
+        storySpeakerExpressionRect.localEulerAngles = Vector3.zero;
         storySpeakerExpressionRect.SetAsLastSibling();
+        ApplyStorySpeakerExpression(info, hasSpeakerIcon, animateExpression);
 
         storySpeakerRect.anchorMin = new Vector2(0.5f, 0.5f);
         storySpeakerRect.anchorMax = new Vector2(0.5f, 0.5f);
@@ -562,8 +565,7 @@ public class DialogView : Module
         if (storySpeakerIcon != null)
             storySpeakerIcon.gameObject.SetActive(false);
 
-        if (storySpeakerExpression != null)
-            storySpeakerExpression.gameObject.SetActive(false);
+        ResetStorySpeakerExpression();
 
         if (storySpeakerHintText != null)
             storySpeakerHintText.gameObject.SetActive(false);
@@ -678,6 +680,91 @@ public class DialogView : Module
         storySpeakerIcon.raycastTarget = canClick;
         if (button != null)
             button.interactable = canClick;
+    }
+
+    private void ApplyStorySpeakerExpression(DialogInfo info, bool hasSpeakerIcon, bool animate)
+    {
+        string expressionId = hasSpeakerIcon ? StoryExpressionCatalog.Normalize(info?.storyExpression) : null;
+        Sprite expression = expressionId == null ? null : StoryExpressionCatalog.Load(expressionId);
+        if (expression == null)
+        {
+            ResetStorySpeakerExpression();
+            return;
+        }
+
+        if (storyExpressionCoroutine != null)
+        {
+            StopCoroutine(storyExpressionCoroutine);
+            storyExpressionCoroutine = null;
+        }
+
+        storySpeakerExpression.sprite = expression;
+        storySpeakerExpression.gameObject.SetActive(true);
+        storySpeakerExpressionRect.anchoredPosition = storySpeakerExpressionBasePosition;
+        storySpeakerExpressionRect.localScale = Vector3.one;
+        storySpeakerExpressionRect.localEulerAngles = Vector3.zero;
+        storySpeakerExpression.color = Color.white;
+
+        if (animate)
+        {
+            StoryExpressionMotion motion = StoryExpressionCatalog.GetMotion(expressionId);
+            storyExpressionCoroutine = StartCoroutine(StoryExpressionPopCoroutine(motion));
+        }
+    }
+
+    private IEnumerator StoryExpressionPopCoroutine(StoryExpressionMotion motion)
+    {
+        const float duration = .24f;
+        float time = 0f;
+        float startRotation = motion == StoryExpressionMotion.Tilt ? 12f : -7f;
+        while (time < duration)
+        {
+            float progress = Mathf.Clamp01(time / duration);
+            float eased = 1f - Mathf.Pow(1f - progress, 3f);
+            float scale = progress < .7f
+                ? Mathf.Lerp(.68f, 1.12f, progress / .7f)
+                : Mathf.Lerp(1.12f, 1f, (progress - .7f) / .3f);
+            float shake = motion == StoryExpressionMotion.Shake
+                ? Mathf.Sin(progress * Mathf.PI * 6f) * 2.5f * (1f - progress)
+                : 0f;
+
+            storySpeakerExpression.color = new Color(1f, 1f, 1f, eased);
+            storySpeakerExpressionRect.anchoredPosition = storySpeakerExpressionBasePosition
+                + new Vector2(shake, -7f * (1f - eased));
+            storySpeakerExpressionRect.localScale = Vector3.one * scale;
+            storySpeakerExpressionRect.localEulerAngles = new Vector3(0f, 0f,
+                Mathf.Lerp(startRotation, 0f, eased));
+            time += Time.unscaledDeltaTime;
+            yield return null;
+        }
+
+        storySpeakerExpression.color = Color.white;
+        storySpeakerExpressionRect.anchoredPosition = storySpeakerExpressionBasePosition;
+        storySpeakerExpressionRect.localScale = Vector3.one;
+        storySpeakerExpressionRect.localEulerAngles = Vector3.zero;
+        storyExpressionCoroutine = null;
+    }
+
+    private void ResetStorySpeakerExpression()
+    {
+        if (storyExpressionCoroutine != null)
+        {
+            StopCoroutine(storyExpressionCoroutine);
+            storyExpressionCoroutine = null;
+        }
+
+        if (storySpeakerExpression == null)
+            return;
+
+        storySpeakerExpression.sprite = null;
+        storySpeakerExpression.gameObject.SetActive(false);
+        storySpeakerExpression.color = Color.white;
+        if (storySpeakerExpressionRect != null)
+        {
+            storySpeakerExpressionRect.anchoredPosition = storySpeakerExpressionBasePosition;
+            storySpeakerExpressionRect.localScale = Vector3.one;
+            storySpeakerExpressionRect.localEulerAngles = Vector3.zero;
+        }
     }
 
     private Sprite GetStorySpeakerIcon(DialogInfo info)

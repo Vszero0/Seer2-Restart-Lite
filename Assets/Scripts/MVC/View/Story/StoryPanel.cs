@@ -895,7 +895,7 @@ public class StoryPanel : Panel
         DialogManager.instance.SetStoryDialogReplyClickHandler(null);
         DialogManager.instance.ClearStoryChoices();
         DialogManager.instance.SetStoryDialogBackgroundClickHandler(Advance);
-        actorStage?.SetActiveActor(actor?.id);
+        actorStage?.SetActiveActor(actor?.id, StoryExpressionCatalog.GetMotion(expression));
         lastDialogInfo = CreateDialogInfo(actor, speaker, content, new List<NpcButtonHandler>(), expression);
         DialogManager.instance.OpenStoryDialog(lastDialogInfo, false);
         RefreshOverlayLayering();

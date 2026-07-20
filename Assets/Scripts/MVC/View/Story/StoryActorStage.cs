@@ -119,7 +119,7 @@ public sealed class StoryActorStage
         LayoutActors();
     }
 
-    public void SetActiveActor(string actorId)
+    public void SetActiveActor(string actorId, StoryExpressionMotion expressionMotion = StoryExpressionMotion.Neutral)
     {
         StoryActorRuntime activeRuntime = null;
         foreach (StoryActorRuntime runtime in actors.Values)
@@ -138,7 +138,7 @@ public sealed class StoryActorStage
         }
 
         if (activeRuntime != null)
-            PlayActorFocus(activeRuntime);
+            PlayActorFocus(activeRuntime, expressionMotion);
     }
 
     public StorySceneActorLayoutDocument GetPlacement(StoryActorDocument actor)
@@ -297,23 +297,50 @@ public sealed class StoryActorStage
         runtime.fadeCoroutine = null;
     }
 
-    private void PlayActorFocus(StoryActorRuntime runtime)
+    private void PlayActorFocus(StoryActorRuntime runtime, StoryExpressionMotion expressionMotion)
     {
         if (runtime?.image == null)
             return;
 
         StopActorFocus(runtime);
-        runtime.focusCoroutine = coroutineHost.StartCoroutine(ActorFocusCoroutine(runtime));
+        runtime.focusCoroutine = coroutineHost.StartCoroutine(ActorFocusCoroutine(runtime, expressionMotion));
     }
 
-    private IEnumerator ActorFocusCoroutine(StoryActorRuntime runtime)
+    private IEnumerator ActorFocusCoroutine(StoryActorRuntime runtime, StoryExpressionMotion expressionMotion)
     {
-        const float duration = .22f;
+        float duration = expressionMotion == StoryExpressionMotion.Shake ? .28f : .24f;
         float time = 0f;
         while (time < duration)
         {
             float progress = Mathf.Clamp01(time / duration);
-            float scale = 1f + Mathf.Sin(progress * Mathf.PI) * .03f;
+            float pulse = Mathf.Sin(progress * Mathf.PI);
+            float scale = 1f + pulse * .03f;
+            Vector2 offset = Vector2.zero;
+            float rotation = 0f;
+            switch (expressionMotion)
+            {
+                case StoryExpressionMotion.Bounce:
+                    offset = Vector2.up * (pulse * 8f);
+                    break;
+                case StoryExpressionMotion.Shake:
+                    offset = Vector2.right * (Mathf.Sin(progress * Mathf.PI * 8f) * 7f * (1f - progress));
+                    scale = 1f + pulse * .02f;
+                    break;
+                case StoryExpressionMotion.Surprise:
+                    scale = 1f + pulse * .085f;
+                    break;
+                case StoryExpressionMotion.Tilt:
+                    rotation = pulse * (runtime.placement?.normalizedSide == "right" ? -6f : 6f);
+                    scale = 1f + pulse * .025f;
+                    break;
+                case StoryExpressionMotion.Sink:
+                    offset = Vector2.down * (pulse * 7f);
+                    scale = 1f + pulse * .018f;
+                    break;
+            }
+
+            runtime.image.rectTransform.anchoredPosition = runtime.basePosition + offset;
+            runtime.image.rectTransform.localEulerAngles = new Vector3(0f, 0f, rotation);
             runtime.image.rectTransform.localScale = new Vector3(
                 runtime.baseScale.x * scale,
                 runtime.baseScale.y * scale,
@@ -322,6 +349,8 @@ public sealed class StoryActorStage
             yield return null;
         }
 
+        runtime.image.rectTransform.anchoredPosition = runtime.basePosition;
+        runtime.image.rectTransform.localEulerAngles = Vector3.zero;
         runtime.image.rectTransform.localScale = runtime.baseScale;
         runtime.focusCoroutine = null;
     }
@@ -348,7 +377,11 @@ public sealed class StoryActorStage
             runtime.focusCoroutine = null;
         }
         if (runtime.image != null)
+        {
+            runtime.image.rectTransform.anchoredPosition = runtime.basePosition;
+            runtime.image.rectTransform.localEulerAngles = Vector3.zero;
             runtime.image.rectTransform.localScale = runtime.baseScale;
+        }
     }
 
     private void LayoutActors()
