@@ -19,6 +19,7 @@ public static class StoryValidator
         "jump",
         "mission",
         "teleport",
+        "battle",
         "end",
     };
 
@@ -271,6 +272,12 @@ public static class StoryValidator
         {
             errors.Add(location + ".fallbackNodeId is only valid for branch nodes");
         }
+        if (node.endTeleportMapId != 0)
+        {
+            if (!node.isEnding)
+                errors.Add(location + ".endTeleportMapId 只能由结束节点配置");
+            StoryResourceValidator.ValidateMap(node.endTeleportMapId, errors, location + ".endTeleportMapId");
+        }
     }
 
     private static void ValidateNodeCommands(
@@ -361,8 +368,15 @@ public static class StoryValidator
                         errors.Add(location + " 需要 args，例如：-10001 complete");
                     break;
                 case "teleport":
-                    if (!int.TryParse(command.args, out _))
-                        errors.Add(location + " 需要数字地图 ID args");
+                    errors.Add(location + " 不再支持内容传送；请在结束连接中配置结束后传送");
+                    break;
+                case "battle":
+                    if (command.battle == null)
+                    {
+                        errors.Add(location + ".battle 不能为空");
+                        break;
+                    }
+                    StoryResourceValidator.ValidateBattle(command.battle, errors, location + ".battle");
                     break;
             }
         }
@@ -525,6 +539,25 @@ public static class StoryValidator
     {
         foreach (StoryConditionDocument condition in EnumerateConditions(group))
         {
+            if (condition != null && string.Equals(condition.type, "battleResult", StringComparison.OrdinalIgnoreCase))
+            {
+                StoryNodeDocument battleNode = ownerNode;
+                if (!string.IsNullOrWhiteSpace(condition.pointId)
+                    && !nodeDict.TryGetValue(condition.pointId, out battleNode))
+                {
+                    errors.Add(location + " 引用了不存在的剧情点：" + condition.pointId);
+                    continue;
+                }
+                bool battleExists = (battleNode?.commands ?? Array.Empty<StoryCommandDocument>()).Any(command => command != null
+                    && string.Equals(command.commandId, condition.commandId, StringComparison.OrdinalIgnoreCase)
+                    && string.Equals(command.type, "battle", StringComparison.OrdinalIgnoreCase));
+                if (!battleExists)
+                    errors.Add(location + " 引用了不存在的战斗命令：" + condition.commandId);
+                if (!string.Equals(condition.value, "win", StringComparison.OrdinalIgnoreCase)
+                    && !string.Equals(condition.value, "lose", StringComparison.OrdinalIgnoreCase))
+                    errors.Add(location + " 的战斗结果只支持 win 或 lose");
+                continue;
+            }
             if (condition == null || !string.Equals(condition.type, "choiceSelected", StringComparison.OrdinalIgnoreCase))
                 continue;
 

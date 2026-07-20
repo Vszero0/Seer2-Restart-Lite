@@ -93,6 +93,14 @@ public sealed class WorkshopStoryNodeEditorController
         return model.CreateScene(mapId, out scene, out error);
     }
 
+    public List<StoryBattleOption> GetBattleOptions(string filter) => model.GetBattleOptions(filter);
+
+    public bool CreateBattleCommand(string sceneId, StoryBattleReferenceDocument reference,
+        out StoryCommandDocument command, out string error)
+    {
+        return model.CreateBattleCommand(sceneId, reference, out command, out error);
+    }
+
     public bool CreateScene(string sceneResourceId, out StorySceneDocument scene, out string error)
         => model.CreateScene(sceneResourceId, out scene, out error);
 

@@ -485,6 +485,39 @@ public sealed class WorkshopStoryNodeEditorModel
         return true;
     }
 
+    public List<StoryBattleOption> GetBattleOptions(string filter) => StoryBattleCatalog.GetOptions(filter);
+
+    public bool CreateBattleCommand(string sceneId, StoryBattleReferenceDocument reference,
+        out StoryCommandDocument command, out string error)
+    {
+        command = null;
+        WorkshopStorySceneSection section = GetSceneSections().FirstOrDefault(value => value?.scene != null
+            && string.Equals(value.scene.id, sceneId, StringComparison.OrdinalIgnoreCase));
+        if (section == null)
+        {
+            error = "请先新建并选择一个场景。";
+            return false;
+        }
+        if (!StoryBattleCatalog.TryResolve(reference, out _, out error))
+            return false;
+
+        command = new StoryCommandDocument
+        {
+            commandId = CreateCommandId(),
+            type = "battle",
+            battle = new StoryBattleReferenceDocument
+            {
+                mapId = reference.mapId,
+                npcId = reference.npcId,
+                battleId = reference.battleId,
+            },
+        };
+        InsertCommand(section.commandEndIndex, command);
+        HasUnsavedChanges = true;
+        error = string.Empty;
+        return true;
+    }
+
     public List<WorkshopStorySceneSection> GetSceneSections()
     {
         EnsureSceneSections(DraftNode);
@@ -570,6 +603,12 @@ public sealed class WorkshopStoryNodeEditorModel
         if (IsChoiceCommandReferenced(target))
         {
             error = "该选择内容已用于剧情点后续规则，请先在入口页的“编辑连接”中处理。";
+            return false;
+        }
+        if (string.Equals(target.type, "battle", StringComparison.OrdinalIgnoreCase)
+            && IsBattleCommandReferenced(target.commandId))
+        {
+            error = "该战斗结果已用于剧情点后续规则，请先在“编辑连接”中处理。";
             return false;
         }
 
@@ -1604,7 +1643,8 @@ public sealed class WorkshopStoryNodeEditorModel
     {
         return command != null && (string.Equals(command.type, "say", StringComparison.OrdinalIgnoreCase)
             || string.Equals(command.type, "narrate", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(command.type, "choice", StringComparison.OrdinalIgnoreCase));
+            || string.Equals(command.type, "choice", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(command.type, "battle", StringComparison.OrdinalIgnoreCase));
     }
 
     private bool IsChoiceCommandReferenced(StoryCommandDocument command)
@@ -1742,6 +1782,29 @@ public sealed class WorkshopStoryNodeEditorModel
         while (DraftNode.GetScene(sceneId) != null)
             sceneId = baseId + "_" + suffix++;
         return sceneId;
+    }
+
+    private bool IsBattleCommandReferenced(string commandId)
+    {
+        if (string.IsNullOrWhiteSpace(commandId))
+            return false;
+        foreach (StoryNodeDocument node in DraftDocument?.nodes ?? Array.Empty<StoryNodeDocument>())
+        foreach (StoryNodeTransitionDocument transition in node?.transitions ?? Array.Empty<StoryNodeTransitionDocument>())
+        foreach (StoryConditionDocument condition in EnumerateConditions(transition?.condition))
+        {
+            if (condition != null
+                && string.Equals(condition.type, "battleResult", StringComparison.OrdinalIgnoreCase)
+                && string.Equals(condition.commandId, commandId, StringComparison.OrdinalIgnoreCase))
+                return true;
+        }
+        return false;
+    }
+
+    private static IEnumerable<StoryConditionDocument> EnumerateConditions(ConditionGroupDocument group)
+    {
+        if (group?.clauses != null && group.clauses.Length > 0)
+            return group.clauses.SelectMany(clause => clause?.conditions ?? Array.Empty<StoryConditionDocument>());
+        return group?.conditions ?? Array.Empty<StoryConditionDocument>();
     }
 
     private string CreateUniqueSceneId(string sceneResourceId)

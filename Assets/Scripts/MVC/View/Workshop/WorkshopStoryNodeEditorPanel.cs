@@ -284,11 +284,12 @@ public class WorkshopStoryNodeEditorPanel : Panel
         CreateToolbarButton(editorActions, "+旁白", new Vector2(328f, -61f), new Vector2(54f, 25f), CreateNarration, false);
         CreateToolbarButton(editorActions, "+对白", new Vector2(390f, -61f), new Vector2(54f, 25f), OpenSayActorPicker, false);
         CreateToolbarButton(editorActions, "+选项", new Vector2(452f, -61f), new Vector2(60f, 25f), ConvertActiveContentToChoice, false);
-        restoreChoiceButtonText = CreateToolbarButton(editorActions, "还原内容", new Vector2(520f, -61f), new Vector2(76f, 25f),
+        CreateToolbarButton(editorActions, "+战斗", new Vector2(520f, -61f), new Vector2(60f, 25f), OpenBattlePicker, false);
+        restoreChoiceButtonText = CreateToolbarButton(editorActions, "还原内容", new Vector2(588f, -61f), new Vector2(76f, 25f),
             RestoreActiveChoiceToContent, false);
-        CreateToolbarButton(editorActions, "上移", new Vector2(604f, -61f), new Vector2(42f, 25f), () => MoveActiveSceneContent(false), false);
-        CreateToolbarButton(editorActions, "下移", new Vector2(654f, -61f), new Vector2(42f, 25f), () => MoveActiveSceneContent(true), false);
-        CreateToolbarButton(editorActions, "删除", new Vector2(704f, -61f), new Vector2(60f, 25f), RemoveActiveSceneContent, false);
+        CreateToolbarButton(editorActions, "上移", new Vector2(672f, -61f), new Vector2(42f, 25f), () => MoveActiveSceneContent(false), false);
+        CreateToolbarButton(editorActions, "下移", new Vector2(722f, -61f), new Vector2(42f, 25f), () => MoveActiveSceneContent(true), false);
+        CreateToolbarButton(editorActions, "删除", new Vector2(772f, -61f), new Vector2(60f, 25f), RemoveActiveSceneContent, false);
         CreateText("Transition Group", editorActions, "进入转场", 13, TextAnchor.MiddleLeft, Cyan,
             new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(10f, -91f), new Vector2(58f, 20f));
         sceneTransitionDropdown = CreateDropdown(editorActions, new Vector2(72f, -89f), new Vector2(174f, 25f), OnSceneTransitionChanged);
@@ -831,13 +832,17 @@ public class WorkshopStoryNodeEditorPanel : Panel
 
         RestoreSourceDialogueText();
         string commandType = (command?.type ?? string.Empty).Trim().ToLowerInvariant();
+        bool isBattle = commandType == "battle";
         StoryActorDocument actor = commandType == "narrate" ? null : document.GetActor(command?.actor);
         StorySceneActorLayoutDocument placement = scene?.GetActorLayout(actor?.id);
         bool isNarration = command == null || commandType == "narrate" || actor == null;
-        bool canEditDialogue = scene != null;
+        bool canEditDialogue = scene != null && !isBattle;
         string content = command == null
             ? (canEditDialogue ? "点击此处输入旁白" : "请先新建场景并选择地图")
-            : command.text ?? string.Empty;
+            : isBattle
+                ? "战斗：地图 " + command.battle?.mapId + " / NPC " + command.battle?.npcId
+                    + " / 战斗 " + command.battle?.battleId
+                : command.text ?? string.Empty;
 
         bool canSelectExpression = !isNarration && command != null
             && (commandType == "say" || commandType == "choice")
@@ -851,7 +856,7 @@ public class WorkshopStoryNodeEditorPanel : Panel
             iconId = isNarration ? "none" : actor.icon,
             iconSize = isNarration ? "0,0" : DefaultIconSize,
             iconPos = isNarration ? "0,0" : DefaultIconPosition,
-            name = isNarration ? "旁白" : actor.displayName,
+            name = isBattle ? "战斗" : isNarration ? "旁白" : actor.displayName,
             storySpeakerSide = placement?.normalizedSide ?? "left",
             storyFlipIcon = placement != null && (placement.flipIcon != (actor?.sourceFacesLeft ?? false)),
             storyUseIconCrop = actor != null && actor.usesPortraitIcon,
@@ -1541,6 +1546,27 @@ public class WorkshopStoryNodeEditorPanel : Panel
         RefreshCanvas();
     }
 
+    private void OpenBattlePicker()
+    {
+        if (controller.DraftNode?.GetScene(activeSceneId) == null)
+        {
+            Hintbox.OpenHintboxWithContent("请先新建并选择一个场景。", 16);
+            return;
+        }
+        resourcePicker?.OpenBattles(controller.GetBattleOptions, CreateBattle);
+    }
+
+    private void CreateBattle(StoryBattleReferenceDocument reference)
+    {
+        if (!controller.CreateBattleCommand(activeSceneId, reference, out activeDialogueCommand, out string error))
+        {
+            Hintbox.OpenHintboxWithContent(error, 16);
+            return;
+        }
+        resourcePicker?.Close();
+        RefreshCanvas();
+    }
+
     private void SelectAdjacentScene(int offset)
     {
         List<WorkshopStorySceneSection> sections = controller.GetSceneSections()
@@ -1979,8 +2005,11 @@ public class WorkshopStoryNodeEditorPanel : Panel
     private static string FormatSceneContentLabel(int index, StoryCommandDocument command)
     {
         string type = string.Equals(command?.type, "say", StringComparison.OrdinalIgnoreCase) ? "对白"
-            : string.Equals(command?.type, "choice", StringComparison.OrdinalIgnoreCase) ? "选项" : "旁白";
-        string preview = (command?.text ?? string.Empty).Replace('\n', ' ').Trim();
+            : string.Equals(command?.type, "choice", StringComparison.OrdinalIgnoreCase) ? "选项"
+            : string.Equals(command?.type, "battle", StringComparison.OrdinalIgnoreCase) ? "战斗" : "旁白";
+        string preview = string.Equals(command?.type, "battle", StringComparison.OrdinalIgnoreCase)
+            ? (command.battle?.mapId + "/" + command.battle?.npcId + "/" + command.battle?.battleId)
+            : (command?.text ?? string.Empty).Replace('\n', ' ').Trim();
         if (preview.Length > 5)
             preview = preview.Substring(0, 5) + "...";
         return (index + 1).ToString("00") + "｜" + type + "｜" + (string.IsNullOrEmpty(preview) ? "未填写" : preview);
@@ -2149,7 +2178,8 @@ public class WorkshopStoryNodeEditorPanel : Panel
     {
         return command != null && (string.Equals(command.type, "say", StringComparison.OrdinalIgnoreCase)
             || string.Equals(command.type, "narrate", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(command.type, "choice", StringComparison.OrdinalIgnoreCase));
+            || string.Equals(command.type, "choice", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(command.type, "battle", StringComparison.OrdinalIgnoreCase));
     }
 
     private Text CreateToolbarButton(Transform parent, string label, Vector2 position, Vector2 dimensions, Action callback,

@@ -188,26 +188,42 @@ public class Battle
 
     public static void StartBattle(BattleInfo battleInfo)
     {
-        if (battleInfo == null)
-            return;
+        TryStartBattle(battleInfo, out _);
+    }
 
-        bool isPlayerPetBag = (battleInfo.playerInfo == null) || (battleInfo.playerInfo.Count == 0);
-        bool isFirstPetDead = (Player.instance.petBag[0] == null) || (Player.instance.petBag[0].currentStatus.hp == 0);
-        if (isPlayerPetBag && isFirstPetDead)
-        {
-            Hintbox.OpenHintboxWithContent("首发精灵血量耗尽，快去恢复精灵吧！", 14);
-            return;
-        }
-
-        var petBag = Player.instance.petBag.Take(battleInfo.settings.petCount);
-        if (!battleInfo.settings.Condition(petBag, out var message))
-        {
-            Hintbox.OpenHintboxWithContent(message, 16);
-            return;
-        }
+    public static bool TryStartBattle(BattleInfo battleInfo, out string error)
+    {
+        if (!CanStartBattle(battleInfo, out error))
+            return false;
 
         Battle battle = new Battle(battleInfo);
         SceneLoader.instance.ChangeScene(SceneId.Battle);
+        return true;
+    }
+
+    public static bool CanStartBattle(BattleInfo battleInfo, out string error)
+    {
+        error = string.Empty;
+        if (battleInfo == null)
+        {
+            error = "战斗配置不存在。";
+            return false;
+        }
+        bool isPlayerPetBag = battleInfo.playerInfo == null || battleInfo.playerInfo.Count == 0;
+        bool isFirstPetDead = Player.instance?.petBag == null || Player.instance.petBag.Length == 0
+            || Player.instance.petBag[0] == null || Player.instance.petBag[0].currentStatus.hp == 0;
+        if (isPlayerPetBag && isFirstPetDead)
+        {
+            error = "首发精灵血量耗尽，快去恢复精灵吧！";
+            return false;
+        }
+        IEnumerable<Pet> petBag = Player.instance.petBag.Take(battleInfo.settings.petCount);
+        if (!battleInfo.settings.Condition(petBag, out string message))
+        {
+            error = message;
+            return false;
+        }
+        return true;
     }
 
     public void NextPhase()

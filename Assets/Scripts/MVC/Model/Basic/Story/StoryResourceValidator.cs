@@ -139,7 +139,7 @@ public static class StoryResourceValidator
         ValidatePath("Maps/bg/" + resourceId, "mapBackground", source, errors, location);
     }
 
-    private static bool TryLoadMapDefinition(int mapId, out Map map, out string error)
+    public static bool TryLoadMapDefinition(int mapId, out Map map, out string error)
     {
         map = null;
         error = string.Empty;
@@ -180,6 +180,34 @@ public static class StoryResourceValidator
             error = exception.Message;
             map = null;
             return false;
+        }
+    }
+
+    public static void ValidateBattle(StoryBattleReferenceDocument reference, List<string> errors, string location)
+    {
+        if (reference == null)
+        {
+            errors.Add(location + " 不能为空");
+            return;
+        }
+        if (!TryLoadMapDefinition(reference.mapId, out Map map, out string mapError))
+        {
+            errors.Add(location + ".mapId 引用的地图 XML 无效：" + reference.mapId
+                + (string.IsNullOrWhiteSpace(mapError) ? string.Empty : "（" + mapError + "）"));
+            return;
+        }
+        NpcInfo npc = Map.GetNpcInfo(map, reference.npcId);
+        if (npc == null)
+        {
+            errors.Add(location + ".npcId 在地图 XML 中不存在：" + reference.npcId);
+            return;
+        }
+        if (string.IsNullOrWhiteSpace(reference.battleId)
+            || npc.battleHandler == null
+            || !npc.battleHandler.Any(value => value != null
+                && string.Equals(value.id, reference.battleId, StringComparison.OrdinalIgnoreCase)))
+        {
+            errors.Add(location + ".battleId 在指定 NPC 中不存在：" + (reference.battleId ?? string.Empty));
         }
     }
 

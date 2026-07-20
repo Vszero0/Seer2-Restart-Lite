@@ -65,6 +65,10 @@ public class StoryPanel : Panel
     private GameObject previewIndicator;
     private TextMeshProUGUI previewIndicatorText;
     private DialogInfo lastDialogInfo;
+    private StoryBattleSession pendingBattleResume;
+    private RectTransform battlePrompt;
+    private RectTransform battlePromptMask;
+    private StoryCommand pendingBattleCommand;
 
     public static StoryPanel Open(string storyId, int fallbackMapId = 0, int missionId = 0)
     {
@@ -97,6 +101,29 @@ public class StoryPanel : Panel
     public static bool CanOpenStory(string storyId, out string error)
     {
         return StoryDocumentLoader.CanOpen(storyId, out error);
+    }
+
+    public static StoryPanel OpenResume(StoryBattleSession session)
+    {
+        if (session?.story == null)
+            return null;
+        GameObject canvas = GameObject.Find("Canvas");
+        if (canvas == null)
+            return null;
+        GameObject obj = new GameObject("Story Panel", typeof(RectTransform), typeof(CanvasRenderer),
+            typeof(Image), typeof(Button), typeof(StoryPanel));
+        obj.transform.SetParent(canvas.transform, false);
+        obj.transform.SetAsLastSibling();
+        RectTransform rect = obj.GetComponent<RectTransform>();
+        rect.anchorMin = Vector2.zero;
+        rect.anchorMax = Vector2.one;
+        rect.offsetMin = Vector2.zero;
+        rect.offsetMax = Vector2.zero;
+        obj.GetComponent<Image>().color = new Color32(8, 11, 18, 255);
+        obj.GetComponent<Button>().transition = Selectable.Transition.None;
+        StoryPanel panel = obj.GetComponent<StoryPanel>();
+        panel.pendingBattleResume = session;
+        return panel;
     }
 
     /// <summary>
@@ -178,12 +205,17 @@ public class StoryPanel : Panel
         base.Init();
         BuildUI();
         isBuilt = true;
-        CaptureMusicContext();
 
-        if (pendingPreviewStory != null)
-            LoadRuntimeStory(pendingPreviewStory, pendingPreviewStartNodeId);
-        else if (!string.IsNullOrEmpty(pendingStoryId))
-            LoadStory(pendingStoryId, fallbackMapId);
+        if (pendingBattleResume != null)
+            ResumeAfterBattle(pendingBattleResume);
+        else
+        {
+            CaptureMusicContext();
+            if (pendingPreviewStory != null)
+                LoadRuntimeStory(pendingPreviewStory, pendingPreviewStartNodeId);
+            else if (!string.IsNullOrEmpty(pendingStoryId))
+                LoadStory(pendingStoryId, fallbackMapId);
+        }
     }
 
     public override void ClosePanel()
@@ -204,6 +236,8 @@ public class StoryPanel : Panel
             Destroy(exitButton);
         if (previewIndicator != null)
             Destroy(previewIndicator);
+        if (battlePromptMask != null)
+            Destroy(battlePromptMask.gameObject);
 
         base.ClosePanel();
         onPreviewClosed?.Invoke();
@@ -354,10 +388,21 @@ public class StoryPanel : Panel
                         continue;
                     Teleport(command.args);
                     return;
+                case StoryCommandType.Battle:
+                    if (isPreviewMode)
+                    {
+                        ShowBattlePreview(command);
+                        return;
+                    }
+                    ShowBattlePreparation(command);
+                    return;
                 case StoryCommandType.End:
                     if (StoryConditionEvaluator.Evaluate(story, command.condition))
                     {
-                        FinishStory();
+                        if (!isPreviewMode && !string.IsNullOrWhiteSpace(command.args))
+                            Teleport(command.args);
+                        else
+                            FinishStory();
                         return;
                     }
                     continue;
@@ -365,6 +410,211 @@ public class StoryPanel : Panel
         }
 
         FinishStory();
+    }
+
+    private void ResumeAfterBattle(StoryBattleSession session)
+    {
+        pendingBattleResume = null;
+        story = session.story;
+        commandIndex = Mathf.Clamp(session.commandIndex, 0, story.commands.Count);
+        fallbackMapId = session.fallbackMapId;
+        boundMissionId = session.boundMissionId;
+        boundMissionCompleted = session.boundMissionCompleted;
+        musicSnapshot = session.musicSnapshot;
+        hasChangedMusicIdentity = session.hasChangedMusicIdentity;
+        hasRestartedMusic = session.hasRestartedMusic;
+        activeMusicIdentity = AudioSystem.instance?.CurrentMusicIdentity;
+        isClosing = false;
+        waitingForChoice = false;
+        isTransitioning = false;
+        actorStage.Reset(story.layout);
+        ClearDialogHandlers();
+        lastDialogInfo = null;
+
+        StoryCommand sceneCommand = story.commands.Take(commandIndex).LastOrDefault(command => command?.type == StoryCommandType.Scene);
+        if (sceneCommand != null)
+        {
+            StoryTransitionDocument transition = sceneCommand.transition;
+            sceneCommand.transition = null;
+            bool loading = ApplyScene(sceneCommand);
+            sceneCommand.transition = transition;
+            if (loading)
+                return;
+        }
+        ShowNextCommand();
+    }
+
+    private void ShowBattlePreview(StoryCommand command)
+    {
+        pendingBattleCommand = command;
+        waitingForChoice = true;
+        CreateBattlePrompt("战斗预览", GetBattleDescription(command), new[]
+        {
+            new KeyValuePair<string, Action>("模拟胜利", () => CompletePreviewBattle("win")),
+            new KeyValuePair<string, Action>("模拟失败", () => CompletePreviewBattle("lose")),
+            new KeyValuePair<string, Action>("返回预览", CancelBattlePrompt),
+        });
+    }
+
+    private void ShowBattlePreparation(StoryCommand command)
+    {
+        pendingBattleCommand = command;
+        waitingForChoice = true;
+        CreateBattlePrompt("战斗准备", GetBattleDescription(command), new[]
+        {
+            new KeyValuePair<string, Action>("打开精灵背包", OpenBattlePetBag),
+            new KeyValuePair<string, Action>("开始战斗", StartStoryBattle),
+            new KeyValuePair<string, Action>("返回剧情", CancelBattlePrompt),
+        });
+    }
+
+    private string GetBattleDescription(StoryCommand command)
+    {
+        StoryBattleReferenceDocument reference = command?.battle;
+        if (reference == null)
+            return "战斗配置无效";
+        StoryBattleOption option = StoryBattleCatalog.GetOptions(string.Empty).FirstOrDefault(value => value.reference.mapId == reference.mapId
+            && value.reference.npcId == reference.npcId
+            && string.Equals(value.reference.battleId, reference.battleId, StringComparison.OrdinalIgnoreCase));
+        return option == null ? "地图 " + reference.mapId + " / NPC " + reference.npcId + " / 战斗 " + reference.battleId
+            : option.displayName;
+    }
+
+    private void OpenBattlePetBag()
+    {
+        PetBagPanel panel = Panel.OpenPanel<PetBagPanel>();
+        if (panel != null)
+            panel.onCloseEvent += RefreshBattlePromptAfterPetBag;
+    }
+
+    private void RefreshBattlePromptAfterPetBag()
+    {
+        if (battlePromptMask != null)
+            battlePromptMask.SetAsLastSibling();
+    }
+
+    private void StartStoryBattle()
+    {
+        if (!StoryBattleCatalog.TryResolve(pendingBattleCommand?.battle, out BattleInfo battleInfo, out string error)
+            || !Battle.CanStartBattle(battleInfo, out error))
+        {
+            Hintbox.OpenHintboxWithContent(error, 16);
+            return;
+        }
+
+        StoryBattleSession.current = new StoryBattleSession
+        {
+            story = story,
+            commandIndex = commandIndex,
+            fallbackMapId = fallbackMapId,
+            boundMissionId = boundMissionId,
+            boundMissionCompleted = boundMissionCompleted,
+            pointId = pendingBattleCommand.pointId,
+            commandId = pendingBattleCommand.commandId,
+            musicSnapshot = musicSnapshot,
+            hasChangedMusicIdentity = hasChangedMusicIdentity,
+            hasRestartedMusic = hasRestartedMusic,
+        };
+        suppressMusicRestore = true;
+        isClosing = true;
+        ClosePanel();
+        if (!Battle.TryStartBattle(battleInfo, out error))
+        {
+            StoryBattleSession.current = null;
+            Hintbox.OpenHintboxWithContent(error, 16);
+        }
+    }
+
+    private void CompletePreviewBattle(string result)
+    {
+        story.battleHistory.Add(new StoryBattleHistoryEntry
+        {
+            pointId = pendingBattleCommand?.pointId,
+            commandId = pendingBattleCommand?.commandId,
+            result = result,
+        });
+        CloseBattlePrompt();
+        ShowNextCommand();
+    }
+
+    private void CancelBattlePrompt()
+    {
+        commandIndex = Mathf.Max(0, commandIndex - 1);
+        CloseBattlePrompt();
+    }
+
+    private void CloseBattlePrompt()
+    {
+        waitingForChoice = false;
+        pendingBattleCommand = null;
+        if (battlePromptMask != null)
+            Destroy(battlePromptMask.gameObject);
+        battlePrompt = null;
+        battlePromptMask = null;
+    }
+
+    private void CreateBattlePrompt(string title, string content, IEnumerable<KeyValuePair<string, Action>> actions)
+    {
+        if (battlePromptMask != null)
+            Destroy(battlePromptMask.gameObject);
+        battlePrompt = null;
+        battlePromptMask = null;
+        waitingForChoice = true;
+        Transform overlayParent = transform.parent != null ? transform.parent : transform;
+        Image mask = CreateImage("Battle Prompt Mask", overlayParent, Vector2.zero, Vector2.one, new Vector2(.5f, .5f),
+            Vector2.zero, Vector2.zero, new Color(0f, 0f, 0f, .68f));
+        mask.raycastTarget = true;
+        battlePromptMask = mask.rectTransform;
+        battlePrompt = CreateRect("Battle Prompt", mask.transform, new Vector2(.5f, .5f), new Vector2(.5f, .5f),
+            new Vector2(.5f, .5f), Vector2.zero, new Vector2(620f, 260f));
+        Image background = battlePrompt.gameObject.AddComponent<Image>();
+        background.color = new Color32(0, 12, 18, 250);
+        Outline outline = battlePrompt.gameObject.AddComponent<Outline>();
+        outline.effectColor = new Color32(82, 229, 249, 255);
+        outline.effectDistance = new Vector2(2f, -2f);
+        CreateBattlePromptText("Title", battlePrompt, title, 25f, new Vector2(0f, -28f), new Vector2(560f, 36f), new Color32(82, 229, 249, 255));
+        CreateBattlePromptText("Content", battlePrompt, content, 17f, new Vector2(0f, -88f), new Vector2(540f, 76f), new Color32(210, 235, 240, 255));
+        KeyValuePair<string, Action>[] buttons = actions.ToArray();
+        float width = 154f;
+        float gap = 20f;
+        float start = -(buttons.Length * width + (buttons.Length - 1) * gap) * .5f + width * .5f;
+        for (int index = 0; index < buttons.Length; index++)
+            CreateBattlePromptButton(battlePrompt, buttons[index].Key, new Vector2(start + index * (width + gap), -194f), buttons[index].Value);
+        mask.transform.SetAsLastSibling();
+    }
+
+    private void CreateBattlePromptText(string name, Transform parent, string value, float size, Vector2 position, Vector2 dimensions, Color color)
+    {
+        GameObject obj = new GameObject(name, typeof(RectTransform), typeof(CanvasRenderer), typeof(TextMeshProUGUI));
+        obj.transform.SetParent(parent, false);
+        RectTransform rect = obj.GetComponent<RectTransform>();
+        rect.anchorMin = rect.anchorMax = new Vector2(.5f, 1f);
+        rect.pivot = new Vector2(.5f, 1f);
+        rect.anchoredPosition = position;
+        rect.sizeDelta = dimensions;
+        TextMeshProUGUI text = obj.GetComponent<TextMeshProUGUI>();
+        text.font = StoryTextFontProvider.GetDefaultFont();
+        text.text = value;
+        text.fontSize = size;
+        text.alignment = TextAlignmentOptions.Center;
+        text.color = color;
+        text.raycastTarget = false;
+    }
+
+    private void CreateBattlePromptButton(Transform parent, string label, Vector2 position, Action callback)
+    {
+        GameObject obj = new GameObject(label, typeof(RectTransform), typeof(CanvasRenderer), typeof(Image), typeof(Button), typeof(Outline));
+        obj.transform.SetParent(parent, false);
+        RectTransform rect = obj.GetComponent<RectTransform>();
+        rect.anchorMin = rect.anchorMax = new Vector2(.5f, 1f);
+        rect.pivot = new Vector2(.5f, 1f);
+        rect.anchoredPosition = position;
+        rect.sizeDelta = new Vector2(154f, 38f);
+        obj.GetComponent<Image>().color = new Color32(0, 22, 30, 255);
+        obj.GetComponent<Outline>().effectColor = new Color32(82, 229, 249, 255);
+        Button button = obj.GetComponent<Button>();
+        button.onClick.AddListener(() => callback?.Invoke());
+        CreateBattlePromptText("Text", obj.transform, label, 18f, Vector2.zero, new Vector2(150f, 38f), new Color32(82, 229, 249, 255));
     }
 
     private bool ShouldFinishNodePreview(StoryCommand command)
@@ -1288,6 +1538,8 @@ public class StoryPanel : Panel
         DialogManager.instance?.RefreshStoryOverlayLayering();
         BringPreviewIndicatorToFront();
         BringExitButtonToFront();
+        if (battlePromptMask != null)
+            battlePromptMask.SetAsLastSibling();
     }
 
     private TMP_Text FindTextSample()

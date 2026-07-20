@@ -175,7 +175,7 @@ public class StoryTextStyleDocument
 [Serializable]
 public class StoryDocument
 {
-    public int schemaVersion = 9;
+    public int schemaVersion = 10;
     public string status = "published";
     public string id;
     public string title;
@@ -345,7 +345,9 @@ public class StoryDocument
                 commandId = node.id + ":transition:" + (transition.transitionId ?? transition.targetNodeId),
                 pointId = node.id,
                 type = transition.isEnd ? StoryCommandType.End : StoryCommandType.Jump,
-                args = transition.isEnd ? null : transition.targetNodeId,
+                args = transition.isEnd
+                    ? (node.endTeleportMapId == 0 ? null : node.endTeleportMapId.ToString())
+                    : transition.targetNodeId,
                 condition = transition.isDefault ? null : transition.condition,
             });
         }
@@ -396,6 +398,7 @@ public class StoryDocument
             commandId = node.id + ":flow:end",
             pointId = node.id,
             type = StoryCommandType.End,
+            args = node.endTeleportMapId == 0 ? null : node.endTeleportMapId.ToString(),
         });
     }
 }
@@ -465,6 +468,8 @@ public class StoryNodeDocument
     public StoryTextStyleDocument style;
     public StoryCommandDocument[] commands;
     public StoryNodeTransitionDocument[] transitions;
+    // 只有结束节点可用。0 表示正常结束，非 0 表示完成剧情后传送到真实 XML 地图。
+    public int endTeleportMapId;
 
     public string normalizedFlowRole => string.Equals(flowRole, "branch", StringComparison.OrdinalIgnoreCase)
         ? "branch"
@@ -537,6 +542,7 @@ public class StoryCommandDocument
     public string text;
     public string target;
     public string args;
+    public StoryBattleReferenceDocument battle;
     public StoryLayoutDocument layout;
     public float actorSpacing;
     public float actorHeight;
@@ -630,8 +636,13 @@ public class StoryCommandDocument
                 command.type = StoryCommandType.Teleport;
                 command.args = args;
                 return command;
+            case "battle":
+                command.type = StoryCommandType.Battle;
+                command.battle = battle;
+                return command.battle == null ? null : command;
             case "end":
                 command.type = StoryCommandType.End;
+                command.args = (node?.endTeleportMapId ?? 0) == 0 ? null : node.endTeleportMapId.ToString();
                 return command;
             default:
                 return null;
@@ -671,6 +682,14 @@ public class StoryCommandDocument
             stackOffset = stackOffset,
         };
     }
+}
+
+[Serializable]
+public class StoryBattleReferenceDocument
+{
+    public int mapId;
+    public int npcId;
+    public string battleId;
 }
 
 [Serializable]

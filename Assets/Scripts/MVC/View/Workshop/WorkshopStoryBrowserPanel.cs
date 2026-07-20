@@ -153,6 +153,7 @@ public class WorkshopStoryBrowserPanel : Panel
     private int sourceRewardPage;
     private string sourceRewardQuery = string.Empty;
     private bool hasBuilt;
+    private WorkshopStoryPointResourcePicker connectionResourcePicker;
 
     public override void Init()
     {
@@ -168,6 +169,8 @@ public class WorkshopStoryBrowserPanel : Panel
         FindWorkshopPetInputFieldPrefabs();
         background = GetComponent<Image>();
         BuildLayout();
+        connectionResourcePicker = new WorkshopStoryPointResourcePicker(
+            transform, actionButtonPrefab, listButtonPrefab, petNameInputFieldPrefab, font);
         Reload();
     }
 
@@ -2014,6 +2017,7 @@ public class WorkshopStoryBrowserPanel : Panel
 
     private void CloseConnectionEditor()
     {
+        connectionResourcePicker?.Close();
         if (connectionOverlay != null)
             connectionOverlay.gameObject.SetActive(false);
         RefreshStoryInfo();
@@ -2847,7 +2851,9 @@ public class WorkshopStoryBrowserPanel : Panel
                     ruleIndex++;
                 AddGraphEdge(edges, nodeIds, node.id,
                     transition.isEnd ? StoryEndGraphNodeId : transition.targetNodeId,
-                    transition.isDefault ? "默认" : "条件" + ruleIndex,
+                    transition.isEnd && node.endTeleportMapId != 0
+                        ? "传送 " + node.endTeleportMapId
+                        : transition.isDefault ? "默认" : "条件" + ruleIndex,
                     conditional);
             }
 
@@ -3302,7 +3308,10 @@ public class WorkshopStoryBrowserPanel : Panel
             int selectedIndex = Array.FindIndex(options, option => option != null
                 && string.Equals(option.commandId, condition?.commandId, StringComparison.OrdinalIgnoreCase)
                 && string.Equals(option.choiceId, condition?.choiceId, StringComparison.OrdinalIgnoreCase)
-                && string.Equals(option.optionId, condition?.optionId, StringComparison.OrdinalIgnoreCase));
+                && string.Equals(option.optionId,
+                    string.Equals(condition?.type, "battleResult", StringComparison.OrdinalIgnoreCase)
+                        ? condition?.value : condition?.optionId,
+                    StringComparison.OrdinalIgnoreCase));
             dropdown.SetValueWithoutNotify(Mathf.Max(0, selectedIndex));
             dropdown.interactable = options.Length > 0;
             SetSelectorValueText(CreateSelectorValueText(dropdown), dropdown, "当前剧情点没有可用选项");
@@ -3371,10 +3380,13 @@ public class WorkshopStoryBrowserPanel : Panel
 
     private float CreateDefaultFlowCard(float y)
     {
-        const float height = 72f;
-        RectTransform card = CreateRuleCard("Default Story Flow", y, height);
         StoryNodeTransitionDocument explicitDefault = (controller.SelectedNode?.transitions ?? Array.Empty<StoryNodeTransitionDocument>())
             .FirstOrDefault(transition => transition != null && transition.isDefault);
+        bool canConfigureEndTeleport = explicitDefault != null
+            && explicitDefault.isEnd
+            && controller.SelectedNode?.isEnding == true;
+        float height = canConfigureEndTeleport ? 108f : 72f;
+        RectTransform card = CreateRuleCard("Default Story Flow", y, height);
         string targetNodeId = explicitDefault?.targetNodeId ?? controller.GetSelectedNodeDefaultFlowTarget();
         string targetName = explicitDefault != null && explicitDefault.isEnd
             ? "结束整个剧情"
@@ -3401,6 +3413,16 @@ public class WorkshopStoryBrowserPanel : Panel
                 CreateActionButton(card, "恢复默认流程", new Vector2(-14f, -28f), new Vector2(126f, 28f),
                     () => RestoreDefaultFlow(explicitDefault.transitionId), TextAnchor.UpperRight);
             }
+            if (canConfigureEndTeleport)
+            {
+                string endLabel = controller.SelectedNode.endTeleportMapId == 0
+                    ? "结束后：正常结束"
+                    : "结束后：传送到地图 " + controller.SelectedNode.endTeleportMapId;
+                CreateText("End Action", card, endLabel, 14, TextAnchor.MiddleLeft, HintColor,
+                    new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(14f, -74f), new Vector2(500f, 26f));
+                CreateActionButton(card, "设置结束行为", new Vector2(-14f, -66f), new Vector2(126f, 28f),
+                    () => OpenEndTeleportPicker(explicitDefault.transitionId), TextAnchor.UpperRight);
+            }
         }
         else
         {
@@ -3408,6 +3430,66 @@ public class WorkshopStoryBrowserPanel : Panel
                 CreateExplicitDefaultFlow, TextAnchor.UpperRight);
         }
         return height;
+    }
+
+    private void OpenEndTeleportPicker(string transitionId)
+    {
+        connectionResourcePicker?.OpenMaps(GetStoryMapOptions,
+            mapId => SetEndTeleport(transitionId, mapId), null, null,
+            "正常结束", () => SetEndTeleport(transitionId, 0));
+    }
+
+    private void SetEndTeleport(string transitionId, int mapId)
+    {
+        if (!controller.UpdateSelectedNodeEndTeleport(transitionId, mapId, out string error))
+        {
+            Hintbox.OpenHintboxWithContent(error, 16);
+            return;
+        }
+        connectionResourcePicker?.Close();
+        RefreshConnections();
+    }
+
+    private List<WorkshopStoryPointResourceOption> GetStoryMapOptions(string filter)
+    {
+        Dictionary<int, WorkshopStoryPointResourceOption> options = new Dictionary<int, WorkshopStoryPointResourceOption>();
+        foreach (TextAsset asset in Resources.LoadAll<TextAsset>("Data/Maps"))
+        {
+            try { AddStoryMapOption(options, ResourceManager.GetXML<Map>(asset.text)); }
+            catch { }
+        }
+        string modDirectory = Path.Combine(Application.persistentDataPath, "Mod", "Maps");
+        try
+        {
+            if (Directory.Exists(modDirectory))
+            {
+                foreach (string path in Directory.GetFiles(modDirectory, "*.xml", SearchOption.TopDirectoryOnly))
+                {
+                    try { AddStoryMapOption(options, ResourceManager.GetXML<Map>(File.ReadAllText(path))); }
+                    catch { }
+                }
+            }
+        }
+        catch { }
+
+        string query = (filter ?? string.Empty).Trim();
+        return options.Values
+            .Where(option => string.IsNullOrEmpty(query)
+                || option.id.ToString().IndexOf(query, StringComparison.OrdinalIgnoreCase) >= 0
+                || (option.name ?? string.Empty).IndexOf(query, StringComparison.OrdinalIgnoreCase) >= 0)
+            .OrderBy(option => option.isMod).ThenBy(option => option.id).ToList();
+    }
+
+    private static void AddStoryMapOption(Dictionary<int, WorkshopStoryPointResourceOption> options, Map map)
+    {
+        if (map == null || map.id == 0)
+            return;
+        options[map.id] = new WorkshopStoryPointResourceOption
+        {
+            id = map.id,
+            name = map.name,
+            isMod = Map.IsMod(map.id),
+        };
     }
 
     private void CreateExplicitDefaultFlow()

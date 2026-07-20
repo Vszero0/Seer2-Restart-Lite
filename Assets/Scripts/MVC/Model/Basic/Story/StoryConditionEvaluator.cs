@@ -68,6 +68,14 @@ public static class StoryConditionEvaluator
                     ? mission.isDone
                     : !mission.isDone;
                 break;
+            case "battleresult":
+                result = story.battleHistory.Any(entry => entry != null
+                    && (string.IsNullOrWhiteSpace(condition.pointId)
+                        || string.Equals(entry.pointId, condition.pointId, StringComparison.OrdinalIgnoreCase))
+                    && (string.IsNullOrWhiteSpace(condition.commandId)
+                        || string.Equals(entry.commandId, condition.commandId, StringComparison.OrdinalIgnoreCase))
+                    && string.Equals(entry.result, condition.value, StringComparison.OrdinalIgnoreCase));
+                break;
             case "storyflag":
                 result = false;
                 break;

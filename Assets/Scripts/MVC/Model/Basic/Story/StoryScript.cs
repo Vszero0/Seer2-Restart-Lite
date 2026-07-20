@@ -7,6 +7,7 @@ public class StoryScript
     public Dictionary<string, int> labels = new Dictionary<string, int>();
     public Dictionary<string, string> resourceSources = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
     public List<StoryChoiceHistoryEntry> choiceHistory = new List<StoryChoiceHistoryEntry>();
+    public List<StoryBattleHistoryEntry> battleHistory = new List<StoryBattleHistoryEntry>();
     public StoryLayoutDocument layout;
     public StoryTextStyleDocument textStyle;
     public string currentPointId;
@@ -53,6 +54,7 @@ public class StoryCommand
     public List<StoryChoice> choices = new List<StoryChoice>();
     public ConditionGroupDocument condition;
     public ConditionGroupDocument displayCondition;
+    public StoryBattleReferenceDocument battle;
 }
 
 public class StoryChoiceHistoryEntry
@@ -61,6 +63,13 @@ public class StoryChoiceHistoryEntry
     public string commandId;
     public string choiceId;
     public string optionId;
+}
+
+public class StoryBattleHistoryEntry
+{
+    public string pointId;
+    public string commandId;
+    public string result;
 }
 
 public class StoryChoice
@@ -83,5 +92,6 @@ public enum StoryCommandType
     Jump,
     Mission,
     Teleport,
+    Battle,
     End,
 }

@@ -487,6 +487,9 @@ public class MapSceneView : UIModule
             return;
         }
 
+        if (StoryBattleSession.TryConsumeBattleResult(player.currentBattle))
+            return;
+
         if ((player.currentNpcId == 0) || (player.currentNpcId.IsInRange(50000, 50100) && (player.currentMapId != 500)))
         {
             // player.currentBattle = null;

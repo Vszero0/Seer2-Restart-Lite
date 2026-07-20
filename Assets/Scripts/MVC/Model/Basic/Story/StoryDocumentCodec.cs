@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
 
@@ -59,7 +60,7 @@ public static class StoryDocumentCodec
         int sourceVersion = document.schemaVersion;
         if (sourceVersion < 6)
             MigrateConnectionTransitionsToScenes(document);
-        document.schemaVersion = Math.Max(9, document.schemaVersion);
+        document.schemaVersion = Math.Max(10, document.schemaVersion);
         foreach (StoryActorDocument actor in document.actors ?? Array.Empty<StoryActorDocument>())
         {
             if (actor == null)
@@ -124,6 +125,39 @@ public static class StoryDocumentCodec
 
         if (sourceVersion < 4)
             EnsureAutoEnding(document);
+        if (sourceVersion < 10)
+            MigrateEndingTeleportCommands(document);
+    }
+
+    private static void MigrateEndingTeleportCommands(StoryDocument document)
+    {
+        foreach (StoryNodeDocument node in document?.nodes ?? Array.Empty<StoryNodeDocument>())
+        {
+            List<StoryCommandDocument> commands = (node?.commands ?? Array.Empty<StoryCommandDocument>())
+                .Where(command => command != null).ToList();
+            StoryCommandDocument teleport = commands.LastOrDefault(command =>
+                string.Equals(command.type, "teleport", StringComparison.OrdinalIgnoreCase));
+            if (teleport == null || !int.TryParse(teleport.args, out int mapId))
+                continue;
+            int teleportIndex = commands.IndexOf(teleport);
+            bool onlyEndAfterTeleport = commands.Skip(teleportIndex + 1).All(command =>
+                string.Equals(command.type, "end", StringComparison.OrdinalIgnoreCase));
+            StoryNodeTransitionDocument ending = (node.transitions ?? Array.Empty<StoryNodeTransitionDocument>())
+                .FirstOrDefault(transition => transition != null && transition.isDefault && transition.isEnd);
+            if (!onlyEndAfterTeleport)
+                continue;
+            if (ending == null)
+            {
+                ending = StoryDocumentFactory.CreateAutoEndTransition(node.id);
+                node.transitions = (node.transitions ?? Array.Empty<StoryNodeTransitionDocument>())
+                    .Where(transition => transition != null && !transition.isDefault)
+                    .Append(ending).ToArray();
+                commands.RemoveAll(command => string.Equals(command.type, "end", StringComparison.OrdinalIgnoreCase));
+            }
+            node.endTeleportMapId = mapId;
+            commands.Remove(teleport);
+            node.commands = commands.ToArray();
+        }
     }
 
     private static void MigrateConnectionTransitionsToScenes(StoryDocument document)

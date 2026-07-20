@@ -41,7 +41,9 @@ public sealed class WorkshopStoryPointResourcePicker
     public void OpenMaps(Func<string, List<WorkshopStoryPointResourceOption>> getOptions,
         Action<int> onSelected,
         Func<string, List<WorkshopStoryCustomSceneOption>> getCustomScenes = null,
-        Action<string> onCustomSceneSelected = null)
+        Action<string> onCustomSceneSelected = null,
+        string directActionLabel = null,
+        Action directAction = null)
     {
         bool canUseModResources = HasModResources(getOptions);
         Open("选择本剧情点地图", "输入地图名称或 ID", query =>
@@ -49,8 +51,8 @@ public sealed class WorkshopStoryPointResourcePicker
             List<WorkshopStoryPointResourceOption> options = getOptions?.Invoke(query)
                 ?? new List<WorkshopStoryPointResourceOption>();
             BuildResourceItems(FilterResourceSource(options), option => onSelected?.Invoke(option.id));
-        }, getCustomScenes == null ? null : "自制场景",
-        getCustomScenes == null ? null : (Action)(() => OpenCustomScenes(
+        }, !string.IsNullOrWhiteSpace(directActionLabel) ? directActionLabel : getCustomScenes == null ? null : "自制场景",
+        !string.IsNullOrWhiteSpace(directActionLabel) ? directAction : getCustomScenes == null ? null : (Action)(() => OpenCustomScenes(
             getOptions, onSelected, getCustomScenes, onCustomSceneSelected)),
         true, canUseModResources);
     }
@@ -125,6 +127,25 @@ public sealed class WorkshopStoryPointResourcePicker
 
             BuildActorItems(visible, option => onSelected?.Invoke(option.actorId));
         }, null, null);
+    }
+
+    public void OpenBattles(Func<string, List<StoryBattleOption>> getOptions,
+        Action<StoryBattleReferenceDocument> onSelected)
+    {
+        bool canUseModResources = (getOptions?.Invoke(string.Empty) ?? new List<StoryBattleOption>())
+            .Any(option => option != null && option.isMod);
+        Open("选择 XML 战斗", "输入地图、NPC、战斗名称或 ID", query =>
+        {
+            IEnumerable<StoryBattleOption> options = getOptions?.Invoke(query) ?? Enumerable.Empty<StoryBattleOption>();
+            ClearList();
+            int index = 0;
+            foreach (StoryBattleOption option in options.Where(value => value != null && value.isMod == showModResources))
+            {
+                StoryBattleOption captured = option;
+                CreateListButton(option.displayName, index++, () => onSelected?.Invoke(captured.reference));
+            }
+            FinishList(index, showModResources ? "当前 Mod 中没有匹配的 XML 战斗。" : "没有匹配的本体 XML 战斗。");
+        }, null, null, true, canUseModResources);
     }
 
     public void OpenMapLibrary(Func<List<WorkshopStoryPointResourceOption>> getOptions, Action onAdd,
