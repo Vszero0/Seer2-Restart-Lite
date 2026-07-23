@@ -608,10 +608,9 @@ public class ResourceManager : Singleton<ResourceManager>
             yield break;
         }
 
-        var anim = GetMapAnimPrefab(resId, $"{resId}-idle");
+        var anim = (map.anim == null) ? null : GetMapAnimPrefab(resId, $"{resId}-idle");
 
         MapResources mapResources = new MapResources(bg, pathSprite, bgm, fx, anim);
-        mapResources.anim = anim;
         map.SetResources(mapResources);
         onSuccess?.Invoke(map);
     }

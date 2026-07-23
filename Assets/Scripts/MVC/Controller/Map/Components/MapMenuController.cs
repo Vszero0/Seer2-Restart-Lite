@@ -7,20 +7,22 @@ using UnityEngine.UI;
 
 public class MapMenuController : UIModule
 {
+    [SerializeField] private Image mailNewIcon;
+
+    /*
     private const string SettingsAreaName = "Settings Area";
     private const string MissionAreaName = "Mission Area";
     private const string MissionPanelName = "Mission";
     private const string MissionPromptText = "\u4EFB\u52A1";
-
-    [SerializeField] private Image mailNewIcon;
     [SerializeField] private Sprite missionButtonIcon;
     [SerializeField] private Vector2 missionButtonOffset = new Vector2(0, 65);
+    */
 
     public override void Init()
     {
         base.Init();
         mailNewIcon?.gameObject.SetActive(Player.instance.gameData.mailStorage.Any(x => !x.isRead));
-        CreateMissionButton();
+        // CreateMissionButton();
     }
 
     public void SetInfoPromptText(string content)
@@ -50,6 +52,7 @@ public class MapMenuController : UIModule
         Player.instance.isShootMode = !Player.instance.isShootMode;
     }
 
+    /*
     private void CreateMissionButton()
     {
         if (transform.Find(MissionAreaName) != null)
@@ -134,4 +137,5 @@ public class MapMenuController : UIModule
     {
         SetInfoPromptActive(false);
     }
+    */
 }
