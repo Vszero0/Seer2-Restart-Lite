@@ -47,7 +47,7 @@ public static class Parser {
         if (num.Length != 2)
             return false;
         int _;
-        return (int.TryParse(num[0], out _) && (int.TryParse(num[1], out _)));
+        return int.TryParse(num[0], out _) && (int.TryParse(num[1], out _));
     }
 
     public static KeyValuePair<DataType, object> ParseDataType(string data) {

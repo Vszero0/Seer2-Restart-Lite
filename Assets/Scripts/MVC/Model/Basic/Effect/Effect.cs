@@ -338,15 +338,7 @@ public class Effect
             });
         }
 
-        // Post Process
-        var postExpr = abilityOptionDict.Get("on_" + (result ? "success" : "fail"));
-        if (!TryGetPostProcessEffects(postExpr, state, out var postEffects))
-            return result;
-
-        var effectHandler = new EffectHandler();
-        effectHandler.AddEffects(invokeUnit, postEffects);
-        effectHandler.CheckAndApply(state);
-
+        PostProcess(result, state);
         return result;
     }
 
@@ -357,6 +349,17 @@ public class Effect
             return false;
 
         return Apply(invokeUnit, state);
+    }
+
+    public void PostProcess(bool result, BattleState state = null)
+    {
+        var postExpr = abilityOptionDict.Get("on_" + (result ? "success" : "fail"));
+        if (!TryGetPostProcessEffects(postExpr, state, out var postEffects))
+            return;
+
+        var effectHandler = new EffectHandler();
+        effectHandler.AddEffects(invokeUnit, postEffects);
+        effectHandler.CheckAndApply(state);
     }
 
     private bool TryGetPostProcessEffects(string postExpr, BattleState state, out List<Effect> postEffects)

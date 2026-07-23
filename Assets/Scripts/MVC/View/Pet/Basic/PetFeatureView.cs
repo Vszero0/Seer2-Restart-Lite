@@ -59,10 +59,10 @@ public class PetFeatureView : Module
         }
 
         var item = new Item(buff.info.itemId, 1);
-        // var handler = new EffectHandler();
-        // 
-        // handler.AddEffects(currentPet, item.effects.Where(x => x.timing == EffectTiming.OnRemoveBuff).ToList());
-        // handler.CheckAndApply(null, false);
+        var handler = new EffectHandler();
+        
+        handler.AddEffects(currentPet, item.effects.Where(x => x.timing == EffectTiming.OnRemoveBuff).ToList());
+        handler.CheckAndApply(null, false);
 
         currentPet.feature.afterwardBuffIds.Remove(buff.id);
 

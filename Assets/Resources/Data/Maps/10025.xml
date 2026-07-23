@@ -440,7 +440,7 @@
 				</branch>
 				<branch id="king">
 					<settings count="1">
-						<mode>1</mode>
+						<mode>4</mode>
 						<weather>8</weather>
 						<initBuff>(rule[0]:600000)(rule[1]:410010)</initBuff>
 					</settings>

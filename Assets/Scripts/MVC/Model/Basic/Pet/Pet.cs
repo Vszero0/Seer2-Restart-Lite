@@ -252,6 +252,14 @@ public class Pet
 
     public virtual float GetPetIdentifier(string id)
     {
+        if (id.TryTrimStart("backup", out var trimBackup))
+        {
+            if (backupPet == null)
+                return 0;
+
+            return backupPet.GetPetIdentifier(trimBackup.TrimStart('.'));
+        }
+
         if (id.TryTrimStart("status.", out var trimStatus))
         {
             trimStatus = trimStatus.ToLower();

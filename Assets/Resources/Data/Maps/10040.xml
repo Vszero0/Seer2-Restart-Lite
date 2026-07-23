@@ -5,16 +5,14 @@
 		<bgm>BGM_40</bgm>
 	</music>
 	<entities>
-		<npc id="1004000" resId="1001" name="" size="200,200" pos="90,340" namePos="0,0" color="0,0,0,0" target="false">
-			<!-- <description>寒冰溶洞</description> -->
-			<!-- <transport>210,380</transport> -->
+		<npc id="1004000" resId="1001" name="" size="150,150" pos="180,315" namePos="0,0" color="0,0,0,0">
+			<description>寒冰溶洞</description>
+			<transport>210,380</transport>
 			<eventHandler>
-				<!--
 				<button type="click">
 					<action>teleport</action>
 					<param>10041</param>
 				</button>
-				-->
 				<button type="auto">
 					<action>openHintbox</action>
 					<param>type=Item</param>
@@ -22,7 +20,7 @@
 					<param>item_icon=item[37010]</param>
 					<param>option_num=1</param>
 					<param>callback=teleport</param>
-					<condition>player.achievementNOT37010</condition>
+					<condition>player.shootNOT7010</condition>
 				</button>
 			</eventHandler>
 			<callbackHandler>
@@ -144,53 +142,6 @@
 				</button>
 			</eventHandler>
 		</npc>
-		<!--
-		<npc id="1004003" resId="Pets/pet/10908" name="Lv50 卡卡★" size="38,41" pos="815,365" namePos="0,0" active="false">
-			<description>稀有精灵</description>
-			<battle>
-				<branch id="default">
-					<settings count="6" capture="true">
-						<weather>8</weather>
-					</settings>
-					<enemy>
-						<pet id="10908" level="50">
-							<initBuff>-2</initBuff>
-							<loopSkill>14016</loopSkill>
-						</pet>
-					</enemy>
-					<winHandler>
-						<button type="auto">
-							<action>setItem</action>
-							<param>add</param>
-							<param>400000,1</param>
-							<condition>battle.result.state=1</condition>
-						</button>
-						<button type="auto">
-							<action>openHintbox</action>
-							<param>type=Item</param>
-							<param>title=提示</param>
-							<param>content=1个陨石碎片已经放入背包</param>
-							<param>item_icon=item[400000]</param>
-							<param>option_num=1</param>
-							<condition>battle.result.state=1</condition>
-						</button>
-					</winHandler>
-				</branch>
-			</battle>
-			<eventHandler>
-				<button type="click">
-					<action>battle</action>
-					<param>default</param>
-				</button>
-				<button type="auto">
-					<action>setNpcParam</action>
-					<param>1003003</param>
-					<param>active=true</param>
-					<condition>random[0~4096]&lt;1</condition>
-				</button>
-			</eventHandler>
-		</npc>
-		-->
 		<npc id="1004004" resId="Pets/pet/10050" name="Lv100 阿克希亚" size="106,138" pos="85,400" namePos="0,-160">
 			<description>SPT</description>
 			<dialog>
@@ -216,6 +167,26 @@
 							<param>option_num=1</param>
 							<param>item_icon=pet[10050]</param>
 							<condition>firstPet.idNOT10050</condition>
+						</func>
+						<func type="click">
+							<description><![CDATA[千雪]]></description>
+							<action>battle</action>
+							<param>queen</param>
+							<condition>firstPet.id=11361</condition>
+						</func>
+						<func type="branch">
+							<action>openHintbox</action>
+							<param>type=Item</param>
+							<param>title=提示</param>
+							<param>content=把阿克妮丝设为首发之后再来挑战吧</param>
+							<param>option_num=1</param>
+							<param>item_icon=pet[11361]</param>
+							<condition>firstPet.idNOT11361</condition>
+						</func>
+						<func type="click">
+							<description><![CDATA[冰之契约]]></description>
+							<action>battle</action>
+							<param>contract</param>
 						</func>
 					</functionHandler>
 					<replyHandler>
@@ -296,6 +267,62 @@
 						</button>
 					</winHandler>
 				</branch>
+				<branch id="queen">
+					<settings count="1">
+						<mode>3</mode>
+						<weather>4</weather>
+						<initBuff>(rule:600000)</initBuff>
+					</settings>
+					<enemy>
+						<pet id="13293" level="105">
+							<status>
+								<mat>400</mat>
+								<hp>3000</hp>
+								<cri>-1000</cri>
+							</status>
+							<initBuff>13,17,20,57,-3105,98,99,-3115</initBuff>
+							<loopSkill>14742,14732,14741,14666</loopSkill>
+						</pet>
+					</enemy>
+					<winHandler>
+						<button type="auto">
+							<action>evolvePet</action>
+							<param>13293</param>
+						</button>
+						<button type="auto">
+							<action>openHintbox</action>
+							<param>type=Item</param>
+							<param>title=提示</param>
+							<param>content=你的阿克妮丝成功突破了自我！</param>
+							<param>item_icon=pet[13293]</param>
+							<param>option_num=1</param>
+						</button>
+					</winHandler>
+				</branch>
+				<branch id="contract">
+					<settings count="6" star="7">
+						<mode>4</mode>
+						<weather>4</weather>
+					</settings>
+					<enemy>
+						<pet id="13699" level="105">
+							<status>
+								<hp>30000</hp>
+							</status>
+							<initBuff>-8,61,-3059,76,-3082,-3112,-3118</initBuff>
+							<loopSkill>14745,14746,14747,14748,14744</loopSkill>
+						</pet>
+					</enemy>
+					<winHandler>
+						<button type="auto">
+							<action>openHintbox</action>
+							<param>type=PetSelect</param>
+						    <param>title=选择要进化的冰雪女皇·阿克希亚</param>
+						    <param>option_num=2</param>
+							<param>callback=evolve</param>
+						</button>
+					</winHandler>
+				</branch>
 			</battle>
 			<eventHandler>
 				<button type="click">
@@ -303,6 +330,43 @@
 					<param>default</param>
 				</button>
 			</eventHandler>
+			<callbackHandler>
+				<button type="choose">
+					<action>openHintbox</action>
+					<param>type=PetSelect</param>
+				    <param>title=选择要进化的冰雪女皇·阿克希亚</param>
+				    <param>option_num=2</param>
+					<param>callback=evolve</param>
+				    <condition>data.PetSelect.uidNOT13293|data.PetSelect.level&lt;100</condition>
+				</button>
+				<button type="evolve">
+				    <action>openHintbox</action>
+				    <param>type=Item</param>
+				    <param>title=提示</param>
+				    <param>content=必须选择等级100的冰雪女皇·阿克希亚！</param>
+				    <param>item_icon=pet[13293]</param>
+				    <param>option_num=1</param>
+					<param>callback=choose</param>
+				    <condition>data.PetSelect.uidNOT13293|data.PetSelect.level&lt;100</condition>
+				</button>
+				<button type="evolve">
+				    <action>openHintbox</action>
+				    <param>type=Item</param>
+				    <param>title=提示</param>
+				    <param>content=阿克希亚已完成冰之契约！</param>
+				    <param>item_icon=pet[13293]</param>
+				    <param>option_num=1</param>
+				    <condition>data.PetSelect.uid=13293</condition>
+				    <condition>data.PetSelect.levelGTE100</condition>
+				</button>
+				<button type="evolve">
+				    <action>evolvePet</action>
+				    <param>index=data.PetSelectIndex</param>
+				    <param>13699</param>
+				    <condition>data.PetSelect.uid=13293</condition>
+				    <condition>data.PetSelect.levelGTE100</condition>
+				</button>
+			</callbackHandler>
 		</npc>
 		<npc id="1004005" resId="Pets/pet/10555" name="Lv65 宾克" size="48,59" pos="290,160" namePos="0,0" active="false">
 			<description>稀有精灵</description>

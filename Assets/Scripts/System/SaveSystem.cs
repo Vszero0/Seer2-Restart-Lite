@@ -453,7 +453,7 @@ public static class SaveSystem
 
             foreach (var entry in Database.instance.buffInfoDict)
             {
-                if (!BuffInfo.IsMod(entry.Key))
+                if ((!BuffInfo.IsMod(entry.Key)) && (!bool.Parse(entry.Value.options.Get("mod", "false"))))
                     continue;
 
                 FileBrowserHelpers.AppendTextToFile(infoPath, entry.Value.GetRawInfoStringArray().ConcatToString(",") + "\n");
@@ -529,7 +529,7 @@ public static class SaveSystem
 
             foreach (var entry in Database.instance.skillDict)
             {
-                if (!Skill.IsMod(entry.Key))
+                if ((!Skill.IsMod(entry.Key)) && (!bool.Parse(entry.Value.options.Get("mod", "false"))))
                     continue;
 
                 FileBrowserHelpers.AppendTextToFile(infoPath, entry.Value.GetRawInfoStringArray().ConcatToString(",") + "\n");

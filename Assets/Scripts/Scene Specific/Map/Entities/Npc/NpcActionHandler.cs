@@ -125,9 +125,13 @@ public static class NpcActionHandler
             var option = handler.param[i].Split('=', 2);
             if (option[0] == "callback")
             {
+                var callbackId = option[1];
+                if (callbackId.TryTrimStart("[expr]", out var callbackExpr))
+                    callbackId = ((int)Parser.ParseOperation(callbackExpr)).ToString();
+
                 Action callback = () =>
                 {
-                    npc?.GetInfo()?.callbackHandler?.FindAll(x => x.typeId == option[1])?.ForEach(x =>
+                    npc?.GetInfo()?.callbackHandler?.FindAll(x => x.typeId == callbackId)?.ForEach(x =>
                     {
                         NpcHandler.GetNpcEntity(npc, x, npcList)?.Invoke();
                     });
@@ -459,8 +463,16 @@ public static class NpcActionHandler
         var callbackHandler = npc.GetInfo()?.callbackHandler;
         if (ListHelper.IsNullOrEmpty(callbackHandler))
             return;
-        
-        var callbacks = callbackHandler.FindAll(x => handler.param.Contains(x.typeId));
+
+        var callbackIds = handler.param.Select(x =>
+        {
+            if (x.TryTrimStart("[expr]", out var callbackExpr))
+                return ((int)Parser.ParseOperation(callbackExpr)).ToString();
+            
+            return x;
+        }).ToList();
+
+        var callbacks = callbackHandler.FindAll(x => callbackIds.Contains(x.typeId));
         if (ListHelper.IsNullOrEmpty(callbacks))
             return;
         

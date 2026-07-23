@@ -52,7 +52,6 @@ public class PetUI
     [XmlIgnore] public Sprite battleImage => PetUISystem.GetPetBattleImage(skinId) ?? SpriteSet.Empty;
     [XmlIgnore] public Sprite idleImage => PetUISystem.GetPetIdleImage(skinId) ?? SpriteSet.Empty;
 
-
     public GameObject GetBattleAnim(PetAnimationType type)
     {
         return PetUISystem.GetPetAnimInstance(animId, type);
@@ -66,6 +65,14 @@ public class PetUI
     public void PreloadPetAnimAsync(Action onSuccess = null, Action<float> onProgress = null) 
     {   
         PetUISystem.PreloadPetAnimAsync(animId, onSuccess, onProgress);
+    }
+
+    public void PlaySound(AudioVolumeType audioVolumeType = AudioVolumeType.BattleSE)
+    {
+        ResourceManager.instance.GetLocalAddressables<AudioClip>($"BGM/pet/{id}", PetInfo.IsMod(id), (clip) =>
+        {
+            AudioSystem.instance.PlaySound(clip, audioVolumeType);
+        });
     }
 
     public PetUI()

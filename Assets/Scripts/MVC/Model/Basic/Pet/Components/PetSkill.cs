@@ -103,7 +103,10 @@ public class PetSkill
             .Select(x => x.skill.id);
 
         if (ListHelper.IsNullOrEmpty(newSkillId))
-            return;
+        {
+            superSkill = superSkill ?? ownSkill?.FirstOrDefault(x => (!Skill.IsNullOrEmpty(x)) && (x.positionType == SkillType.必杀));
+            return;    
+        }
 
         ownSkillId = ownSkillId.Concat(newSkillId).Where(x => x != 0).ToArray();
         superSkill = superSkill ?? ownSkill?.FirstOrDefault(x => (!Skill.IsNullOrEmpty(x)) && (x.positionType == SkillType.必杀));

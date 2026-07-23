@@ -529,12 +529,20 @@ id,baseId,skinChoice,options
 10048,10048,none,star=2
 10049,10048,none,star=2
 10050,10048,none,star=2
+10051,10051,none,star=2
+10052,10051,none,star=2
 10053,10053,none,star=2
 10054,10053,none,star=2
 10055,10053,none,star=2
+10059,10059,none,star=2
+10060,10059,none,star=2
+10061,10059,none,star=2
 10062,10062,none,star=2
 10063,10062,none,star=2
 10064,10062,none,star=2
+10065,10065,none,star=2
+10066,10065,none,star=2
+10067,10065,none,star=2
 10068,10068,none,star=2
 10069,10068,none,star=2
 10070,10070,none,star=4
@@ -638,6 +646,8 @@ id,baseId,skinChoice,options
 10811,10809,none,star=3
 10864,10864,none,star=4
 10865,10864,none,star=4
+10893,10893,none,star=2&hide=true&default_feature=10051&default_id=10051.1
+10894,10893,none,star=2&hide=true&default_feature=10051&default_id=10052.1
 10905,10905,none,star=2&hide=true&default_feature=10030&default_id=10030.1
 10906,10905,none,star=2&hide=true&default_feature=10030&default_id=10031.1
 10907,10905,none,star=2&hide=true&default_feature=10030&default_id=10032.1
@@ -659,6 +669,7 @@ id,baseId,skinChoice,options
 11278,10499,none,star=4
 11279,10499,none,star=5&default_buff=111279
 11298,10041,none,star=4
+11315,10065,none,star=2
 11361,10048,none,star=4
 11448,11448,none,star=3&generation=2
 11449,11448,none,star=3&generation=2
@@ -732,6 +743,7 @@ id,baseId,skinChoice,options
 20012,234,none,star=7&default_feature=20012&default_skin=951&default_anim=951
 20013,126,none,star=7&default_feature=20013&default_skin=739&default_anim=739
 20014,10499,none,star=7&default_feature=20014&default_skin=13848&default_anim=13848
+20015,10030,none,star=7&default_feature=20015&default_skin=114780&default_anim=114780
 100010,100010,none,star=1&hide=true&default_feature=10&default_id=10.1
 100011,100010,none,star=1&hide=true&default_feature=10&default_id=11.1
 100012,100010,none,star=1&hide=true&default_feature=10&default_id=12.1
@@ -756,5 +768,5 @@ id,baseId,skinChoice,options
 114732,10164,none,star=6&hide=true&default_feature=10010&default_id=114731.1&default_buff=91/214732&default_anim=110166
 114734,10016,none,star=6&hide=true&default_buff=91/120010&default_skin=14734&default_anim=14734
 114761,114727,none,star=7&hide=true&default_feature=14761
-114780,10030,none,star=6&default_buff=91/214780
+114780,10030,none,star=6&hide=true&default_buff=91/214780
 114798,10033,none,star=6&default_buff=91/214798&default_skin=14798&default_anim=14798

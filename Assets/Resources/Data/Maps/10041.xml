@@ -1,0 +1,149 @@
+<map name="寒冰溶洞" category="102" id="10041">
+	<fightMapColor>64,64,64,255</fightMapColor>
+	<initialPoint>450,300</initialPoint>
+	<music category="102">
+		<bgm>BGM_41</bgm>
+	</music>
+	<entities>
+		<npc id="1004100" resId="1001" name="" size="200,200" pos="760,340" namePos="0,0" color="0,0,0,0">
+			<description>塞西利亚星冰原</description>
+			<transport>550,380</transport>
+			<eventHandler>
+				<button type="click">
+					<action>teleport</action>
+					<param>10040</param>
+				</button>
+				<button type="auto">
+					<action>openHintbox</action>
+					<param>type=Item</param>
+					<param>content=塞西利亚星很冷，穿上防寒套装再来吧！</param>
+					<param>item_icon=item[37010]</param>
+					<param>option_num=1</param>
+					<param>callback=teleport</param>
+					<condition>player.shootNOT7010</condition>
+				</button>
+			</eventHandler>
+			<callbackHandler>
+				<button type="teleport">
+					<action>teleport</action>
+					<param>10001</param>
+				</button>
+			</callbackHandler>
+		</npc>
+		<npc id="1004102" resId="1001" name="" size="300,180" pos="285,80" namePos="0,0" color="0,0,0,0">
+			<description>赫尔卡飞船</description>
+			<transport>450,180</transport>
+			<eventHandler>
+				<button type="click">
+					<action>teleport</action>
+					<param>10043</param>
+				</button>
+			</eventHandler>
+		</npc>
+		<npc id="1004101" resId="Pets/pet/10065" name="Lv65 林克" size="35,70" pos="600,310" namePos="0,-5" active="false">
+			<description>神秘的精灵</description>
+			<dialog>
+				<branch id="default" name="林克" icon="Pets/pet/10065" size="35,70" pos="10,55">
+					<content><![CDATA[你是谁？]]></content>
+					<functionHandler>
+						<func type="click">
+							<description>分支进化</description>
+							<action>battle</action>
+							<param>branch</param>
+							<condition>firstPet.uid=10066</condition>
+							<condition>firstPet.levelGTE60</condition>
+							<condition>firstPet.backup=0</condition>
+						</func>
+						<func type="branch">
+							<action>openDialog</action>
+							<param>evolveBan</param>
+							<condition>firstPet.uidNOT10066|firstPet.level&lt;60|firstPet.backupNOT0</condition>
+						</func>
+					</functionHandler>
+					<replyHandler>
+						<reply type="click">
+							<description><![CDATA[我是神秘果实商人]]></description>
+							<action>openDialog</action>
+							<param>null</param>
+						</reply>
+						<reply type="click">
+							<description><![CDATA[尝试共鸣]]></description>
+							<action>openHintbox</action>
+							<param>type=Item</param>
+							<param>content=让首发精灵习得【红宝石之光】技能再来共鸣吧！</param>
+							<param>option_num=1</param>
+							<param>item_icon=buff[3439]</param>
+							<condition>firstPet.skill[13070]=0</condition>
+						</reply>
+						<reply type="branch">
+							<action>battle</action>
+							<param>default</param>
+							<condition>firstPet.skill[13070]=1</condition>
+						</reply>
+					</replyHandler>
+				</branch>
+				<branch id="evolveBan" name="林克" icon="Pets/pet/10065" size="35,70" pos="10,55">
+					<content><![CDATA[将60级以上且<b><color=#ffbb33>未曾进行其他进化</color></b>的【林斯奇】设为首发再来吧！]]></content>
+					<replyHandler>
+						<reply type="click">
+							<description><![CDATA[你要求真多]]></description>
+							<action>openDialog</action>
+							<param>null</param>
+						</reply>
+					</replyHandler>
+				</branch>
+			</dialog>
+			<battle>
+				<branch id="default">
+					<settings count="6" capture="true"/>
+					<enemy>
+						<pet id="10065" level="65">
+							<initBuff>-2,20</initBuff>
+							<loopSkill>14750,14757,14750,14757,-4</loopSkill>
+						</pet>
+					</enemy>
+				</branch>
+				<branch id="branch">
+					<settings count="1" />
+					<enemy>
+						<pet id="11315" level="60">
+							<status>
+								<spd>1000</spd>
+								<hp>2000</hp>
+							</status>
+							<initBuff>13,17,20</initBuff>
+							<headerSkill>14759</headerSkill>
+							<loopSkill>14758,14755,14752</loopSkill>
+						</pet>
+					</enemy>
+					<winHandler>
+						<button type="auto">
+							<action>evolvePet</action>
+							<param>11315</param>
+						</button>
+						<button type="auto">
+							<action>openHintbox</action>
+							<param>type=Item</param>
+							<param>title=提示</param>
+							<param>content=分支进化成功，快去学习隐藏技能吧！</param>
+							<param>item_icon=pet[11315]</param>
+							<param>option_num=1</param>
+						</button>
+					</winHandler>
+				</branch>
+			</battle>
+			<eventHandler>
+				<button type="auto">
+					<action>setNpcParam</action>
+					<param>1004101</param>
+					<param>active=true</param>
+					<condition>random[new]LTE5</condition>
+				</button>
+				<button type="click">
+					<action>openDialog</action>
+					<param>default</param>
+				</button>
+			</eventHandler>
+		</npc>
+	</entities>
+</map>

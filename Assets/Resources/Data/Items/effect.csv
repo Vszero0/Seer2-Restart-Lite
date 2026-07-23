@@ -41,6 +41,7 @@ id,timing,priority,target,condition,cond_option,effect,effect_option
 1203,none,-1,none,none,none,none,none
 1206,none,-1,none,none,none,none,none
 1207,none,-1,none,none,none,none,none
+1209,none,-1,none,none,none,none,none
 7001,none,-1,none,none,none,none,resId=0
 7002,none,-1,none,none,none,none,shootSize=76/38&resId=0
 7003,none,-1,none,none,none,none,shootSize=59/37&resId=Maps/shoot/7003&size=50/50&offset=-27.5/-10

@@ -47,6 +47,14 @@ public class PetUIInfo
         PetUISystem.PreloadPetAnimAsync(defaultSkinId, onSuccess, onProgress);
     }
 
+    public void PlaySound(AudioVolumeType audioVolumeType = AudioVolumeType.BattleSE)
+    {
+        ResourceManager.instance.GetLocalAddressables<AudioClip>($"BGM/pet/{id}", PetInfo.IsMod(id), (clip) =>
+        {
+            AudioSystem.instance.PlaySound(clip, audioVolumeType);
+        });
+    }
+
     public PetUIInfo(int petId, int petBaseId)
     {
         id = petId;

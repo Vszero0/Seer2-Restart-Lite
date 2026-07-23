@@ -108,7 +108,7 @@ public static class PetElementSystem
             elementColorDict.Set(element, _slicedData[2]);
     }
 
-    public static List<Element> GetElementGroup(Element element)
+    public static List<Element> GetElementGroup(this Element element)
     {
         return elementGroupDict.Get(element, element.SingleToList());
     }

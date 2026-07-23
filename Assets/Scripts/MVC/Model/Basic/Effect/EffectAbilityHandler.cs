@@ -129,7 +129,7 @@ public static class EffectAbilityHandler
         // On before pet change
         var tmpPhase = state.phase;
         state.phase = EffectTiming.OnBeforePetChange;
-        state.GetEffectHandler(petChangeUnit, false).CheckAndApply(state);
+        state.ApplyBuffs();
         state.phase = tmpPhase;
 
         // Inherit Buffs: 主動換場繼承
@@ -156,7 +156,7 @@ public static class EffectAbilityHandler
 
         // On after pet change
         state.phase = EffectTiming.OnAfterPetChange;
-        state.GetEffectHandler(petChangeUnit, false).CheckAndApply(state);
+        state.ApplyBuffs();
         state.phase = tmpPhase;
 
         return true;
@@ -241,6 +241,8 @@ public static class EffectAbilityHandler
                         maxHp = (int)Operator.Operate(op, maxHp, Parser.ParseEffectOperation(value, x, lhsUnit, rhsUnit, targetList[i]));
                         break;
                 }
+
+                x.PostProcess(true, state);
             });
 
             if (set != "none")

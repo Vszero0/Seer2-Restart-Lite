@@ -1,0 +1,235 @@
+<map name="赫尔卡飞船" category="102" id="10043" weather="100004">
+	<fightMapColor>64,64,64,255</fightMapColor>
+	<initialPoint>540,90</initialPoint>
+	<music category="102">
+		<bgm>BGM_40</bgm>
+	</music>
+	<entities>
+		<npc id="1004300" resId="1001" name="" size="150,150" pos="105,390" namePos="0,0" color="0,0,0,0">
+			<description>寒冰溶洞</description>
+			<transport>210,380</transport>
+			<eventHandler>
+				<button type="click">
+					<action>teleport</action>
+					<param>10041</param>
+				</button>
+				<button type="auto">
+					<action>openHintbox</action>
+					<param>type=Item</param>
+					<param>content=塞西利亚星很冷，穿上防寒套装再来吧！</param>
+					<param>item_icon=item[37010]</param>
+					<param>option_num=1</param>
+					<param>callback=teleport</param>
+					<condition>player.shootNOT7010</condition>
+				</button>
+			</eventHandler>
+			<callbackHandler>
+				<button type="teleport">
+					<action>teleport</action>
+					<param>10001</param>
+				</button>
+			</callbackHandler>
+		</npc>
+		<npc id="1004301" resId="1001" name="" size="200,200" pos="760,340" namePos="0,0" color="0,0,0,0">
+			<description>冰窖迷宫</description>
+			<transport>750,380</transport>
+			<eventHandler>
+				<button type="click">
+					<action>teleport</action>
+					<param>10042</param>
+				</button>
+			</eventHandler>
+		</npc>
+		<npc id="1004302" resId="Pets/pet/10051" name="Lv63 玄冰兽" size="39,57" pos="390,90" namePos="0,0">
+			<wild>
+				<movement mode="wander" radius="220" speed="34" idle="2,6" step="12,26" moveTick="0.05" snap="1" bob="1.25" bobSpeed="2" originalFacesRight="false" />
+				<talk chance="0.3" duration="4">
+					<self image="emoji/meme/question" />
+					<self image="emoji/meme/cute" />
+					<self image="emoji/meme/haha" />
+					<self image="emoji/meme/heyhey" />
+					<self image="emoji/meme/yeah" />
+					<self image="emoji/meme/tf" />
+					<self image="emoji/meme/ys" />
+					<self image="emoji/toon/alert" />
+					<self image="emoji/toon/angry" />
+					<self image="emoji/toon/annoyed" />
+					<self image="emoji/toon/cool" />
+					<self image="emoji/toon/cry" />
+					<self image="emoji/toon/dizzy" />
+					<self image="emoji/toon/grin" />
+					<self image="emoji/toon/happy" />
+					<self image="emoji/toon/hypno" />
+					<self image="emoji/toon/laugh" />
+					<self image="emoji/toon/love" />
+					<self image="emoji/toon/mute" />
+					<self image="emoji/toon/shocked" />
+					<self image="emoji/toon/shy" />
+					<self image="emoji/toon/sick" />
+					<self image="emoji/toon/silly" />
+					<self image="emoji/toon/skull" />
+					<self image="emoji/toon/sleepy" />
+					<self image="emoji/toon/smug" />
+					<self image="emoji/toon/star_eyes" />
+					<self image="emoji/toon/sunglasses" />
+					<self image="emoji/toon/surprised" />
+					<self image="emoji/toon/sweat" />
+					<self image="emoji/toon/worried" />
+				</talk>
+			</wild>
+			<battle>
+				<branch id="default">
+					<settings count="6" capture="true">
+						<initBuff>(field:600004)</initBuff>
+					</settings>
+					<enemy>
+						<pet id="10051" level="63">
+							<loopSkill>14763</loopSkill>
+						</pet>
+					</enemy>
+					<winHandler>
+						<button type="auto">
+							<action>setItem</action>
+							<param>add</param>
+							<param>1209,1</param>
+							<condition>random[old]&lt;10</condition>
+						</button>
+						<button type="auto">
+							<action>openHintbox</action>
+							<param>type=Item</param>
+							<param>title=提示</param>
+							<param>content=1个玄冰已经放入背包</param>
+							<param>item_icon=item[1209]</param>
+							<param>option_num=1</param>
+							<condition>random[old]&lt;10</condition>
+						</button>
+					</winHandler>
+				</branch>
+			</battle>
+			<eventHandler>
+				<button type="click">
+					<action>battle</action>
+					<param>default</param>
+				</button>
+			</eventHandler>
+		</npc>
+		<npc id="1004303" resId="Pets/pet/10051" name="Lv64 玄冰兽" size="39,57" pos="300,280" namePos="0,0">
+			<wild>
+				<movement mode="wander" radius="220" speed="34" idle="2,6" step="12,26" moveTick="0.05" snap="1" bob="1.25" bobSpeed="2" originalFacesRight="false" />
+				<talk chance="0.3" duration="4">
+					<self image="emoji/meme/question" />
+					<self image="emoji/meme/cute" />
+					<self image="emoji/meme/haha" />
+					<self image="emoji/meme/heyhey" />
+					<self image="emoji/meme/yeah" />
+					<self image="emoji/meme/tf" />
+					<self image="emoji/meme/ys" />
+					<self image="emoji/toon/alert" />
+					<self image="emoji/toon/angry" />
+					<self image="emoji/toon/annoyed" />
+					<self image="emoji/toon/cool" />
+					<self image="emoji/toon/cry" />
+					<self image="emoji/toon/dizzy" />
+					<self image="emoji/toon/grin" />
+					<self image="emoji/toon/happy" />
+					<self image="emoji/toon/hypno" />
+					<self image="emoji/toon/laugh" />
+					<self image="emoji/toon/love" />
+					<self image="emoji/toon/mute" />
+					<self image="emoji/toon/shocked" />
+					<self image="emoji/toon/shy" />
+					<self image="emoji/toon/sick" />
+					<self image="emoji/toon/silly" />
+					<self image="emoji/toon/skull" />
+					<self image="emoji/toon/sleepy" />
+					<self image="emoji/toon/smug" />
+					<self image="emoji/toon/star_eyes" />
+					<self image="emoji/toon/sunglasses" />
+					<self image="emoji/toon/surprised" />
+					<self image="emoji/toon/sweat" />
+					<self image="emoji/toon/worried" />
+				</talk>
+			</wild>
+			<battle>
+				<branch id="default">
+					<settings count="6" capture="true">
+						<initBuff>(field:600004)</initBuff>
+					</settings>
+					<enemy>
+						<pet id="10051" level="64">
+							<loopSkill>14763</loopSkill>
+						</pet>
+					</enemy>
+					<winHandler>
+						<button type="auto">
+							<action>setItem</action>
+							<param>add</param>
+							<param>1209,1</param>
+							<condition>random[old]&lt;10</condition>
+						</button>
+						<button type="auto">
+							<action>openHintbox</action>
+							<param>type=Item</param>
+							<param>title=提示</param>
+							<param>content=1个玄冰已经放入背包</param>
+							<param>item_icon=item[1209]</param>
+							<param>option_num=1</param>
+							<condition>random[old]&lt;10</condition>
+						</button>
+					</winHandler>
+				</branch>
+			</battle>
+			<eventHandler>
+				<button type="click">
+					<action>battle</action>
+					<param>default</param>
+				</button>
+			</eventHandler>
+		</npc>
+		<npc id="1004304" resId="Pets/pet/10893" name="Lv60 玄冰兽★" size="42,56" pos="680,180" namePos="0,0" active="false">
+			<description>稀有精灵</description>
+			<battle>
+				<branch id="default">
+					<settings count="6" capture="true">
+						<initBuff>(field:600004)</initBuff>
+					</settings>
+					<enemy>
+						<pet id="10893" level="60">
+							<initBuff>-2</initBuff>
+							<loopSkill>10001</loopSkill>
+						</pet>
+					</enemy>
+					<winHandler>
+						<button type="auto">
+							<action>setItem</action>
+							<param>add</param>
+							<param>400000,1</param>
+							<condition>battle.result.state=1</condition>
+						</button>
+						<button type="auto">
+							<action>openHintbox</action>
+							<param>type=Item</param>
+							<param>title=提示</param>
+							<param>content=1个陨石碎片已经放入背包</param>
+							<param>item_icon=item[400000]</param>
+							<param>option_num=1</param>
+							<condition>battle.result.state=1</condition>
+						</button>
+					</winHandler>
+				</branch>
+			</battle>
+			<eventHandler>
+				<button type="click">
+					<action>battle</action>
+					<param>default</param>
+				</button>
+				<button type="auto">
+					<action>setNpcParam</action>
+					<param>1004304</param>
+					<param>active=true</param>
+					<condition>random[0~4096]&lt;1</condition>
+				</button>
+			</eventHandler>
+		</npc>
+	</entities>
+</map>

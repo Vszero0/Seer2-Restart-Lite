@@ -181,8 +181,21 @@ public class UnitSkillSystem
         atk = Mathf.Max(status.Key, 1);
         def = Mathf.Max(status.Value, 1);
         elementRelation = PetElementSystem.GetElementRelation(skill, defPet);
-        sameElementBuff = ((skill.element == atkPet.battleElement) || ((skill.element == atkPet.subBattleElement) &&
-            (atkPet.subBattleElement != Element.普通))) ? 1.5f : 1f;
+        sameElementBuff = GetSameElementBuff(atkPet);
+    }
+
+    private float GetSameElementBuff(BattlePet atkPet)
+    {
+        if (atkPet == null)
+            return 1f;
+
+        if (atkPet.battleElement.GetElementGroup().Contains(skill.element))
+            return 1.5f;
+        
+        if (atkPet.subBattleElement.GetElementGroup().Contains(skill.element) && (atkPet.subBattleElement != Element.普通))
+            return (atkPet.info.star > 5) ? 1.5f: 1.25f;
+
+        return 1f;
     }
 
     public int CalculateDamage(BattlePet atkPet, BattlePet defPet)

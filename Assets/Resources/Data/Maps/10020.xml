@@ -242,10 +242,11 @@
 				</button>
 			</eventHandler>
 		</npc>
-		<npc id="1002005" resId="Pets/pet/114780" name="Lv105 神迹巴拉龟" size="198,172" pos="520,300" namePos="0,-20">
+		<npc id="1002005" resId="Pets/pet/114780" name="Lv105 布贝巴拉" size="198,172" pos="520,300" namePos="0,-20">
+			<anim id="Pets/anim/114780" pos="-3,1.6" scale="1,1" />
 			<description>巴拉龟神迹觉醒！</description>
 			<dialog>
-				<branch id="default" name="神迹巴拉龟" icon="Pets/pet/114780" size="149,129" pos="10,35">
+				<branch id="default" name="布贝巴拉" icon="Pets/pet/114780" size="149,129" pos="10,35">
 					<content><![CDATA[我不是雄龟！]]></content>
 					<functionHandler>
 						<func type="click">
@@ -309,7 +310,7 @@
 						<weather>2</weather>
 					</settings>
 					<enemy>
-						<pet id="114780" level="105">
+						<pet id="20015" level="105">
 							<status>
 								<hp>30000</hp>
 							</status>
