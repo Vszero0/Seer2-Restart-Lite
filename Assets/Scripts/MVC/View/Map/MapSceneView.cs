@@ -63,7 +63,7 @@ public class MapSceneView : UIModule
 
     public void SetBGM(MapResources resources)
     {
-        AudioSystem.instance.PlayMusic(resources.bgm);
+        AudioSystem.instance.PlayMusic(resources.bgm, AudioVolumeType.BGM, AudioSystem.BuildMapMusicIdentity(map));
         AudioSystem.instance.PlayEffect(resources.fx);
     }
 
@@ -486,6 +486,9 @@ public class MapSceneView : UIModule
             // player.currentBattle = null;
             return;
         }
+
+        if (StoryBattleSession.TryConsumeBattleResult(player.currentBattle))
+            return;
 
         if ((player.currentNpcId == 0) || (player.currentNpcId.IsInRange(50000, 50100) && (player.currentMapId != 500)))
         {

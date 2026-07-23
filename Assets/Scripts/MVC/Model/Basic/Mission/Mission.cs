@@ -7,8 +7,23 @@ using System;
 
 public class Mission
 {
+    private static readonly List<Mission> runtimeModStorage = new List<Mission>();
+
     public MissionInfo info => GetMissionInfo(id);
-    public MissionCheckpoint checkpointInfo => info.checkpoints.Find(x => x.id == checkPointId);
+    public MissionCheckpoint checkpointInfo
+    {
+        get
+        {
+            if (info == null || info.checkpoints == null)
+                return null;
+
+            MissionCheckpoint checkpoint = info.checkpoints.Find(x => x.id == checkPointId);
+            if (checkpoint == null && info.replayable)
+                checkpoint = info.checkpoints.Find(x => x.id == "default");
+
+            return checkpoint;
+        }
+    }
 
     [XmlAttribute] public int id;
     [XmlAttribute("checkpoint")] public string checkPointId;
@@ -27,25 +42,66 @@ public class Mission
     }
 
     public static List<Mission> Filter(Predicate<Mission> pred) {
-        return Player.instance.gameData.missionStorage.FindAll(pred);
+        return GetStorage().FindAll(pred);
+    }
+
+    public static List<Mission> GetStorage() {
+        var storage = Player.instance?.gameData?.missionStorage != null
+            ? new List<Mission>(Player.instance.gameData.missionStorage)
+            : new List<Mission>();
+        storage.AddRange(runtimeModStorage);
+        return storage;
+    }
+
+    public static void ReloadRuntimeModMissions(IEnumerable<MissionInfo> missionInfos) {
+        runtimeModStorage.Clear();
+        if (missionInfos == null)
+            return;
+
+        foreach (MissionInfo missionInfo in missionInfos) {
+            if (missionInfo == null || missionInfo.type != MissionType.Mod)
+                continue;
+
+            runtimeModStorage.Add(new Mission(missionInfo.id));
+        }
+    }
+
+    public static void RemoveLegacyModEntries() {
+        Player.instance?.gameData?.missionStorage?.RemoveAll(x => (x?.id ?? 0) < 0);
     }
 
     public static Mission Find(int id = 0) {
         id = (id == 0) ? Player.instance.currentMissionId : id;
-        Mission mission = Player.instance.gameData.missionStorage.Find(x => x.id == id);
+        List<Mission> storage = id < 0
+            ? runtimeModStorage
+            : Player.instance.gameData.missionStorage;
+        Mission mission = storage.Find(x => x.id == id);
         return mission;
     }
 
     public static Mission Start(int id) {
         Mission mission = new Mission(id);
-        if (!string.IsNullOrEmpty(mission.info.preMissionId)) {
-            foreach (var preId in mission.info.preMissions) {
+        MissionInfo missionInfo = mission.info;
+        if (missionInfo == null)
+            return null;
+
+        if (!string.IsNullOrEmpty(missionInfo.preMissionId)) {
+            foreach (var preId in missionInfo.preMissions) {
                 Mission preMission = Mission.Find(preId);
                 if ((preMission == null) || (!preMission.isDone)) {
                     return null;
                 }
             }
         }
+        if (missionInfo.type == MissionType.Mod) {
+            Mission runtimeMission = runtimeModStorage.Find(x => x.id == id);
+            if (runtimeMission != null)
+                return runtimeMission;
+
+            runtimeModStorage.Add(mission);
+            return mission;
+        }
+
         Player.instance.gameData.missionStorage.Add(mission);
         return mission;
     }
@@ -58,21 +114,45 @@ public class Mission
         mission.checkPointId = checkpointId;
     }
 
-    public static void Complete(int id = 0) {
+    public static List<Item> Complete(int id = 0) {
+        List<Item> grantedRewards = new List<Item>();
         Mission mission = Mission.Find(id);
+        if (mission == null)
+            return grantedRewards;
 
+        bool wasDone = mission.isDone;
         mission.isDone = true;
         mission.checkPointId = "complete";
-        if (string.IsNullOrEmpty(mission.info.nextMissionId))
-            return;
 
-        foreach (var nextId in mission.info.nextMissions) {
+        MissionInfo missionInfo = mission.info;
+        if (missionInfo == null)
+            return grantedRewards;
+
+        if (!wasDone || missionInfo.rewardEveryCompletion)
+        {
+            foreach (Item reward in missionInfo.rewards ?? new List<Item>())
+            {
+                if (Item.IsNullOrEmpty(reward) || reward.info == null)
+                    continue;
+
+                Item granted = new Item(reward.info.getId, reward.num);
+                Item.AddTo(granted, Item.itemStorage);
+                grantedRewards.Add(granted);
+            }
+        }
+
+        if (string.IsNullOrEmpty(missionInfo.nextMissionId))
+            return grantedRewards;
+
+        foreach (var nextId in missionInfo.nextMissions) {
             Mission.Start(nextId);
         }
+
+        return grantedRewards;
     }
 
     public static void VersionUpdate() {
-        var mainMission = Mission.Filter(x => x.id <= 10000);
+        var mainMission = Mission.Filter(x => x.info != null && x.info.type == MissionType.Main);
         if (mainMission.Count == 0)
             Mission.Start(1);
         else {
@@ -82,8 +162,10 @@ public class Mission
             }   
         }
 
-        var sideMissions = Database.instance.missionInfos.FindAll(x => 
-            ((x.type == MissionType.Side) || (x.type == MissionType.Event)) && (Mission.Find(x.id) == null));
+        var sideMissions = Database.instance.missionInfos.FindAll(x =>
+            ((x.type == MissionType.Side) || (x.type == MissionType.Daily)
+                || (x.type == MissionType.Event))
+            && (Mission.Find(x.id) == null));
 
         foreach (var mission in sideMissions)
             Mission.Start(mission.id);

@@ -19,6 +19,7 @@ public class Database : Singleton<Database>
     public Dictionary<int, ItemInfo> itemInfoDict = new Dictionary<int, ItemInfo>();
     public Dictionary<int, BuffInfo> buffInfoDict = new Dictionary<int, BuffInfo>();
     public Dictionary<int, MissionInfo> missionInfoDict = new Dictionary<int, MissionInfo>();
+    public Dictionary<string, StoryDocument> storyInfoDict = new Dictionary<string, StoryDocument>();
     public Dictionary<string, ActivityInfo> activityInfoDict = new Dictionary<string, ActivityInfo>();
 
     public List<MissionInfo> missionInfos = new List<MissionInfo>();
@@ -40,6 +41,7 @@ public class Database : Singleton<Database>
         RM.LoadMissionInfo((x) =>
         {
             missionInfoDict = x;
+            ReloadStoryMod();
             missionInfos = missionInfoDict.Select(entry => entry.Value).ToList();
         });
         RM.LoadActivityInfo((x) =>
@@ -54,9 +56,10 @@ public class Database : Singleton<Database>
 
     public bool VerifyData(out string error)
     {
-        if (missionInfoDict.Count != GameManager.versionData.missionData.totalMissionCount)
+        int officialMissionCount = missionInfoDict.Count(x => x.Value != null && x.Value.type != MissionType.Mod);
+        if (officialMissionCount != GameManager.versionData.missionData.totalMissionCount)
         {
-            error = $"正在获取任务档案 {missionInfoDict.Count} / {GameManager.versionData.missionData.totalMissionCount}";
+            error = $"正在获取任务档案 {officialMissionCount} / {GameManager.versionData.missionData.totalMissionCount}";
             return false;
         }
 
@@ -168,6 +171,47 @@ public class Database : Singleton<Database>
     public MissionInfo GetMissionInfo(int id)
     {
         return (id == 0) ? null : missionInfoDict.Get(id);
+    }
+
+    public StoryDocument GetStoryInfo(string id)
+    {
+        return string.IsNullOrEmpty(id) ? null : storyInfoDict.Get(id);
+    }
+
+    public void ReloadStoryMod()
+    {
+        storyInfoDict.Clear();
+        var modMissionIds = missionInfoDict
+            .Where(x => x.Value != null && x.Value.type == MissionType.Mod)
+            .Select(x => x.Key)
+            .ToList();
+
+        foreach (int id in modMissionIds)
+            missionInfoDict.Remove(id);
+
+        missionInfos = missionInfoDict.Select(entry => entry.Value).ToList();
+        Mission.ReloadRuntimeModMissions(missionInfos);
+
+        if (!SaveSystem.TryLoadStoryMod(out string error, out var storyDict))
+        {
+            if (!string.IsNullOrEmpty(error))
+                Debug.LogWarning(error);
+
+            return;
+        }
+
+        storyInfoDict = storyDict;
+        foreach (var entry in storyInfoDict)
+        {
+            MissionInfo missionInfo = entry.Value?.ToMissionInfo();
+            if (missionInfo == null)
+                continue;
+
+            missionInfoDict[missionInfo.id] = missionInfo;
+        }
+
+        missionInfos = missionInfoDict.Select(entry => entry.Value).ToList();
+        Mission.ReloadRuntimeModMissions(missionInfos);
     }
 
     public PetHitInfo GetPetHitInfo(int skinId)

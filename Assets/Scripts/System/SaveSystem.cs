@@ -268,6 +268,7 @@ public static class SaveSystem
             var mapMinePath = FileBrowserHelpers.CreateFolderInDirectory(mapPath, "mine");
 
             var npcPath = FileBrowserHelpers.CreateFolderInDirectory(modPath, "Npc");
+            var storyPath = FileBrowserHelpers.CreateFolderInDirectory(modPath, "Stories");
 
             var spritePath = FileBrowserHelpers.CreateFolderInDirectory(modPath, "Sprites");
             var spriteMapPath = FileBrowserHelpers.CreateFolderInDirectory(spritePath, "Map");
@@ -392,6 +393,7 @@ public static class SaveSystem
                 data.activityStorage.Find(x => x.id == "shop")?.data.RemoveAll(x => ItemInfo.IsMod(int.Parse(x.key)));
                 data.itemStorage.RemoveAll(x => ItemInfo.IsMod(x.id));
                 data.achievement = ItemInfo.IsMod(data.achievement) ? 0 : data.achievement;
+                data.missionStorage.RemoveAll(x => (x?.id ?? 0) < 0 || x.info?.type == MissionType.Mod);
 
                 // Clean farm
                 var farmActivity = data.activityStorage.Find(x => x.id == "farm");
@@ -422,6 +424,8 @@ public static class SaveSystem
 
                 SaveData(data, id);
             }
+
+            Mission.ReloadRuntimeModMissions(null);
         }
         catch (Exception e)
         {
@@ -854,6 +858,66 @@ public static class SaveSystem
             return false;
         }
         return true;
+    }
+
+    public static bool TryLoadStoryMod(out string error, out Dictionary<string, StoryDocument> storyDict)
+    {
+        storyDict = new Dictionary<string, StoryDocument>();
+        error = string.Empty;
+
+        var storyPath = Application.persistentDataPath + "/Mod/Stories/";
+        try
+        {
+            if (!FileBrowserHelpers.DirectoryExists(storyPath))
+                return false;
+
+            foreach (var path in GetStoryJsonPaths(storyPath))
+            {
+                string json = FileBrowserHelpers.ReadTextFromFile(path);
+                if (!StoryDocumentCodec.TryDeserialize(json, false, out StoryDocument document, out string validationError))
+                    throw new Exception("Story json format error: " + path + "\n" + validationError);
+
+                if (document.isDraft)
+                {
+                    if (!StoryValidator.ValidateDraft(document, out validationError))
+                        throw new Exception("Story json format error: " + path + "\n" + validationError);
+
+                    continue;
+                }
+
+                if (!StoryValidator.Validate(document, out validationError))
+                    throw new Exception("Story json format error: " + path + "\n" + validationError);
+
+                if (storyDict.ContainsKey(document.id))
+                    throw new Exception("Duplicate story id: " + document.id + "\n" + path);
+
+                storyDict[document.id] = document;
+            }
+        }
+        catch (Exception e)
+        {
+            error = e.ToString();
+            storyDict.Clear();
+            return false;
+        }
+
+        return true;
+    }
+
+    private static IEnumerable<string> GetStoryJsonPaths(string storyPath)
+    {
+        if (!Directory.Exists(storyPath))
+            yield break;
+
+        foreach (string path in Directory.GetFiles(storyPath, "*.json", SearchOption.TopDirectoryOnly))
+            yield return path;
+
+        foreach (string directory in Directory.GetDirectories(storyPath))
+        {
+            string packageStory = Path.Combine(directory, "story.json");
+            if (File.Exists(packageStory))
+                yield return packageStory;
+        }
     }
 
     public static bool TrySaveItemMod(ItemInfo info, byte[] iconBytes, Sprite iconSprite, out string error, int deleteItemId = 0)

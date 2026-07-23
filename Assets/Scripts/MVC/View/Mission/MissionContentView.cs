@@ -14,10 +14,11 @@ public class MissionContentView : Module
             Clear();
             return;
         }
-        titleText?.SetText(mission.info.title);
-        contentText?.SetText(mission.checkpointInfo.description);
+        titleText?.SetText(mission.info?.title ?? string.Empty);
+        contentText?.SetText(mission.checkpointInfo?.description ?? string.Empty);
+        var rewards = mission.info?.rewards ?? new List<Item>();
         for (int i = 0; i < itemBlockViews.Count; i++) {
-            Item item = (i < mission.info.rewards.Count) ? mission.info.rewards[i] : null;
+            Item item = (i < rewards.Count) ? rewards[i] : null;
             itemBlockViews[i]?.SetItem(item);
         }
     }
@@ -28,6 +29,12 @@ public class MissionContentView : Module
         foreach (var block in itemBlockViews) {
             block?.SetItem(null);
         }
+    }
+
+    public void SetEmptyState(string title, string description) {
+        Clear();
+        titleText?.SetText(title);
+        contentText?.SetText(description);
     }
 
 }

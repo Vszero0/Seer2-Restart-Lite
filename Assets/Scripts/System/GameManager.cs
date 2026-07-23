@@ -87,6 +87,7 @@ public class GameManager : Singleton<GameManager>
     private void GameLogin()
     {
         GameData gameData = Player.instance.gameData;
+        Mission.RemoveLegacyModEntries();
         if (gameData.version != versionData.gameVersion)
         {
             Mail.VersionUpdate();

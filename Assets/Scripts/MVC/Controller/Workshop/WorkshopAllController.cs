@@ -75,6 +75,15 @@ public class WorkshopAllController : Module
         allView.SetItemListPanelActive(true);
     }
 
+    public void OpenStoryPanel() {
+        if (!SaveSystem.IsModExists()) {
+            Hintbox.OpenHintboxWithContent("请先创建Mod，再编辑自制剧情", 16);
+            return;
+        }
+
+        Panel.OpenPanel<WorkshopStoryBrowserPanel>();
+    }
+
     public void OnEditPet(PetInfo petInfo) {
         optionSelectController.Select(1);
         petController.SetPetInfo(petInfo);

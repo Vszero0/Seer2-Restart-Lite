@@ -28,6 +28,9 @@
 .idea/
 .vscode/
 
+# Local design documents and implementation plans
+/docs/
+
 # Gradle cache directory
 .gradle/
 

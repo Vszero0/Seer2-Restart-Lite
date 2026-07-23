@@ -1,0 +1,12 @@
+<mission id="10001" type="1" replayable="true">
+    <title>法拉的梦</title>
+    <reward>
+    </reward>
+    <checkpoint>
+        <branch id="default">
+            <map>121</map>
+            <story>Side/fala_intro</story>
+            <description>异蘑世界附近，法拉似乎在等待一场不会醒来的梦。</description>
+        </branch>
+    </checkpoint>
+</mission>
