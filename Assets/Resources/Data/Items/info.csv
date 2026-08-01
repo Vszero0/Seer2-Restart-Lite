@@ -42,6 +42,7 @@ id,name,type,price,option,description,effect
 1206,空气结晶,mine,50,habitat=克洛斯星草原&linkId=10036,none,可转化为飞船能源，在动力室兑换赛尔豆
 1207,电容球,mine,50,habitat=赫尔卡星建筑区&linkId=10030,none,可转化为飞船能源，在动力室兑换赛尔豆
 1209,玄冰,mine,50,habitat=赫尔卡飞船&linkId=10043,none,可转化为飞船能源，在动力室兑换赛尔豆
+1302,海洋能量,mine,50,habitat=海洋星深水区&linkId=10021,none,可转化为飞船能源，在动力室兑换赛尔豆
 7001,潜水服,equipment,1[22010],resId=37001&removable=false,none,可以潜入深海！
 7002,高压水枪,shoot,1[22007],removable=false,none,可以喷射水流！
 7003,火焰喷射器,shoot,1[22006],removable=false,none,可以发射火焰！
@@ -206,6 +207,7 @@ id,name,type,price,option,description,effect
 22034,口臭花苞,buff,50[D],resId=Buffs/420034&habitat=黄金之路&linkId=360,[ffbb33]【随身物品】[-][ENDL]其实这只是个普通的花苞，只是胖胖沱喝醉之后朝它呼了一口气就变成了口臭花苞,免疫睡眠和恶心状态，胖胖沱携带时自动获得微醉和烂醉状态
 22035,雪球,buff,50[D],resId=Buffs/420035&habitat=原始雪森林&linkId=408,[ffbb33]【随身物品】[-][ENDL]多普利滚的雪球日积月累变成这么大颗，现在任何人都没办法阻止她回家吃饭,每回合强化双方双攻1级，多普利携带时回家吃饭立刻恢复1/6体力且无法被中断
 22036,寒冰大米,buff,50[D],resId=Buffs/420036&habitat=冰之谷&linkId=401,[ffbb33]【随身物品】[-][ENDL]据说寒冰大米是精灵吃饭时不小心落下的米粒，迅速的被暴风雪冻结而成的产物,最大体力提高100点，寒冰龟携带时首次出场会获得寒冰护甲状态
+22037,冰晶碎片,buff,50[D],resId=Buffs/420037&habitat=雪之湖泊&linkId=409,[ffbb33]【随身物品】[-][ENDL]冰川豚可以利用周围洒落的冰晶碎片巩固自己的防御,每回合强化双方双防1级，冰川豚携带时首次出伤会获得寒冰坚韧
 23001,蘑菇果实,buff,100[610004],resId=Buffs/430001&habitat=种植园&linkId=990,[ffbb33]【随身物品】[-][ENDL]蘑菇果实能让轻盈的攻击更容易发挥出效果，但有时会受到迷幻成分影响,威力低于自身体重的技能连击数+1，但会有50%概率使自身在出手前陷入昏迷1回合
 23002,伊萨晶石,buff,50[D],resId=Buffs/430002&habitat=VIP乐园&linkId=89,[ffbb33]【随身物品】[-][ENDL]伊萨之意为生命。它不仅给予阿卡迪亚的居民们力量、影响着当地生物的发展，更直接关系着精灵的成长,每回合恢复双方1/12体力
 23003,黑水结晶,buff,50[D],resId=Buffs/430003&habitat=VIP乐园&linkId=89,[ffbb33]【随身物品】[-][ENDL]在被污染的水源之心发现的结晶，混杂了黑色的杂质能让居民和精灵躁动，浓度太高的话甚至会使其发狂,命中率提高15%，受到的伤害提升15%
@@ -213,6 +215,7 @@ id,name,type,price,option,description,effect
 23005,茶叶包,buff,50[D],resId=Buffs/430005,[ffbb33]【随身物品】[-][ENDL]精灵喜欢吃饱后才喝茶，但这种特殊的茶叶会遏止回复效果，所以有些精灵会故意恶作剧请对方喝,回合开始时若自身为满体力则使对手当回合【禁疗】
 23006,水脉璞玉,buff,50[D],resId=Buffs/430006&habitat=水源之心&linkId=171,[ffbb33]【随身物品】[-][ENDL]水脉氏族出产的璞玉，蕴含特殊能量可以改变天气,技能暴击时使天气转变为雨天
 23007,火幻璞玉,buff,50[D],resId=Buffs/430007&habitat=幻空岭&linkId=292,[ffbb33]【随身物品】[-][ENDL]火幻氏族出产的璞玉，蕴含特殊能量可以改变天气,技能暴击时使天气转变为炎热
+23008,冰沁璞玉,buff,50[D],resId=Buffs/430008&habitat=冰沁神殿&linkId=406,[ffbb33]【随身物品】[-][ENDL]冰沁氏族出产的璞玉，蕴含特殊能量可以改变天气,技能暴击时使天气转变为暴风雪
 24000,大乱斗邀请函,buff,50[5],resId=Buffs/440000&habitat=实验禁地&linkId=500,[ffbb33]【随身物品】[-][ENDL]伊特大乱斗的邀请函，欢迎所有伊特前往参加,首次登场时获得【伊特领域】，伊特家族以外的精灵携带时仍可以享有该领域的效果
 24001,魅魔之王,achievement,999[22001],resId=Buffs/440001,[ffbb33]【称号】[-][ENDL]你的威猛就连阿卡迪亚的魅魔精灵都自叹弗如，简直就是魅魔之王！,必定遇见雌性野生精灵（无雌性种类时无效）
 24002,笑口常开,achievement,999[22002],resId=Buffs/440002,[ffbb33]【称号】[-][ENDL]你从笑笑葵口中得知了他们笑口常开的秘诀，那就是他们颜面神经失调导致很难摆出臭脸！,战斗时全队在晴天环境下每回合会恢复5点怒气，笑笑葵的技能威力增加10点(不论天气)[ENDL](PVP对战无效)
@@ -467,6 +470,7 @@ id,name,type,price,option,description,effect
 500621,天马精元蛋,package,2026[D],resId=Pets/icon/621,none,在精灵背包中使用后可以获得天马
 500631,小木马精元蛋,package,10[610003],resId=Pets/icon/631,none,在精灵背包中使用后可以获得小木马
 500697,死神镰刀精元蛋,package,1[4],resId=Pets/icon/697,none,在精灵背包中使用后可以获得死神镰刀
+500703,小撒旦精元蛋,package,1[4],resId=Pets/icon/703,none,在精灵背包中使用后可以获得小撒旦
 500761,迦拉特精元蛋,package,1[4],resId=Pets/icon/761,none,在精灵背包中使用后可以获得迦拉特
 500797,赤兔精元蛋,package,1[4],resId=Pets/icon/797,none,在精灵背包中使用后可以获得赤兔
 500808,漱玉精元蛋,package,1[4],resId=Pets/icon/808,none,在精灵背包中使用后可以获得漱玉

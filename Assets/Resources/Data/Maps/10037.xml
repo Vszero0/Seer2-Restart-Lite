@@ -294,7 +294,7 @@
 								<mdf>600</mdf>
 								<hp>14000</hp>
 							</status>
-							<initBuff>-8,100,56,61,-3059,3007</initBuff>
+							<initBuff>-8,100,56,61,-3059</initBuff>
 							<loopSkill>13144,13146,13147,13144,13146,13148</loopSkill>
 						</pet>
 					</enemy>

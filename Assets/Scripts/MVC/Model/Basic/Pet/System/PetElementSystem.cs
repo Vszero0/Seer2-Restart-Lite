@@ -38,7 +38,8 @@ public static class PetElementSystem
 
     public static Dictionary<Element, string> elementColorDict = new Dictionary<Element, string>() 
     {
-        { Element.普通, "#ffffff" },
+        { Element.全部, "#ffffff" },
+        { Element.普通, "#fd893d" },
         { Element.草, "#73c652" },
         { Element.水, "#65ffff" },
         { Element.火, "#fd0100" },
@@ -47,7 +48,7 @@ public static class PetElementSystem
         { Element.飞行, "#e5eeeb" },
         { Element.电, "#ffe53d" },
         { Element.地面, "#cca681" },
-        { Element.冰, "#55d9e8" },
+        { Element.冰, "#57cbfc" },
         { Element.超能, "#c24ec9" },
         { Element.战斗, "#ba8551" },
         { Element.特质, "#f9e805" },

@@ -65,17 +65,20 @@ public class AttackPhase : BattlePhase
         var atkUnit = state.atkUnit;
         var defUnit = state.defUnit;
         
+        var elementDamage = atkUnit.skillSystem.GetTypeDamage(type => type.StartsWith("skill_element")); // 系別屬性傷害
         var pinkDamage = atkUnit.skillSystem.GetTypeDamage(type => (type == "skill_fix") || (type == "skill_per")); // 粉傷 (固傷+百分比)
         var whiteDamage = atkUnit.skillSystem.GetTypeDamage(type => type == "skill_act"); // 白傷 (真實傷害)
 
+        var elementHeal = atkUnit.skillSystem.GetTypeHeal(type => (type == "skill_elementBuff") || (type == "skill_elementAtk")); // 系別屬性回復
         var pinkHeal = atkUnit.skillSystem.GetTypeHeal(type => (type == "skill_fix") || (type == "skill_per")); // 粉血 (固回復+百分比)
         var whiteHeal = atkUnit.skillSystem.GetTypeHeal(type => type == "skill_act"); // 白血 (真實回復)
 
-        ApplyAttackDamage(pinkDamage + whiteDamage, pinkHeal + whiteHeal);
+        ApplyAttackDamage(elementDamage + pinkDamage + whiteDamage, elementHeal + pinkHeal + whiteHeal);
 
         atkUnit = state.atkUnit;
         defUnit = state.defUnit;
 
+        ApplySpecialHit("element", elementDamage, elementHeal);
         ApplySpecialHit("pink", pinkDamage, pinkHeal);
         ApplySpecialHit("white", whiteDamage, whiteHeal);
     }
@@ -166,6 +169,10 @@ public class AttackPhase : BattlePhase
         if ((atkUnit.skill.type > SkillType.属性) || (atkUnit.skillSystem.totalSkillDamage > 0))
         {
             report += $"對<color={defColor}>【{defUnit.pet.name}】</color>总共造成了 <color=#ff4444><size=13>{atkUnit.skillSystem.totalSkillDamage}</size></color> 點傷害！";   
+
+            var elementDamage = atkUnit.skillSystem.GetTypeDamage(type => type.StartsWith("skill_element"));
+            if (elementDamage > 0)
+                report += $"<color=#fd893d>【属性伤害】<size=13>{elementDamage}</size=13></color>";
 
             var damageTypes = new Dictionary<string, string>
             {

@@ -60,6 +60,9 @@ public static class Identifier
             if (trimId.TryTrimStart("follower.", out trimId))
                 return Player.instance.follower?.GetIdentifier(trimId) ?? float.MinValue;
 
+            if (trimId.TryTrimStart("map.", out trimId))
+                return Player.instance.currentMap?.GetMapIdentifier(trimId) ?? float.MinValue;
+
             return trimId switch
             {
                 "shoot" => gameData.shoot,

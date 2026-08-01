@@ -188,7 +188,10 @@ public class Battle
 
     public static void StartBattle(BattleInfo battleInfo)
     {
-        TryStartBattle(battleInfo, out _);
+        if (TryStartBattle(battleInfo, out var message))
+            return;
+
+        Hintbox.OpenHintboxWithContent(message, 16);
     }
 
     public static bool TryStartBattle(BattleInfo battleInfo, out string error)
@@ -209,14 +212,17 @@ public class Battle
             error = "战斗配置不存在。";
             return false;
         }
-        bool isPlayerPetBag = battleInfo.playerInfo == null || battleInfo.playerInfo.Count == 0;
-        bool isFirstPetDead = Player.instance?.petBag == null || Player.instance.petBag.Length == 0
+
+        bool isPlayerPetBag = ListHelper.IsNullOrEmpty(battleInfo.playerInfo);
+        bool isFirstPetDead = ListHelper.IsNullOrEmpty(Player.instance?.petBag) 
             || Player.instance.petBag[0] == null || Player.instance.petBag[0].currentStatus.hp == 0;
+
         if (isPlayerPetBag && isFirstPetDead)
         {
             error = "首发精灵血量耗尽，快去恢复精灵吧！";
             return false;
         }
+
         IEnumerable<Pet> petBag = Player.instance.petBag.Take(battleInfo.settings.petCount);
         if (!battleInfo.settings.Condition(petBag, out string message))
         {

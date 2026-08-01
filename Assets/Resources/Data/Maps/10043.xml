@@ -231,5 +231,53 @@
 				</button>
 			</eventHandler>
 		</npc>
+		<npc id="1004305" resId="Pets/pet/10059" name="" size="250,120" pos="450,420" namePos="0,0" color="0,0,0,0">
+			<description>奇怪的箱子</description>
+			<dialog>
+				<branch id="default" name="西塔" icon="Pets/pet/10059" size="52,90" pos="10,45">
+					<content><![CDATA[哔...哔哔...能源不足...]]></content>
+					<replyHandler>
+						<reply type="click">
+							<description><![CDATA[等我找到无尽能源再说]]></description>
+							<action>openDialog</action>
+							<param>null</param>
+						</reply>
+						<reply type="click">
+							<description><![CDATA[帮他充电]]></description>
+							<action>openHintbox</action>
+							<param>type=Item</param>
+							<param>content=让首发精灵习得【充电】技能再来共鸣吧！</param>
+							<param>option_num=1</param>
+							<param>item_icon=buff[3066]</param>
+							<condition>firstPet.skill[10440]=0</condition>
+						</reply>
+						<reply type="branch">
+							<action>battle</action>
+							<param>default</param>
+							<condition>firstPet.skill[10440]=1</condition>
+						</reply>
+					</replyHandler>
+				</branch>
+			</dialog>
+			<battle>
+				<branch id="default">
+					<settings count="6" capture="true">
+						<initBuff>(field:600004)</initBuff>
+					</settings>
+					<enemy>
+						<pet id="10059" level="65">
+							<initBuff>-2</initBuff>
+							<loopSkill>14772,14773,14772,14773,-4</loopSkill>
+						</pet>
+					</enemy>
+				</branch>
+			</battle>
+			<eventHandler>
+				<button type="click">
+					<action>openDialog</action>
+					<param>default</param>
+				</button>
+			</eventHandler>
+		</npc>
 	</entities>
 </map>

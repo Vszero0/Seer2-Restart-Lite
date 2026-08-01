@@ -128,6 +128,23 @@
 							<loopSkill>10401</loopSkill>
 						</pet>
 					</enemy>
+					<winHandler>
+						<button type="auto">
+							<action>setItem</action>
+							<param>add</param>
+							<param>1302,1</param>
+							<condition>random[old]&lt;10</condition>
+						</button>
+						<button type="auto">
+							<action>openHintbox</action>
+							<param>type=Item</param>
+							<param>title=提示</param>
+							<param>content=1个海洋能量已经放入背包</param>
+							<param>item_icon=item[1302]</param>
+							<param>option_num=1</param>
+							<condition>random[old]&lt;10</condition>
+						</button>
+					</winHandler>
 				</branch>
 			</battle>
 			<eventHandler>
@@ -185,11 +202,75 @@
 							<loopSkill>10401</loopSkill>
 						</pet>
 					</enemy>
+					<winHandler>
+						<button type="auto">
+							<action>setItem</action>
+							<param>add</param>
+							<param>1302,1</param>
+							<condition>random[old]&lt;10</condition>
+						</button>
+						<button type="auto">
+							<action>openHintbox</action>
+							<param>type=Item</param>
+							<param>title=提示</param>
+							<param>content=1个海洋能量已经放入背包</param>
+							<param>item_icon=item[1302]</param>
+							<param>option_num=1</param>
+							<condition>random[old]&lt;10</condition>
+						</button>
+					</winHandler>
 				</branch>
 			</battle>
 			<eventHandler>
 				<button type="click">
 					<action>battle</action>
+					<param>default</param>
+				</button>
+			</eventHandler>
+		</npc>
+		<npc id="1002106" resId="1001" name="" size="50,50" pos="170,365" namePos="0,0" color="0,0,0,0">
+			<description>神秘的精灵</description>
+			<dialog>
+				<branch id="default" name="安迷亚" icon="Pets/pet/27" size="67,104" pos="10,45">
+					<content><![CDATA[这个精灵的墨汁很厉害，带上我再来和他的墨汁一较高下]]></content>
+					<replyHandler>
+						<reply type="click">
+							<description><![CDATA[有墨汁有没有毛笔？]]></description>
+							<action>openDialog</action>
+							<param>null</param>
+						</reply>
+						<reply type="click">
+							<description><![CDATA[我准备好了]]></description>
+							<action>openHintbox</action>
+							<param>type=Item</param>
+							<param>content=将安迷亚设为首发再来吧！</param>
+							<param>option_num=1</param>
+							<param>item_icon=pet[27]</param>
+							<condition>firstPet.baseIdNOT25</condition>
+						</reply>
+						<reply type="branch">
+							<action>battle</action>
+							<param>default</param>
+							<condition>firstPet.baseId=25</condition>
+						</reply>
+					</replyHandler>
+				</branch>
+			</dialog>
+			<battle>
+				<branch id="default">
+					<settings count="6" capture="true">
+						<initBuff>(field:600002)</initBuff>
+					</settings>
+					<enemy>
+						<pet id="10730" level="16">
+							<loopSkill>14779</loopSkill>
+						</pet>
+					</enemy>
+				</branch>
+			</battle>
+			<eventHandler>
+				<button type="click">
+					<action>openDialog</action>
 					<param>default</param>
 				</button>
 			</eventHandler>

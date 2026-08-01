@@ -1,3 +1,4 @@
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
@@ -27,7 +28,7 @@ public class BattleAudioView : BattleBaseView
             yield break;
         }
         */
-        var path = "BGM/fight/BGM_" + GetWorldId(battle.settings.mode) + GetBattleBGMId(battle.settings.mode) + ".mp3";
+        var path = battle.settings.bgm ?? $"BGM/fight/BGM_{GetWorldId(battle.settings.mode)}{GetBattleBGMId(battle.settings.mode)}.mp3";
         ResourceManager.instance.GetLocalAddressables<AudioClip>(path, battle.settings.isMod,
             (bgm) => AudioSystem.instance.PlayMusic(bgm, AudioVolumeType.BattleBGM));
     }

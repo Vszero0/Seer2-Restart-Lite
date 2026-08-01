@@ -1,19 +1,19 @@
 <versionData>
-    <gameVersion>lite_4.6.1</gameVersion>
-    <buildVersion>lite_4.6.1</buildVersion>
-    <resourceVersion>lite_4.6</resourceVersion>
-    <releaseDate>2026-07-19+08:00</releaseDate>
+    <gameVersion>lite_4.7</gameVersion>
+    <buildVersion>lite_4.7</buildVersion>
+    <resourceVersion>lite_4.7</resourceVersion>
+    <releaseDate>2026-07-31+08:00</releaseDate>
     <releaseNote>
-        【当前版本】lite_4.6.2
-        【版本日期】2026/07/19
+        【当前版本】lite_4.7
+        【版本日期】2026/07/31
 
-        【更新精灵】冰之契约·阿克希亚、急冻兽、雷吉欧斯
-        【更新活动】
-        【更新功能】图鉴精灵叫声、（试运行）新任务系统
-        【更新地图】冰窖迷宫、赫尔卡飞船
+        【更新精灵】冰之契约·阿克希亚、急冻兽、雷吉欧斯、斯特洛亚、沙恩克、塔奇拉顿、尼斯克、帕尔西丝、小撒旦
+        【更新活动】八月签到、沙恩克的挑战、试炼之塔60层、随身物品第16期
+        【更新功能】图鉴精灵叫声、战斗设定可自选战斗BGM、（试运行）新任务系统、未命中也能造成系别属性伤害
+        【更新地图】冰窖迷宫、赫尔卡飞船、飞船底层走廊、飞船二层走廊
         【修复错误】修复诗风特性的使用属性技能实际上是使用攻击技能的错误
-        【平衡调整】冻结之风、炎阳圣盾、神迹巴拉龟
-        【伊特大乱斗调整】
+        【平衡调整】欲望之翼、冻结之风、海浪咆哮、炎阳圣盾、神迹巴拉龟
+        【伊特大乱斗调整】《实装新加成》冰沁璞玉、冰晶碎片
         【下期预告】超能系氏族
 
         后续更新请关注【B站奥比休斯】或加群 258645296
@@ -48,7 +48,7 @@
         <petNum>759</petNum>
         <minPetId>1</minPetId>
         <maxPetId>20000</maxPetId>
-        <topicPetId>13699,10052,10061</topicPetId>
+        <topicPetId>13699,10052,10061,10731,10408,10058,10096,10082,703</topicPetId>
     </petData>
     <skillData>
         <skillNum>4748</skillNum>
@@ -59,6 +59,6 @@
         <mainCount>6</mainCount>
         <sideCount>1</sideCount>
         <dailyCount>0</dailyCount>
-        <eventCount>1</eventCount>
+        <eventCount>0</eventCount>
     </missionData>
 </versionData>

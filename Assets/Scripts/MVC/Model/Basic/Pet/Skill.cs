@@ -357,15 +357,22 @@ public class Skill
             desc = $"[ff50d0]【暴击率 {critical}%】[-][ENDL]{desc}";
         }
 
-        if ((accuracy <= 100) && (accuracy != (isAttack ? 95 : 100)))
+        var mustHit = accuracy / 1000;
+        if (mustHit != 0)
+        {
+            var sign = (mustHit > 0) ? "+" : string.Empty;
+            var hitDesc = (mustHit != 1) ? $" {sign}{mustHit}" : string.Empty;
+            desc = $"[52e5f9]【必中{hitDesc}】[-][ENDL]{desc}";
+        }
+        else if ((accuracy <= 100) && (accuracy != (isAttack ? 95 : 100)))
         {
             desc = $"[52e5f9]【命中率 {accuracy}%】[-][ENDL]{desc}";
         }
 
         if (priority != 0)
         {
-            var priDesc = "[77e20c]【先制" + ((priority > 0) ? "+" : string.Empty) + priority + "】[-][ENDL]";
-            desc = priDesc + desc;
+            var sign = (priority > 0) ? "+" : string.Empty;
+            desc = $"[77e20c]【先制 {sign}{priority}】[-][ENDL]{desc}";
         }
 
         if (mode == "card")
@@ -378,7 +385,7 @@ public class Skill
             for (int i = 0; i < referBuffList.Count; i++)
             {
                 var buff = new Buff(BuffReferData.Parse(referBuffList[i])){ turn = -2 };
-                desc += ("[ENDL][ENDL][ffbb33]【" + buff.name + "】[-]：" + buff.description);
+                desc += $"[ENDL][ENDL][ffbb33]【{buff.name}】[-]：{buff.description}";
             }
         }
         return Skill.GetSkillDescriptionPreview(desc);
@@ -425,6 +432,15 @@ public class Skill
         effects = Effect.SetEffects(_effects);
         foreach (var e in effects)
             e.source = this;
+    }
+
+    public void AddEffects(List<Effect> _effects)
+    {
+        var addEffects = Effect.SetEffects(_effects);
+        foreach (var e in addEffects)
+            e.source = this;
+
+        effects.AddRange(addEffects);
     }
 
     public void SetParallelIndex(int parallelSourceIndex = 0, int parallelTargetIndex = 0)

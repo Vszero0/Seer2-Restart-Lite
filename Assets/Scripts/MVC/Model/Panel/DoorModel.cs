@@ -50,7 +50,7 @@ public class DoorModel : Module
     {
         return door switch
         {
-            "new_basic" => 30,
+            "new_basic" => 60,
             _ => 21
         };
     }
@@ -71,14 +71,14 @@ public class DoorModel : Module
                 return new BattleInfo(){ enemyInfo = new List<BossInfo>() };
 
             case "new_basic":
-                if (floorNum > 29)
+                if (floorNum % 30 == 0)
                     goto default;
 
                 return new BattleInfo()
                 {
                     enemyInfo = new BossInfo()
                     { 
-                        petId = 10000 + floorNum,
+                        petId = 10000 + floorNum - floorNum / 30,
                         level = 10 + (floorNum - 1) * 3,
                         initBuffIds = "-3",
                         loopSkillIds = Pet.GetPetInfo(10000 + floorNum).skills.skillIdList.Select(x => x.ToString()).ConcatToString(","),
@@ -150,7 +150,7 @@ public class DoorModel : Module
                 return;
 
             case "new_basic":
-                if (floorNum > 29)
+                if (floorNum % 30 == 0)
                     goto default;
                 
                 doorSettings = new BattleSettings()
@@ -164,7 +164,7 @@ public class DoorModel : Module
                     settings = doorSettings,
                     enemyInfo = new BossInfo()
                     { 
-                        petId = 10000 + floorNum,
+                        petId = 10000 + floorNum - floorNum / 30,
                         level = 10 + (floorNum - 1) * 3,
                         initBuffIds = "-3",
                         loopSkillIds = Pet.GetPetInfo(10000 + floorNum).skills.skillIdList.Select(x => x.ToString()).ConcatToString(","),

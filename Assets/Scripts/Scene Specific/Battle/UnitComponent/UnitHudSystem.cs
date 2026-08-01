@@ -302,6 +302,7 @@ public class UnitHudSystem
         {
             return type switch
             {
+                "element" => new Color32(253, 137, 61, 255),
                 "pink" => new Color32(255, 64, 255, 255),
                 "white" => Color.white,
                 _ => Heal >= 0 ? new Color32(119, 226, 12, 255) : Color.red,

@@ -29,6 +29,7 @@ public class BattleSettings
     [XmlElement("limitDesc")] public string filterLimitDesc;
 
     [XmlAttribute("time")] public int time = 10;
+    [XmlElement("bgm")] public string bgm = null;
     [XmlElement("mode")] public int modeId = 0;
     [XmlIgnore]
     public BattleMode mode
@@ -91,6 +92,7 @@ public class BattleSettings
         filterLimit = rhs.filterLimit;
         filterLimitDesc = rhs.filterLimitDesc;
         time = rhs.time;
+        bgm = rhs.bgm;
         initBuffExpr = rhs.initBuffExpr;
     }
 

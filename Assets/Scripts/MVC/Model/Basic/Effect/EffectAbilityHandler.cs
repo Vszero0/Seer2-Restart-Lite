@@ -378,22 +378,77 @@ public static class EffectAbilityHandler
             return skill.TryGetSkillIdentifier(expr, out var num) ? num : Identifier.GetNumIdentifier(expr);
         });
 
+        var rage = Parser.ParseEffectOperation(add, effect, lhsUnit, rhsUnit);
+        var rec = lhsUnit.pet.battleStatus.angrec;
+        var setAnger = (int)Parser.ParseEffectOperation(set, effect, lhsUnit, rhsUnit);
+        var maxAnger = (max == "none") ? statusController.maxAnger : (int)Parser.ParseEffectOperation(max, effect, lhsUnit, rhsUnit);
+        var minAnger = (min == "none") ? statusController.minAnger : (int)Parser.ParseEffectOperation(min, effect, lhsUnit, rhsUnit);
+
+        // 效果触发时结算，立即修改数值
+        var onEffect = state.GetEffectsByTiming(EffectTiming.OnEffect, state.GetEffectHandler(null, false), x =>
+        Parser.ParseConditionFilter<Effect>(x.abilityOptionDict.Get("condition"), (expr, e) => expr switch
+        {
+            "add" => rage,
+            "rec" => rec,
+            "set" => (set == "none") ? -1 : setAnger,
+            "max" => (max == "none") ? -1 : maxAnger,
+            "min" => (min == "none") ? -1 : minAnger,
+            "type[anger]" => (type == "anger") ? 1 : 0,
+            "type[pp]" => (type == "pp") ? 1 : 0,
+            _ => e.TryGetEffectIdentifier(expr.Replace('：', ':'), out var value) ? value : Identifier.GetNumIdentifier(expr),
+        })(effect)).OrderBy(x => x.priority).ToList();
+
+        onEffect.ForEach(x =>
+        {
+            var who = x.abilityOptionDict.Get("who", "me");
+            var type = x.abilityOptionDict.Get("type");
+            var op = x.abilityOptionDict.Get("op");
+            var value = x.abilityOptionDict.Get("value");
+            if (string.IsNullOrEmpty(type))
+                return;
+
+            var effectInvokeUnit = (Unit)x.invokeUnit;
+            var effectLhsUnit = (who == "me") ? state.GetUnitById(effectInvokeUnit.id) : state.GetRhsUnitById(effectInvokeUnit.id);
+            if (effectLhsUnit.id != lhsUnit.id)
+                return;
+
+            switch (type)
+            {
+                default:
+                    break;
+                case "add":
+                    rage = Operator.Operate(op, rage, Parser.ParseEffectOperation(value, x, lhsUnit, rhsUnit));
+                    break;
+                case "rec":
+                    rec = Operator.Operate(op, rec, Parser.ParseEffectOperation(value, x, lhsUnit, rhsUnit));
+                    break;
+                case "set":
+                    setAnger = (int)Operator.Operate(op, setAnger, Parser.ParseEffectOperation(value, x, lhsUnit, rhsUnit));
+                    break;
+                case "max":
+                    maxAnger = (int)Operator.Operate(op, maxAnger, Parser.ParseEffectOperation(value, x, lhsUnit, rhsUnit));
+                    break;
+                case "min":
+                    minAnger = (int)Operator.Operate(op, minAnger, Parser.ParseEffectOperation(value, x, lhsUnit, rhsUnit));
+                    break;
+            }
+            x.PostProcess(true, state);
+        });
+
         switch (type)
         {
             case "anger":
-                statusController.minAnger = (min == "none") ? statusController.minAnger : (int)Parser.ParseEffectOperation(min, effect, lhsUnit, rhsUnit);
-                statusController.maxAnger = (max == "none") ? statusController.maxAnger : (int)Parser.ParseEffectOperation(max, effect, lhsUnit, rhsUnit);
+                statusController.minAnger = minAnger;
+                statusController.maxAnger = maxAnger;
 
                 if (set == "none")
                 {
-                    float anger = Parser.ParseEffectOperation(add, effect, lhsUnit, rhsUnit);
-                    int angerAdd = (int)(anger * ((anger > 0) ? (lhsUnit.pet.battleStatus.angrec / 100f) : 1));
+                    int angerAdd = (int)(rage * ((rage > 0) ? (rec / 100f) : 1));
                     lhsUnit.pet.anger += angerAdd;
                 }
                 else
                 {
-                    float anger = Parser.ParseEffectOperation(set, effect, lhsUnit, rhsUnit);
-                    lhsUnit.pet.anger = (int)anger;
+                    lhsUnit.pet.anger = setAnger;
                 }
                 break;
 
@@ -404,13 +459,11 @@ public static class EffectAbilityHandler
 
                 if (set == "none")
                 {
-                    float pp = Parser.ParseEffectOperation(add, effect, lhsUnit, rhsUnit);
-                    ppSkills.ForEach(x => x.PP += (int)pp);
+                    ppSkills.ForEach(x => x.PP += (int)rage);
                 }
                 else
                 {
-                    float pp = Parser.ParseEffectOperation(set, effect, lhsUnit, rhsUnit);
-                    ppSkills.ForEach(x => x.PP = (int)pp);
+                    ppSkills.ForEach(x => x.PP = setAnger);
                 }
                 break;
         }
@@ -1232,7 +1285,11 @@ public static class EffectAbilityHandler
             {
                 var effectList = new List<Effect>();
                 skillIdList.ForEach(skillId => effectList.AddRange(Skill.GetSkill(skillId, false)?.effects.Select(x => new Effect(x)) ?? new List<Effect>()));
-                lhsUnit.skillSystem.GetSkillByKey(key)?.SetEffects(effectList);
+
+                if (op == "SET")
+                    lhsUnit.skillSystem.GetSkillByKey(key)?.SetEffects(effectList);
+                else if (op == "+")
+                    lhsUnit.skillSystem.GetSkillByKey(key)?.AddEffects(effectList);
 
                 return true;
             }
@@ -1247,6 +1304,11 @@ public static class EffectAbilityHandler
             float newOrderDir = Operator.Operate(op, oldOrderDir, newValue);
             state.SetStateIdentifier("order.direction", newOrderDir);
             return true;
+        }
+        else if (type == "parallelTargetIndex")
+        {
+            if (value == "random")
+                newValue = rhsUnit.petSystem.petBag.FindAllIndex(x => x != null && !x.isDead).ToList().Random();
         }
 
         lhsSystem.SetSkillSystemIdentifier(type, Operator.Operate(op, oldValue, newValue), key);
@@ -1468,6 +1530,11 @@ public static class EffectAbilityHandler
                         secretSkills = secretSkills.Concat(otherSkills.Random(4 - secretSkills.Length, false)).ToArray();
                     }
                     normalSkills = secretSkills;
+                }
+                else if (normalSkillExpr == "satan")
+                {
+                    normalSkills = (ListHelper.IsNullOrEmpty(pet.skillController.normalSkills) ? pet.skillController.loopSkills : pet.skillController.normalSkills)
+                        .Select(x => (x == null) ? null : Skill.GetSkill(x.id.IsWithin(14788, 14795) ? (x.id - 3283) : x.id, false)).Take(4).ToArray();
                 }
                 else if (normalSkillExpr.TryTrimStart("shift", out var normalTrim) &&
                     normalTrim.TryTrimParentheses(out var normalShift) &&

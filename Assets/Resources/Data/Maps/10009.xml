@@ -79,6 +79,48 @@
 						</button>
 					</winHandler>
 				</branch>
+				<branch id="60">
+					<settings count="1">
+						<mode>1</mode>
+					</settings>
+					<enemy>
+						<pet id="10082" level="190">
+							<status>
+								<hp>6000</hp>
+							</status>
+							<initBuff>-3022,-8,-3,97</initBuff>
+							<headerSkill>14650</headerSkill>
+							<loopSkill>14836,11140,14835,14837,14834</loopSkill>
+						</pet>
+					</enemy>
+					<winHandler>
+						<button type="auto">
+							<action>getPet</action>
+							<param>10080</param>
+							<condition>activity[door].new_basic[easy][max]=[int]59[default]0</condition>
+						</button>
+						<button type="auto">
+							<action>openHintbox</action>
+							<param>type=Item</param>
+							<param>title=提示</param>
+							<param>content=获得了帕诺！</param>
+							<param>option_num=1</param>
+							<param>item_icon=pet[10080]</param>
+							<condition>activity[door].new_basic[easy][max]=[int]59[default]0</condition>
+						</button>
+						<button type="auto">
+							<action>setActivity</action>
+							<param>door</param>
+							<param>new_basic[easy][floor]=61</param>
+						</button>
+						<button type="auto">
+							<action>setActivity</action>
+							<param>door</param>
+							<param>new_basic[easy][max]=60</param>
+							<condition>activity[door].new_basic[easy][max]=[int]59[default]0</condition>
+						</button>
+					</winHandler>
+				</branch>
 			</battle>
 			<eventHandler>
 				<button type="click">

@@ -395,6 +395,7 @@ id,baseId,skinChoice,options
 697,697,none,star=3
 698,126,none,star=3
 699,214,none,star=3
+703,703,none,star=2
 704,7,100618,star=5&default_buff=100704
 705,705,none,star=2
 711,711,none,star=2
@@ -534,6 +535,9 @@ id,baseId,skinChoice,options
 10053,10053,none,star=2
 10054,10053,none,star=2
 10055,10053,none,star=2
+10056,10056,none,star=2
+10057,10056,none,star=2
+10058,10056,none,star=2
 10059,10059,none,star=2
 10060,10059,none,star=2
 10061,10059,none,star=2
@@ -555,9 +559,14 @@ id,baseId,skinChoice,options
 10077,10077,none,star=2
 10078,10077,none,star=2
 10079,10077,none,star=2
+10080,10080,none,star=2
+10081,10080,none,star=2
+10082,10080,none,star=2
 10083,10083,none,star=2
 10084,10083,none,star=2
 10085,10083,none,star=2
+10095,10095,none,star=2
+10096,10095,none,star=2
 10108,10108,none,star=2
 10109,10108,none,star=2
 10110,10108,none,star=2
@@ -624,6 +633,9 @@ id,baseId,skinChoice,options
 10372,10370,none,star=2
 10392,10392,none,star=3
 10393,10392,none,star=3
+10406,10406,none,star=3
+10407,10406,none,star=3
+10408,10406,none,star=3
 10409,10409,none,star=2&default_feature=10062&default_id=10062.1
 10410,10409,none,star=2&default_feature=10062&default_id=10063.1
 10411,10409,none,star=2&default_feature=10062&default_id=10064.1
@@ -640,6 +652,8 @@ id,baseId,skinChoice,options
 10555,10555,none,star=1
 10556,10555,none,star=1
 10729,10346,none,star=2
+10730,10730,none,star=3
+10731,10730,none,star=3
 10760,10392,none,star=3
 10809,10809,none,star=3
 10810,10809,none,star=3
@@ -761,6 +775,7 @@ id,baseId,skinChoice,options
 110018,10016,none,star=4&default_skin=10018&default_anim=10018
 113302,10392,none,star=6&default_buff=91/213302&default_skin=13302&default_anim=13302
 113309,10346,none,star=6&default_buff=91/213309
+113699,10048,none,star=6&hide=true&default_feature=13699
 113786,10041,none,star=6&default_buff=91/213786&default_skin=13786&default_anim=13786
 114693,10046,none,star=6&default_buff=91/214693
 114727,114727,none,star=7&hide=true&default_feature=14761

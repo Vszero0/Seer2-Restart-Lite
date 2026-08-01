@@ -794,6 +794,8 @@ public static class SaveSystem
 
                 if (TryLoadXML<PetKizunaInfo>($"{petPath}kizuna/{basic.id}.xml", out var kizunaInfo, out _))
                     info.kizuna = kizunaInfo;
+                else
+                    info.kizuna = LoadXML<PetKizunaInfo>($"Resources/Pets/kizuna/{basic.id}");
 
                 petDict.Set(info.id, info);
             }

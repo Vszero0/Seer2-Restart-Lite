@@ -42,6 +42,7 @@ id,timing,priority,target,condition,cond_option,effect,effect_option
 1206,none,-1,none,none,none,none,none
 1207,none,-1,none,none,none,none,none
 1209,none,-1,none,none,none,none,none
+1302,none,-1,none,none,none,none,none
 7001,none,-1,none,none,none,none,resId=0
 7002,none,-1,none,none,none,none,shootSize=76/38&resId=0
 7003,none,-1,none,none,none,none,shootSize=59/37&resId=Maps/shoot/7003&size=50/50&offset=-27.5/-10
@@ -206,6 +207,7 @@ id,timing,priority,target,condition,cond_option,effect,effect_option
 22034,resident,-1,pet,pet,type=buff[group:exclude]&buff[group:exclude]_cmp=0,set_pet,type=buff&op=+&value=420034
 22035,resident,-1,pet,pet,type=buff[group:exclude]&buff[group:exclude]_cmp=0,set_pet,type=buff&op=+&value=420035
 22036,resident,-1,pet,pet,type=buff[group:exclude]&buff[group:exclude]_cmp=0,set_pet,type=buff&op=+&value=420036
+22037,resident,-1,pet,pet,type=buff[group:exclude]&buff[group:exclude]_cmp=0,set_pet,type=buff&op=+&value=420037
 23001,resident,-1,pet,pet,type=buff[group:exclude]&buff[group:exclude]_cmp=0,set_pet,type=buff&op=+&value=430001
 23002,resident,-1,pet,pet,type=buff[group:exclude]&buff[group:exclude]_cmp=0,set_pet,type=buff&op=+&value=430002
 23003,resident,-1,pet,pet,type=buff[group:exclude]&buff[group:exclude]_cmp=0,set_pet,type=buff&op=+&value=430003
@@ -213,6 +215,7 @@ id,timing,priority,target,condition,cond_option,effect,effect_option
 23005,resident,-1,pet,pet,type=buff[group:exclude]&buff[group:exclude]_cmp=0,set_pet,type=buff&op=+&value=430005
 23006,resident,-1,pet,pet,type=buff[group:exclude]&buff[group:exclude]_cmp=0,set_pet,type=buff&op=+&value=430006
 23007,resident,-1,pet,pet,type=buff[group:exclude]&buff[group:exclude]_cmp=0,set_pet,type=buff&op=+&value=430007
+23008,resident,-1,pet,pet,type=buff[group:exclude]&buff[group:exclude]_cmp=0,set_pet,type=buff&op=+&value=430008
 24000,resident,-1,pet,pet,type=buff[group:exclude]&buff[group:exclude]_cmp=0,set_pet,type=buff&op=+&value=440000
 24001,on_battle_start,-1,pet,none,none,add_buff,key=unit&id=440001
 24002,on_battle_start,-1,pet,none,none,add_buff,key=unit&id=440002
@@ -467,6 +470,7 @@ id,timing,priority,target,condition,cond_option,effect,effect_option
 500621,resident\resident,-1\-1,state\state,none\none,none\none,set_player\set_player,param_count=1&action=getPet&param[0]=621\param_count=5&action=openHintbox&param[0]=type＝Item&param[1]=title＝提示&param[2]=content＝【天马】已经放入精灵仓库&param[3]=item_icon＝pet[621]&param[4]=option_num＝1
 500631,resident\resident,-1\-1,state\state,none\none,none\none,set_player\set_player,param_count=1&action=getPet&param[0]=631\param_count=5&action=openHintbox&param[0]=type＝Item&param[1]=title＝提示&param[2]=content＝【小木马】已经放入精灵仓库&param[3]=item_icon＝pet[631]&param[4]=option_num＝1
 500697,resident\resident,-1\-1,state\state,none\none,none\none,set_player\set_player,param_count=1&action=getPet&param[0]=697\param_count=5&action=openHintbox&param[0]=type＝Item&param[1]=title＝提示&param[2]=content＝【死神镰刀】已经放入精灵仓库&param[3]=item_icon＝pet[697]&param[4]=option_num＝1
+500703,resident\resident,-1\-1,state\state,none\none,none\none,set_player\set_player,param_count=1&action=getPet&param[0]=703\param_count=5&action=openHintbox&param[0]=type＝Item&param[1]=title＝提示&param[2]=content＝【小撒旦】已经放入精灵仓库&param[3]=item_icon＝pet[703]&param[4]=option_num＝1
 500761,resident\resident,-1\-1,state\state,none\none,none\none,set_player\set_player,param_count=1&action=getPet&param[0]=761\param_count=5&action=openHintbox&param[0]=type＝Item&param[1]=title＝提示&param[2]=content＝【迦拉特】已经放入精灵仓库&param[3]=item_icon＝pet[761]&param[4]=option_num＝1
 500797,resident\resident,-1\-1,state\state,none\none,none\none,set_player\set_player,param_count=1&action=getPet&param[0]=797\param_count=5&action=openHintbox&param[0]=type＝Item&param[1]=title＝提示&param[2]=content＝【赤兔】已经放入精灵仓库&param[3]=item_icon＝pet[797]&param[4]=option_num＝1
 500808,resident\resident,-1\-1,state\state,none\none,none\none,set_player\set_player,param_count=1&action=getPet&param[0]=808\param_count=5&action=openHintbox&param[0]=type＝Item&param[1]=title＝提示&param[2]=content＝【漱玉】已经放入精灵仓库&param[3]=item_icon＝pet[808]&param[4]=option_num＝1

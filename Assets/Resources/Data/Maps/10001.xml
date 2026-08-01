@@ -5,6 +5,16 @@
 		<bgm>BGM_1</bgm>
 	</music>
 	<entities>
+		<npc id="1000100" resId="1001" size="180,180" pos="0,290" color="0,0,0,0">
+			<description>飞船底层走廊</description>
+			<transport>150,300</transport>	
+			<eventHandler>
+				<button type="click">
+					<action>teleport</action>
+					<param>10012</param>
+				</button>
+			</eventHandler>
+		</npc>
 		<npc id="1000101" resId="1000101" size="106,214" pos="690,330" rotation="0,0,-10" color="0,0,0,0">
 			<description>太空站</description>
 			<transport>675,245</transport>
@@ -71,6 +81,5 @@
 				</button>
 			</eventHandler>
 		</npc>
-		<!-- <teleport id="1" name="传送室" pos="100,80" targetMapId="70"/> -->
 	</entities>		
 </map>
