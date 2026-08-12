@@ -24,6 +24,8 @@ public class DialogView : Module
     [SerializeField] private RectTransform contentRect;
     [SerializeField] private RectTransform functionRect;
     [SerializeField] private RectTransform replyRect;
+    [Header("Story Text Layout")]
+    [SerializeField, Min(0f)] private float storyLineSpacing = 10f;
 
     private Action<NpcButtonHandler> replyClickHandler;
     private Image storySpeakerIcon;
@@ -56,6 +58,7 @@ public class DialogView : Module
     private TMP_FontAsset defaultFont;
     private Material defaultFontSharedMaterial;
     private float defaultFontSize;
+    private float defaultLineSpacing;
     private FontStyles defaultFontStyle;
     private Color defaultTextColor;
     private Color defaultOutlineColor;
@@ -63,6 +66,7 @@ public class DialogView : Module
     private bool hasDefaultLayout;
     private Action storySpeakerIconClickHandler;
     private string storySpeakerHint;
+    private bool usesStoryLayout;
     private Vector2 storySpeakerExpressionBasePosition;
     private static readonly Color32 StorySpeakerHintColor = new Color32(145, 190, 200, 210);
     private static readonly Color32 StorySpeakerHintHoverColor = new Color32(82, 229, 249, 255);
@@ -78,6 +82,17 @@ public class DialogView : Module
         StoreDefaultTextStyle();
     }
 
+    private void OnValidate()
+    {
+        storyLineSpacing = Mathf.Max(0f, storyLineSpacing);
+        if (content == null || content.text == null)
+            return;
+        if (Application.isPlaying && !usesStoryLayout)
+            return;
+
+        ApplyStoryLineSpacing();
+    }
+
     public void SetReplyClickHandler(Action<NpcButtonHandler> handler)
     {
         replyClickHandler = handler;
@@ -86,6 +101,7 @@ public class DialogView : Module
     public void OpenDialog(DialogInfo info, bool animateStoryText = true)
     {
         bool useStoryLayout = info?.id == "story";
+        usesStoryLayout = useStoryLayout;
         bool hasIcon = info?.icon != null && info.icon != SpriteSet.Empty && info.size.x > 0 && info.size.y > 0;
 
         SetIconAndName(info.icon, info.pos, info.size, info.name);
@@ -346,6 +362,7 @@ public class DialogView : Module
         defaultFont = content.text.font;
         defaultFontSharedMaterial = content.text.fontSharedMaterial;
         defaultFontSize = content.text.fontSize;
+        defaultLineSpacing = content.text.lineSpacing;
         defaultFontStyle = content.text.fontStyle;
         defaultTextColor = content.text.color;
         defaultOutlineColor = content.text.outlineColor;
@@ -392,6 +409,7 @@ public class DialogView : Module
         content.text.fontSize = style != null && style.fontSize > 0
             ? style.fontSize
             : defaultFontSize;
+        content.text.lineSpacing = storyLineSpacing;
         content.text.fontStyle = style != null && style.bold
             ? FontStyles.Bold
             : FontStyles.Normal;
@@ -433,10 +451,21 @@ public class DialogView : Module
         content.text.font = defaultFont;
         content.text.fontSharedMaterial = defaultFontSharedMaterial;
         content.text.fontSize = defaultFontSize;
+        content.text.lineSpacing = defaultLineSpacing;
         content.text.fontStyle = defaultFontStyle;
         content.text.color = defaultTextColor;
         content.text.outlineColor = defaultOutlineColor;
         content.text.outlineWidth = defaultOutlineWidth;
+    }
+
+    private void ApplyStoryLineSpacing()
+    {
+        content.text.lineSpacing = storyLineSpacing;
+        content.text.SetVerticesDirty();
+        content.text.SetLayoutDirty();
+        content.text.ForceMeshUpdate();
+        if (content.text.rectTransform != null)
+            LayoutRebuilder.ForceRebuildLayoutImmediate(content.text.rectTransform);
     }
 
     private void ApplyStoryLayout(DialogInfo info, bool isActiveSpeaker, bool animateExpression)

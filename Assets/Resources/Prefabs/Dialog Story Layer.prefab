@@ -69,6 +69,7 @@ MonoBehaviour:
   contentRect: {fileID: 1882320614666563356}
   functionRect: {fileID: 1882320614215857066}
   replyRect: {fileID: 1882320614385786825}
+  storyLineSpacing: 50
 --- !u!1 &1882320614215857067
 GameObject:
   m_ObjectHideFlags: 0
@@ -965,7 +966,7 @@ MonoBehaviour:
   m_textAlignment: 65535
   m_characterSpacing: 0
   m_wordSpacing: 0
-  m_lineSpacing: 0
+  m_lineSpacing: 100
   m_lineSpacingMax: 0
   m_paragraphSpacing: 0
   m_charWidthMaxAdj: 0

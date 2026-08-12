@@ -925,8 +925,8 @@ public class WorkshopStoryNodeEditorPanel : Panel
         string[] labels =
         {
             "警觉", "生气", "不耐", "酷", "哭泣", "眩晕", "坏笑", "开心",
-            "催眠", "大笑", "喜爱", "无语", "震惊", "害羞", "难受", "调皮",
-            "骷髅", "困倦", "得意", "星星眼", "墨镜", "惊讶", "流汗", "担忧"
+            "催眠", "大笑", "喜爱", "无语", "震惊", "求饶", "难受", "调皮",
+            "骷髅", "得意", "困倦", "星星眼", "墨镜", "惊讶", "抓狂", "担忧"
         };
         for (int index = 0; index < StoryExpressionCatalog.Ids.Length; index++)
             CreateExpressionOption(panel, StoryExpressionCatalog.Ids[index], labels[index], index + 1);
