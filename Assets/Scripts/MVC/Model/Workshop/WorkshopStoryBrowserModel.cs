@@ -5,6 +5,9 @@ using System.Linq;
 using System.Security.Cryptography;
 using UnityEngine;
 using UnityEngine.UI;
+#if UNITY_EDITOR
+using UnityEditor;
+#endif
 
 public sealed class WorkshopStoryBrowserModel
 {
@@ -159,7 +162,7 @@ public sealed class WorkshopStoryBrowserModel
             path =>
             {
                 scene.backgroundResourcePath = path;
-                ResourceManager.instance?.Set(Path.ChangeExtension(path, null)?.Replace('\\', '/'), sprite);
+                CacheStorySprite(path, sprite);
             }, out error);
     }
 
@@ -336,14 +339,20 @@ public sealed class WorkshopStoryBrowserModel
             string storyId = MakeSafePathSegment(SelectedDocument.id, "story");
             string safeActorId = MakeSafePathSegment(actor.id, "actor");
             string kind = isIcon ? "icon" : "sprite";
-            string relativePath = Path.Combine("Stories", storyId, "Assets", "Characters", safeActorId, kind)
-                .Replace('\\', '/');
-            string absolutePath = Path.Combine(Application.persistentDataPath, "Mod", relativePath + ".png");
+            WorkshopStoryStorageKind storageKind = SelectedStory.storageKind;
+            string relativePath = Path.Combine("Characters", safeActorId, kind + ".png").Replace('\\', '/');
+            if (!repository.TryGetOwnedAssetPaths(storageKind, storyId, relativePath,
+                    out string absolutePath, out string resourcePath, out error))
+            {
+                return false;
+            }
+
             Directory.CreateDirectory(Path.GetDirectoryName(absolutePath));
             File.WriteAllBytes(absolutePath, bytes);
+            ImportSourceAssetIfNeeded(storageKind, absolutePath);
+            resourcePath = Path.ChangeExtension(resourcePath, null)?.Replace('\\', '/');
 
-            string resourcePath = "Mod/" + relativePath;
-            ResourceManager.instance?.Set("Mod/" + relativePath, sprite);
+            CacheStorySprite(resourcePath, sprite);
             RegisterStoryResource(resourcePath, isIcon ? "actorIcon" : "actorSprite");
             if (isIcon)
             {
@@ -476,12 +485,19 @@ public sealed class WorkshopStoryBrowserModel
         {
             string storyId = MakeSafePathSegment(SelectedDocument.id, "story");
             string safeResourceId = MakeSafePathSegment(resourceId, "resource");
-            string relativePath = Path.Combine("Stories", storyId, "Assets", category, safeResourceId, fileName)
-                .Replace('\\', '/');
-            string absolutePath = Path.Combine(Application.persistentDataPath, "Mod", relativePath);
+            WorkshopStoryStorageKind storageKind = SelectedStory.storageKind;
+            string relativePath = Path.Combine(category, safeResourceId, fileName).Replace('\\', '/');
+            if (!repository.TryGetOwnedAssetPaths(storageKind, storyId, relativePath,
+                    out string absolutePath, out string resourcePath, out error))
+            {
+                return false;
+            }
+
             Directory.CreateDirectory(Path.GetDirectoryName(absolutePath));
             File.WriteAllBytes(absolutePath, bytes);
-            string resourcePath = "Mod/" + relativePath;
+            if (storageKind == WorkshopStoryStorageKind.Source)
+                resourcePath = Path.ChangeExtension(resourcePath, null)?.Replace('\\', '/');
+            ImportSourceAssetIfNeeded(storageKind, absolutePath);
             RegisterStoryResource(resourcePath, resourceKind);
             apply?.Invoke(resourcePath);
             MarkUnsaved();
@@ -507,7 +523,9 @@ public sealed class WorkshopStoryBrowserModel
             resources.Add(resource);
         }
         resource.kind = kind;
-        resource.source = "story";
+        resource.source = SelectedStory.storageKind == WorkshopStoryStorageKind.Source
+            ? "builtin"
+            : "story";
         SelectedDocument.resourceDefinitions = resources.ToArray();
     }
 
@@ -533,24 +551,106 @@ public sealed class WorkshopStoryBrowserModel
             return;
 
         string normalized = path.Replace('\\', '/').TrimStart('/');
-        string ownedPrefix = "Mod/Stories/" + MakeSafePathSegment(SelectedDocument.id, "story") + "/Assets/";
+        string storyId = MakeSafePathSegment(SelectedDocument.id, "story");
+        WorkshopStoryStorageKind storageKind = SelectedStory.storageKind;
+        string ownedPrefix = repository.GetOwnedAssetResourcePrefix(storageKind, storyId);
         if (!normalized.StartsWith(ownedPrefix, StringComparison.OrdinalIgnoreCase))
             return;
 
         try
         {
-            string modRoot = Path.GetFullPath(Path.Combine(Application.persistentDataPath, "Mod"))
-                .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
-                + Path.DirectorySeparatorChar;
-            string absolutePath = Path.GetFullPath(Path.Combine(Application.persistentDataPath,
-                normalized.Replace('/', Path.DirectorySeparatorChar)));
-            if (absolutePath.StartsWith(modRoot, StringComparison.OrdinalIgnoreCase) && File.Exists(absolutePath))
-                File.Delete(absolutePath);
+            string relativePath = normalized.Substring(ownedPrefix.Length);
+            if (!repository.TryGetOwnedAssetPaths(storageKind, storyId, relativePath,
+                    out string absolutePath, out _, out _))
+            {
+                return;
+            }
+
+            string existingPath = ResolveOwnedAssetFile(absolutePath);
+            if (!string.IsNullOrEmpty(existingPath))
+                DeleteOwnedAssetFile(storageKind, existingPath);
         }
         catch (Exception exception)
         {
             Debug.LogWarning("清理旧剧本资源失败：" + exception.Message);
         }
+    }
+
+    private static void CacheStorySprite(string resourcePath, Sprite sprite)
+    {
+        if (ResourceManager.instance == null || sprite == null || string.IsNullOrWhiteSpace(resourcePath))
+            return;
+
+        string cachePath = Path.ChangeExtension(resourcePath, null)?.Replace('\\', '/');
+        if (cachePath.TryTrimStart("Builtin/", out string builtinPath))
+            cachePath = "Resources/" + builtinPath;
+        ResourceManager.instance.Set(cachePath, sprite);
+    }
+
+    private static void ImportSourceAssetIfNeeded(
+        WorkshopStoryStorageKind storageKind,
+        string absolutePath)
+    {
+#if UNITY_EDITOR
+        if (storageKind != WorkshopStoryStorageKind.Source || string.IsNullOrWhiteSpace(absolutePath))
+            return;
+
+        string normalizedAssetsPath = Path.GetFullPath(Application.dataPath)
+            .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
+            + Path.DirectorySeparatorChar;
+        string normalizedAbsolutePath = Path.GetFullPath(absolutePath);
+        if (!normalizedAbsolutePath.StartsWith(normalizedAssetsPath, StringComparison.OrdinalIgnoreCase))
+            return;
+
+        string assetPath = "Assets/" + normalizedAbsolutePath.Substring(normalizedAssetsPath.Length)
+            .Replace('\\', '/');
+        AssetDatabase.ImportAsset(assetPath, ImportAssetOptions.ForceSynchronousImport);
+        if (string.Equals(Path.GetExtension(assetPath), ".png", StringComparison.OrdinalIgnoreCase)
+            && AssetImporter.GetAtPath(assetPath) is TextureImporter textureImporter)
+        {
+            textureImporter.textureType = TextureImporterType.Sprite;
+            textureImporter.spriteImportMode = SpriteImportMode.Single;
+            textureImporter.alphaIsTransparency = true;
+            textureImporter.mipmapEnabled = false;
+            textureImporter.SaveAndReimport();
+        }
+#endif
+    }
+
+    private static string ResolveOwnedAssetFile(string path)
+    {
+        if (File.Exists(path))
+            return path;
+
+        foreach (string extension in new[] { ".png", ".mp3", ".wav", ".ogg" })
+        {
+            if (File.Exists(path + extension))
+                return path + extension;
+        }
+        return string.Empty;
+    }
+
+    private static void DeleteOwnedAssetFile(
+        WorkshopStoryStorageKind storageKind,
+        string absolutePath)
+    {
+#if UNITY_EDITOR
+        if (storageKind == WorkshopStoryStorageKind.Source)
+        {
+            string normalizedAssetsPath = Path.GetFullPath(Application.dataPath)
+                .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
+                + Path.DirectorySeparatorChar;
+            string normalizedAbsolutePath = Path.GetFullPath(absolutePath);
+            if (normalizedAbsolutePath.StartsWith(normalizedAssetsPath, StringComparison.OrdinalIgnoreCase))
+            {
+                string assetPath = "Assets/" + normalizedAbsolutePath.Substring(normalizedAssetsPath.Length)
+                    .Replace('\\', '/');
+                AssetDatabase.DeleteAsset(assetPath);
+                return;
+            }
+        }
+#endif
+        File.Delete(absolutePath);
     }
 
     public bool CreateNode(out string error)
@@ -1125,7 +1225,8 @@ public sealed class WorkshopStoryBrowserModel
             return false;
         }
 
-        if (!repository.TryCopyDraft(SelectedDocument, out WorkshopStorySummary summary, out error))
+        if (!repository.TryCopyDraft(SelectedStory.path, SelectedDocument,
+                out WorkshopStorySummary summary, out error))
             return false;
 
         SelectedStory = summary;
@@ -1163,6 +1264,12 @@ public sealed class WorkshopStoryBrowserModel
         if (SelectedStory == null || SelectedDocument == null)
         {
             message = "请先选择要保存的剧本。";
+            return false;
+        }
+
+        if (SelectedStory.storageKind != WorkshopStoryStorageKind.Mod)
+        {
+            message = "源码母稿只保存编辑进度，请使用“导出为”生成源码任务。";
             return false;
         }
 
@@ -1218,10 +1325,10 @@ public sealed class WorkshopStoryBrowserModel
             return false;
         if (HasUnsavedChanges)
         {
-            error = "当前剧本尚未保存，请先保存到 Mod 后再导出。";
+            error = "当前剧本尚未保存，请先保存编辑进度后再导出。";
             return false;
         }
-        if (SelectedDocument.isDraft)
+        if (SelectedStory.storageKind == WorkshopStoryStorageKind.Mod && SelectedDocument.isDraft)
         {
             error = "当前剧本尚未载入 Mod，请先解决运行校验问题并保存到 Mod 后再导出。";
             return false;
@@ -1237,13 +1344,14 @@ public sealed class WorkshopStoryBrowserModel
             return false;
         }
 
+        bool deletedModStory = SelectedStory.storageKind == WorkshopStoryStorageKind.Mod;
         int deletedMissionId = SelectedDocument?.mission?.id ?? SelectedStory.missionId;
         if (!repository.TryDelete(SelectedStory.path, out error))
             return false;
 
-        if (Database.instance != null)
+        if (deletedModStory && Database.instance != null)
             Database.instance.ReloadStoryMod();
-        if (deletedMissionId < 0 && Player.instance != null)
+        if (deletedModStory && deletedMissionId < 0 && Player.instance != null)
         {
             Player.instance.gameData?.missionStorage?.RemoveAll(mission => mission?.id == deletedMissionId);
             if (Player.instance.currentMissionId == deletedMissionId)

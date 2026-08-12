@@ -77,7 +77,7 @@ public sealed class WorkshopStorySceneSection
 
 /// <summary>
 /// 剧情点可视化编辑器的数据会话。
-/// 编辑器始终操作剧本文件的深拷贝，只有显式保存才会写回 Mod/Stories。
+/// 编辑器始终操作剧本文件的深拷贝，只有显式保存才会写回当前源码母稿或 Mod 剧本。
 /// </summary>
 public sealed class WorkshopStoryNodeEditorModel
 {

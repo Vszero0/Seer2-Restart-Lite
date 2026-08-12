@@ -19,8 +19,12 @@ public class WorkshopAllController : Module
     public override void Init() {
         if (SaveSystem.IsModExists())
             allView.CheckCurrentMod();
-        else
+        else {
             allView.NeverCreateMod();
+#if UNITY_EDITOR
+            allView.SetSourceStoryEntryActive(true);
+#endif
+        }
     }
 
     public void CreateMod() {
@@ -76,10 +80,12 @@ public class WorkshopAllController : Module
     }
 
     public void OpenStoryPanel() {
+#if !UNITY_EDITOR
         if (!SaveSystem.IsModExists()) {
             Hintbox.OpenHintboxWithContent("请先创建Mod，再编辑自制剧情", 16);
             return;
         }
+#endif
 
         Panel.OpenPanel<WorkshopStoryBrowserPanel>();
     }

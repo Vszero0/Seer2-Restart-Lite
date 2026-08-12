@@ -126,6 +126,7 @@ public class WorkshopStoryBrowserPanel : Panel
     private Text sourceRewardModeLabel;
     private Text sourceRewardPageText;
     private Text storyStatusText;
+    private Text storySaveButtonText;
     private Text storyOverviewText;
     private Text storyStructureText;
     private Text storyResourceText;
@@ -242,7 +243,8 @@ public class WorkshopStoryBrowserPanel : Panel
         RectTransform storySection = CreateSection("剧本", new Vector2(18f, -76f), new Vector2(236f, 402f));
         RectTransform infoSection = CreateSection("剧本信息", new Vector2(270f, -76f), new Vector2(632f, 402f));
 
-        CreateActionButton(storySection, "新建", new Vector2(32f, -50f), new Vector2(80f, 28f), CreateStory);
+        CreateActionButton(storySection, controller.CanExportSource ? "新建源码" : "新建",
+            new Vector2(32f, -50f), new Vector2(80f, 28f), CreateStory);
         CreateActionButton(storySection, "删除", new Vector2(124f, -50f), new Vector2(80f, 28f), DeleteStory);
         CreateActionButton(storySection, "复制为新剧本", new Vector2(32f, -84f), new Vector2(172f, 28f), CopyStory);
         storyContent = CreateScrollContent(storySection, new Vector2(14f, 14f), new Vector2(-14f, -120f));
@@ -274,8 +276,9 @@ public class WorkshopStoryBrowserPanel : Panel
 
         storyStatusText = CreateText("Story Status", infoSection, string.Empty, 13, TextAnchor.UpperLeft, HintColor,
             new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(358f, -50f), new Vector2(170f, 40f));
-        CreateActionButton(infoSection, "保存到 Mod", new Vector2(516f, -56f),
+        IButton storySaveButton = CreateActionButton(infoSection, "保存到 Mod", new Vector2(516f, -56f),
             new Vector2(98f, 28f), SaveStory);
+        storySaveButtonText = storySaveButton?.GetComponentInChildren<Text>(true);
         IButton manageButton = CreateActionButton(infoSection, "管理剧情点", new Vector2(358f, -100f),
             new Vector2(256f, 62f), OpenNodeManager);
         EmphasizePrimaryAction(manageButton);
@@ -1268,8 +1271,9 @@ public class WorkshopStoryBrowserPanel : Panel
         }
 
         string title = string.IsNullOrWhiteSpace(story.title) ? story.fileName : story.title;
+        string source = IsSourceStory(story) ? "源码母稿" : "Mod 剧本";
         OpenDeleteConfirmation(
-            "确定删除剧本《" + title + "》吗？\n剧本及其中的全部剧情点将被删除，此操作无法撤销。",
+            "确定删除" + source + "《" + title + "》吗？\n剧本及其中的全部剧情点将被删除，此操作无法撤销。",
             ConfirmDeleteStory);
     }
 
@@ -1282,11 +1286,26 @@ public class WorkshopStoryBrowserPanel : Panel
 
     private void SaveStory()
     {
-        bool success = controller.SaveSelectedForRuntime(out bool runtimeReady, out string message);
+        bool sourceStory = IsSourceStory(controller.SelectedStory);
+        bool runtimeReady = false;
+        bool success;
+        string message;
+        if (sourceStory)
+        {
+            success = controller.SaveSelected(out message);
+            if (success)
+                message = "源码母稿已保存。";
+        }
+        else
+        {
+            success = controller.SaveSelectedForRuntime(out runtimeReady, out message);
+        }
+
         if (!string.IsNullOrEmpty(message))
         {
-            Hintbox hintbox = Hintbox.OpenHintboxWithContent(message, runtimeReady ? 16 : 14);
-            if (!runtimeReady || !success)
+            Hintbox hintbox = Hintbox.OpenHintboxWithContent(message,
+                (sourceStory && success) || runtimeReady ? 16 : 14);
+            if ((!sourceStory && !runtimeReady) || !success)
                 hintbox.SetSize(720, 360);
         }
         RefreshView();
@@ -2204,12 +2223,23 @@ public class WorkshopStoryBrowserPanel : Panel
         }
         if (controller.HasUnsavedChanges)
         {
-            bool saved = controller.SaveSelectedForRuntime(out bool runtimeReady, out string saveMessage);
-            if (!saved || !runtimeReady)
+            if (IsSourceStory(controller.SelectedStory))
             {
-                Hintbox hintbox = Hintbox.OpenHintboxWithContent(saveMessage, 14);
-                hintbox.SetSize(720, 360);
-                return;
+                if (!controller.SaveSelected(out string saveError))
+                {
+                    Hintbox.OpenHintboxWithContent(saveError, 14).SetSize(720, 360);
+                    return;
+                }
+            }
+            else
+            {
+                bool saved = controller.SaveSelectedForRuntime(out bool runtimeReady, out string saveMessage);
+                if (!saved || !runtimeReady)
+                {
+                    Hintbox hintbox = Hintbox.OpenHintboxWithContent(saveMessage, 14);
+                    hintbox.SetSize(720, 360);
+                    return;
+                }
             }
         }
 
@@ -2418,13 +2448,16 @@ public class WorkshopStoryBrowserPanel : Panel
         int index = 0;
         foreach (WorkshopStorySummary story in controller.Stories)
         {
-            string title = story.isValid ? story.title : "[格式错误] " + story.fileName;
+            string source = IsSourceStory(story) ? "【源码】" : "【Mod】";
+            string title = source + (story.isValid ? story.title : "[格式错误] " + story.fileName);
             string path = story.path;
             CreateListButton(storyContent, title, story == controller.SelectedStory, index++, () => SelectStory(path));
         }
 
         if (index == 0)
-            CreateHint(storyContent, "点击“新建”创建第一个剧本。");
+            CreateHint(storyContent, controller.CanExportSource
+                ? "点击“新建源码”创建第一个源码母稿。"
+                : "点击“新建”创建第一个剧本。");
         else
             storyContent.sizeDelta = new Vector2(0f, 12f + index * 42f);
     }
@@ -2433,6 +2466,10 @@ public class WorkshopStoryBrowserPanel : Panel
     {
         if (storyStatusText == null)
             return;
+
+        bool sourceStory = IsSourceStory(controller.SelectedStory);
+        if (storySaveButtonText != null)
+            storySaveButtonText.text = sourceStory ? "保存草稿" : "保存到 Mod";
 
         StoryDocument document = controller.SelectedDocument;
         if (document == null)
@@ -2457,10 +2494,18 @@ public class WorkshopStoryBrowserPanel : Panel
         Color saveStateColor = hasUnsavedChanges ? WarningColor : SavedColor;
         SetInputFieldValue(storyTitleInput, document.title, true);
         SetInputFieldValue(storySummaryInput, document.summary, true);
-        storyStatusText.text = "运行状态：" + (document.isDraft ? "暂未载入 Mod" : "已载入 Mod")
+        string storageState = sourceStory
+            ? "源码母稿 · 不载入 Mod"
+            : "当前 Mod · " + (document.isDraft ? "暂未载入" : "已载入");
+        storyStatusText.text = storageState
             + "\n编辑状态：<color=#" + ColorUtility.ToHtmlStringRGB(saveStateColor) + ">" + saveState + "</color>";
         storyStatusText.color = HintColor;
         RefreshStoryOverview(document);
+    }
+
+    private static bool IsSourceStory(WorkshopStorySummary story)
+    {
+        return story != null && story.storageKind == WorkshopStoryStorageKind.Source;
     }
 
     private void RefreshStoryOverview(StoryDocument document)
