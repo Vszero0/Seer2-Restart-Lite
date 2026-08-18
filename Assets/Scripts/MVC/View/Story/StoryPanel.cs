@@ -61,6 +61,15 @@ public class StoryPanel : Panel
     private Image dialogSceneImage;
     private Image dialogTransitionSceneImage;
     private RectTransform actorLayer;
+    private Material backgroundGaussianMaterial;
+    private Material primaryBackgroundMaterial;
+    private Material transitionBackgroundMaterial;
+    private RenderTexture primaryBackgroundBlurTexture;
+    private RenderTexture transitionBackgroundBlurTexture;
+    private Material sceneOriginalMaterial;
+    private Material transitionSceneOriginalMaterial;
+    private Material dialogSceneOriginalMaterial;
+    private Material dialogTransitionSceneOriginalMaterial;
     private GameObject exitButton;
     private GameObject previewIndicator;
     private TextMeshProUGUI previewIndicatorText;
@@ -228,6 +237,7 @@ public class StoryPanel : Panel
             StopCoroutine(sceneTransitionCoroutine);
         sceneTransitionCoroutine = null;
         ResetTransitionImages();
+        RestoreDepthFocusMaterials();
         RestoreMusicContext();
         ClearDialogHandlers();
         actorStage?.Clear();
@@ -268,6 +278,7 @@ public class StoryPanel : Panel
         transitionSceneImage.gameObject.SetActive(false);
         dialogSceneImage = DialogManager.instance?.GetStoryDialogBackgroundImage();
         dialogTransitionSceneImage = DialogManager.instance?.GetStoryTransitionBackgroundImage();
+        ConfigureDepthFocusMaterials();
         actorLayer = DialogManager.instance != null
             ? DialogManager.instance.GetStoryActorLayer()
             : CreateRect("Story Actors", transform, Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero, Vector2.zero);
@@ -275,10 +286,214 @@ public class StoryPanel : Panel
             actorLayer,
             this,
             RefreshOverlayLayering,
-            path => story?.GetResourceSource(path) ?? "auto");
+            path => story?.GetResourceSource(path) ?? "auto",
+            true);
         CreateExitButton();
         if (isPreviewMode)
             CreatePreviewIndicator();
+    }
+
+    private void ConfigureDepthFocusMaterials()
+    {
+        if (backgroundGaussianMaterial != null)
+            return;
+
+        StoryPresentationSettings settings = StoryPresentationSettings.Load();
+        if (!settings.DepthFocusEnabled || settings.BackgroundBlur <= 0f)
+            return;
+
+        Shader gaussianShader = Resources.Load<Shader>("Story/StoryGaussianBlur");
+        Shader displayShader = Resources.Load<Shader>("Story/StoryBlurredBackground");
+        if (gaussianShader == null || displayShader == null)
+            return;
+
+        backgroundGaussianMaterial = CreateRuntimeMaterial(gaussianShader);
+        primaryBackgroundMaterial = CreateRuntimeMaterial(displayShader);
+        transitionBackgroundMaterial = CreateRuntimeMaterial(displayShader);
+        sceneOriginalMaterial = sceneImage != null ? sceneImage.material : null;
+        transitionSceneOriginalMaterial = transitionSceneImage != null ? transitionSceneImage.material : null;
+        dialogSceneOriginalMaterial = dialogSceneImage != null ? dialogSceneImage.material : null;
+        dialogTransitionSceneOriginalMaterial = dialogTransitionSceneImage != null
+            ? dialogTransitionSceneImage.material
+            : null;
+    }
+
+    private void RestoreDepthFocusMaterials()
+    {
+        if (sceneImage != null && sceneImage.material == primaryBackgroundMaterial)
+            sceneImage.material = sceneOriginalMaterial;
+        if (transitionSceneImage != null && transitionSceneImage.material == transitionBackgroundMaterial)
+            transitionSceneImage.material = transitionSceneOriginalMaterial;
+        if (dialogSceneImage != null && dialogSceneImage.material == primaryBackgroundMaterial)
+            dialogSceneImage.material = dialogSceneOriginalMaterial;
+        if (dialogTransitionSceneImage != null
+            && dialogTransitionSceneImage.material == transitionBackgroundMaterial)
+        {
+            dialogTransitionSceneImage.material = dialogTransitionSceneOriginalMaterial;
+        }
+
+        ReleaseBackgroundBlurTexture(false);
+        ReleaseBackgroundBlurTexture(true);
+        DestroyRuntimeMaterial(backgroundGaussianMaterial);
+        DestroyRuntimeMaterial(primaryBackgroundMaterial);
+        DestroyRuntimeMaterial(transitionBackgroundMaterial);
+        backgroundGaussianMaterial = null;
+        primaryBackgroundMaterial = null;
+        transitionBackgroundMaterial = null;
+        sceneOriginalMaterial = null;
+        transitionSceneOriginalMaterial = null;
+        dialogSceneOriginalMaterial = null;
+        dialogTransitionSceneOriginalMaterial = null;
+    }
+
+    private void RefreshBackgroundDepthFocus()
+    {
+        StoryPresentationSettings settings = StoryPresentationSettings.Load();
+        if (backgroundGaussianMaterial == null && settings.DepthFocusEnabled && settings.BackgroundBlur > 0f)
+            ConfigureDepthFocusMaterials();
+    }
+
+    private void ApplyBackgroundBlur(Sprite sprite, bool transition)
+    {
+        StoryPresentationSettings settings = StoryPresentationSettings.Load();
+        bool enabled = settings.DepthFocusEnabled
+            && settings.BackgroundBlur > 0f
+            && settings.BackgroundBlurStrength > 0f
+            && sprite != null;
+        if (enabled && backgroundGaussianMaterial == null)
+            ConfigureDepthFocusMaterials();
+        enabled &= backgroundGaussianMaterial != null;
+
+        Image firstImage = transition ? transitionSceneImage : sceneImage;
+        Image secondImage = transition ? dialogTransitionSceneImage : dialogSceneImage;
+        Material displayMaterial = transition ? transitionBackgroundMaterial : primaryBackgroundMaterial;
+        Material originalFirst = transition ? transitionSceneOriginalMaterial : sceneOriginalMaterial;
+        Material originalSecond = transition ? dialogTransitionSceneOriginalMaterial : dialogSceneOriginalMaterial;
+        if (!enabled)
+        {
+            ReleaseBackgroundBlurTexture(transition);
+            if (firstImage != null)
+                firstImage.material = originalFirst;
+            if (secondImage != null)
+                secondImage.material = originalSecond;
+            return;
+        }
+
+        RenderTexture blurredTexture = CreateBlurredBackground(sprite, settings);
+        if (blurredTexture == null)
+        {
+            ReleaseBackgroundBlurTexture(transition);
+            if (firstImage != null)
+                firstImage.material = originalFirst;
+            if (secondImage != null)
+                secondImage.material = originalSecond;
+            return;
+        }
+
+        ReleaseBackgroundBlurTexture(transition);
+        if (transition)
+            transitionBackgroundBlurTexture = blurredTexture;
+        else
+            primaryBackgroundBlurTexture = blurredTexture;
+
+        Rect rect = sprite.rect;
+        Texture texture = sprite.texture;
+        Vector4 uvRect = new Vector4(
+            rect.x / texture.width,
+            rect.y / texture.height,
+            rect.width / texture.width,
+            rect.height / texture.height);
+        displayMaterial.SetTexture("_BlurTex", blurredTexture);
+        displayMaterial.SetVector("_SpriteUvRect", uvRect);
+        displayMaterial.SetFloat("_BlurStrength", settings.BackgroundBlurStrength);
+        if (firstImage != null)
+            firstImage.material = displayMaterial;
+        if (secondImage != null)
+            secondImage.material = displayMaterial;
+    }
+
+    private RenderTexture CreateBlurredBackground(Sprite sprite, StoryPresentationSettings settings)
+    {
+        int width = Mathf.Max(64, Mathf.RoundToInt(Screen.width * settings.BackgroundBlurRenderScale));
+        int height = Mathf.Max(64, Mathf.RoundToInt(Screen.height * settings.BackgroundBlurRenderScale));
+        float sizeLimitScale = Mathf.Min(1f, 2048f / Mathf.Max(width, height));
+        width = Mathf.Max(64, Mathf.RoundToInt(width * sizeLimitScale));
+        height = Mathf.Max(64, Mathf.RoundToInt(height * sizeLimitScale));
+
+        RenderTexture source = RenderTexture.GetTemporary(width, height, 0, RenderTextureFormat.ARGB32);
+        RenderTexture horizontal = RenderTexture.GetTemporary(width, height, 0, RenderTextureFormat.ARGB32);
+        source.filterMode = FilterMode.Bilinear;
+        source.wrapMode = TextureWrapMode.Clamp;
+        horizontal.filterMode = FilterMode.Bilinear;
+        horizontal.wrapMode = TextureWrapMode.Clamp;
+        RenderTexture result = new RenderTexture(width, height, 0, RenderTextureFormat.ARGB32)
+        {
+            name = "Story Blurred Background",
+            filterMode = FilterMode.Bilinear,
+            wrapMode = TextureWrapMode.Clamp,
+            useMipMap = false,
+            autoGenerateMips = false,
+            hideFlags = HideFlags.DontSave,
+        };
+        result.Create();
+
+        try
+        {
+            Rect rect = sprite.rect;
+            Texture texture = sprite.texture;
+            Vector4 uvRect = new Vector4(
+                rect.x / texture.width,
+                rect.y / texture.height,
+                rect.width / texture.width,
+                rect.height / texture.height);
+            backgroundGaussianMaterial.SetVector("_SourceUvRect", uvRect);
+            Graphics.Blit(texture, source, backgroundGaussianMaterial, 1);
+            float radius = settings.BackgroundBlur;
+            backgroundGaussianMaterial.SetVector("_BlurDirection", new Vector4(radius, 0f, 0f, 0f));
+            Graphics.Blit(source, horizontal, backgroundGaussianMaterial);
+            backgroundGaussianMaterial.SetVector("_BlurDirection", new Vector4(0f, radius, 0f, 0f));
+            Graphics.Blit(horizontal, result, backgroundGaussianMaterial);
+            return result;
+        }
+        catch
+        {
+            result.Release();
+            Destroy(result);
+            return null;
+        }
+        finally
+        {
+            RenderTexture.ReleaseTemporary(source);
+            RenderTexture.ReleaseTemporary(horizontal);
+        }
+    }
+
+    private void ReleaseBackgroundBlurTexture(bool transition)
+    {
+        RenderTexture texture = transition ? transitionBackgroundBlurTexture : primaryBackgroundBlurTexture;
+        if (texture == null)
+            return;
+
+        Material material = transition ? transitionBackgroundMaterial : primaryBackgroundMaterial;
+        if (material != null && material.GetTexture("_BlurTex") == texture)
+            material.SetTexture("_BlurTex", null);
+        texture.Release();
+        Destroy(texture);
+        if (transition)
+            transitionBackgroundBlurTexture = null;
+        else
+            primaryBackgroundBlurTexture = null;
+    }
+
+    private static Material CreateRuntimeMaterial(Shader shader)
+    {
+        return shader == null ? null : new Material(shader) { hideFlags = HideFlags.DontSave };
+    }
+
+    private static void DestroyRuntimeMaterial(Material material)
+    {
+        if (material != null)
+            UnityEngine.Object.Destroy(material);
     }
 
     private void LoadStory(string storyId, int fallbackMapId)
@@ -752,6 +967,7 @@ public class StoryPanel : Panel
 
     private void SetScene(string path, int mapId = 0)
     {
+        RefreshBackgroundDepthFocus();
         int requestVersion = ++sceneVisualRequestVersion;
         Sprite sprite = StorySpriteResolver.Load(path, story?.GetResourceSource(path));
         if (sprite != null)
@@ -784,6 +1000,7 @@ public class StoryPanel : Panel
 
     private bool BeginSceneVisualChange(StoryCommand command, StoryTransitionDocument transition)
     {
+        RefreshBackgroundDepthFocus();
         string path = StoryCommandArguments.GetValue(command.args, "bg", command.args);
         int mapId = command.mapId;
         int requestVersion = ++sceneVisualRequestVersion;
@@ -941,6 +1158,7 @@ public class StoryPanel : Panel
 
     private void PrepareTransitionImage(Sprite sprite)
     {
+        ApplyBackgroundBlur(sprite, true);
         PrepareTransitionImage(transitionSceneImage, sprite);
         PrepareTransitionImage(dialogTransitionSceneImage, sprite);
     }
@@ -954,6 +1172,7 @@ public class StoryPanel : Panel
         SetTransitionScale(Vector3.one);
         ResetTransitionImage(transitionSceneImage);
         ResetTransitionImage(dialogTransitionSceneImage);
+        ReleaseBackgroundBlurTexture(true);
     }
 
     private static void PrepareTransitionImage(Image image, Sprite sprite)
@@ -1119,6 +1338,7 @@ public class StoryPanel : Panel
         sceneImage.sprite = sprite;
         sceneImage.color = sprite == null ? new Color32(8, 11, 18, 255) : Color.white;
         DialogManager.instance?.SetStoryDialogBackground(sceneImage.sprite, sceneImage.color);
+        ApplyBackgroundBlur(sprite, false);
     }
 
     private void RegisterActor(StoryCommand command)
@@ -1174,6 +1394,8 @@ public class StoryPanel : Panel
 
         if (!string.IsNullOrWhiteSpace(command.text))
             SetDialogue(command.actorInfo, command.speaker, command.text, command.expression);
+
+        actorStage?.SetActorsNeutral();
 
         waitingForChoice = true;
         DialogManager.instance.SetStoryDialogBackgroundClickHandler(Advance);

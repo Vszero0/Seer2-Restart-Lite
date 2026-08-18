@@ -173,6 +173,14 @@ public class StoryTextStyleDocument
 }
 
 [Serializable]
+public class StorySourceExportBindingDocument
+{
+    public int missionId;
+    public int missionType;
+    public string storyResourcePath;
+}
+
+[Serializable]
 public class StoryDocument
 {
     public int schemaVersion = 10;
@@ -184,6 +192,7 @@ public class StoryDocument
     public StoryLayoutDocument layout;
     public StoryTextStyleDocument style;
     public StoryMissionDocument mission;
+    public StorySourceExportBindingDocument sourceExport;
     public bool replayable = true;
     public StoryResourceDefinition[] resourceDefinitions;
     public StorySceneResourceDocument[] sceneResources;

@@ -42,6 +42,9 @@ public sealed class WorkshopStorySourceExportResult
     public int missionId;
     public string storyResourcePath;
     public bool updatedExisting;
+    public bool migratedExisting;
+    public int previousMissionId;
+    public StorySourceExportBindingDocument binding;
 }
 
 /// <summary>
@@ -94,8 +97,30 @@ public sealed class WorkshopStorySourceExporter
         if (!TryReadVersionCount(versionPath, countElement, out int currentCount, out string versionText, out error))
             return false;
 
-        bool updatedExisting = TryFindExistingMission(
-            missionDirectory, storyResourcePath, (int)request.missionType, out int missionId);
+        bool updatedExisting = false;
+        int missionId = 0;
+        int previousMissionId = source.sourceExport?.missionId ?? 0;
+        if (source.sourceExport != null
+            && previousMissionId > 0
+            && source.sourceExport.missionType == (int)request.missionType
+            && string.Equals(source.sourceExport.storyResourcePath, storyResourcePath,
+                StringComparison.OrdinalIgnoreCase))
+        {
+            updatedExisting = TryFindMissionById(missionDirectory, previousMissionId,
+                storyResourcePath, (int)request.missionType, out missionId);
+        }
+        if (!updatedExisting)
+        {
+            updatedExisting = TryFindExistingMission(
+                missionDirectory, storyResourcePath, (int)request.missionType, out missionId);
+        }
+        bool migratedExisting = source.sourceExport != null
+            && source.sourceExport.missionId > 0
+            && (!string.Equals(source.sourceExport.storyResourcePath, storyResourcePath,
+                StringComparison.OrdinalIgnoreCase)
+                || source.sourceExport.missionType != (int)request.missionType);
+        int oldMissionId = source.sourceExport?.missionId ?? 0;
+        string oldStoryResourcePath = source.sourceExport?.storyResourcePath;
         if (!updatedExisting)
         {
             missionId = missionBase + currentCount + 1;
@@ -108,6 +133,13 @@ public sealed class WorkshopStorySourceExporter
         }
         if (!TryRemapMissionReferences(document, source.mission?.id ?? 0, missionId, out error))
             return false;
+
+        document.sourceExport = new StorySourceExportBindingDocument
+        {
+            missionId = missionId,
+            missionType = (int)request.missionType,
+            storyResourcePath = storyResourcePath,
+        };
 
         MissionInfo missionInfo = BuildMissionInfo(document, request, missionId, storyResourcePath);
         string missionXml = SerializeMission(missionInfo);
@@ -137,6 +169,25 @@ public sealed class WorkshopStorySourceExporter
             if (!updatedExisting)
                 WriteTextWithBackup(versionPath, updatedVersionText, backups, newlyCreatedFiles);
 
+            if (migratedExisting && oldMissionId > 0 && oldMissionId != missionId)
+            {
+                string oldMissionPath = Path.Combine(missionDirectory, oldMissionId + ".xml");
+                CaptureBackup(oldMissionPath, backups, newlyCreatedFiles);
+                if (File.Exists(oldMissionPath))
+                    File.Delete(oldMissionPath);
+            }
+            if (migratedExisting && !string.IsNullOrWhiteSpace(oldStoryResourcePath)
+                && !string.Equals(oldStoryResourcePath, storyResourcePath,
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                string oldStoryPath = GetGeneratedStoryPath(oldStoryResourcePath);
+                if (!string.IsNullOrWhiteSpace(oldStoryPath) && File.Exists(oldStoryPath))
+                {
+                    CaptureBackup(oldStoryPath, backups, newlyCreatedFiles);
+                    File.Delete(oldStoryPath);
+                }
+            }
+
             UnityEditor.AssetDatabase.Refresh();
             ConfigureImportedSprites(assetCopies);
             UnityEditor.AssetDatabase.Refresh();
@@ -154,6 +205,9 @@ public sealed class WorkshopStorySourceExporter
             missionId = missionId,
             storyResourcePath = storyResourcePath,
             updatedExisting = updatedExisting,
+            migratedExisting = migratedExisting && oldMissionId != missionId,
+            previousMissionId = oldMissionId,
+            binding = document.sourceExport,
         };
         return true;
 #endif
@@ -597,6 +651,59 @@ public sealed class WorkshopStorySourceExporter
             }
         }
         return false;
+    }
+
+    private static bool TryFindMissionById(
+        string missionDirectory,
+        int missionId,
+        string storyResourcePath,
+        int typeId,
+        out int foundMissionId)
+    {
+        foundMissionId = 0;
+        if (missionId <= 0 || !Directory.Exists(missionDirectory))
+            return false;
+
+        string path = Path.Combine(missionDirectory, missionId + ".xml");
+        if (!File.Exists(path))
+            return false;
+        try
+        {
+            XmlDocument xml = new XmlDocument();
+            xml.Load(path);
+            XmlElement root = xml.DocumentElement;
+            if (root == null || !int.TryParse(root.GetAttribute("id"), out int existingId)
+                || existingId != missionId
+                || !int.TryParse(root.GetAttribute("type"), out int existingType)
+                || existingType != typeId)
+                return false;
+            XmlNode storyNode = root.SelectSingleNode("checkpoint/branch/story");
+            if (!string.Equals(storyNode?.InnerText?.Trim(), storyResourcePath,
+                    StringComparison.OrdinalIgnoreCase))
+                return false;
+            foundMissionId = existingId;
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private static string GetGeneratedStoryPath(string storyResourcePath)
+    {
+        string normalized = (storyResourcePath ?? string.Empty).Replace('\\', '/').Trim('/');
+        string[] segments = normalized.Split('/');
+        if (segments.Length != 2
+            || !string.Equals(segments[0], "Side", StringComparison.OrdinalIgnoreCase)
+                && !string.Equals(segments[0], "Daily", StringComparison.OrdinalIgnoreCase)
+                && !string.Equals(segments[0], "Event", StringComparison.OrdinalIgnoreCase))
+            return string.Empty;
+        string storyId = MakeSafePathSegment(segments[1], string.Empty);
+        if (string.IsNullOrWhiteSpace(storyId))
+            return string.Empty;
+        return Path.Combine(Application.dataPath, "Resources", "Data", "Stories",
+            segments[0], storyId + ".json");
     }
 
     private static bool TryReadVersionCount(

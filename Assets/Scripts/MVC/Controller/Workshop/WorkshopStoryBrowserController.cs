@@ -11,6 +11,8 @@ public sealed class WorkshopStoryBrowserController
     public StoryNodeDocument SelectedNode => model.SelectedNode;
     public bool HasUnsavedChanges => model.HasUnsavedChanges;
     public bool CanExportSource => model.CanExportSource;
+    public bool CanCreateSource => model.CanCreateSource;
+    public bool CanCreateMod => model.CanCreateMod;
 
     public WorkshopStoryBrowserController(WorkshopStoryBrowserModel model)
     {
@@ -212,6 +214,11 @@ public sealed class WorkshopStoryBrowserController
         return model.CreateDraft(out error);
     }
 
+    public bool CreateDraft(WorkshopStoryStorageKind storageKind, out string error)
+    {
+        return model.CreateDraft(storageKind, out error);
+    }
+
     public bool CopySelectedStory(out string error)
     {
         return model.CopySelectedStory(out error);
@@ -222,9 +229,19 @@ public sealed class WorkshopStoryBrowserController
         return model.SaveSelected(out error);
     }
 
+    public bool SaveSelectedDraft(out string error)
+    {
+        return model.SaveSelectedDraft(out error);
+    }
+
     public bool SaveSelectedForRuntime(out bool runtimeReady, out string message)
     {
         return model.SaveSelectedForRuntime(out runtimeReady, out message);
+    }
+
+    public bool PublishSelectedMod(out bool runtimeReady, out string message)
+    {
+        return model.PublishSelectedMod(out runtimeReady, out message);
     }
 
     public IReadOnlyList<WorkshopStorySourceRewardOption> GetSourceRewardOptions(string filter)

@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using TMPro;
 using UnityEngine;
+using UnityEngine.EventSystems;
 using UnityEngine.Events;
 using UnityEngine.UI;
 
@@ -74,6 +75,16 @@ public class WorkshopStoryNodeEditorPanel : Panel
     private TextMeshProUGUI sourceDialogueText;
     private IInputField dialogueInput;
     private InputField nativeDialogueInput;
+    private GameObject inlineExpressionButton;
+    private int inlineExpressionInsertionIndex;
+    private int inlineExpressionSelectionEnd;
+    private int lastDialogueCaretPosition;
+    private int lastDialogueSelectionAnchor;
+    private int lastDialogueSelectionFocus;
+    private bool hasDialogueSelectionSnapshot;
+    private bool dialogueInputWasFocusedLastFrame;
+    private bool dialogueSelectionWasAutoSelected;
+    private PointerEventData pendingDialoguePointerDown;
     private StoryCommandDocument activeDialogueCommand;
     private Color sourceDialogueVisibleColor;
     private bool sourceDialogueIsHidden;
@@ -148,6 +159,35 @@ public class WorkshopStoryNodeEditorPanel : Panel
         actorStage?.Clear();
         base.ClosePanel();
         onClosed?.Invoke();
+    }
+
+    private void Update()
+    {
+        bool wasFocused = nativeDialogueInput != null && nativeDialogueInput.isFocused;
+        CaptureDialogueSelection();
+        if (wasFocused)
+            dialogueInputWasFocusedLastFrame = true;
+        else
+            dialogueInputWasFocusedLastFrame = false;
+    }
+
+    private void LateUpdate()
+    {
+        // UI pointer events update InputField selection after Update but before LateUpdate.
+        // Capturing here keeps the caret that was clicked immediately before the picker opens.
+        CaptureDialogueSelection();
+    }
+
+    private void CaptureDialogueSelection()
+    {
+        if (nativeDialogueInput == null || !nativeDialogueInput.isFocused)
+            return;
+
+        int textLength = nativeDialogueInput.text?.Length ?? 0;
+        lastDialogueCaretPosition = Mathf.Clamp(nativeDialogueInput.caretPosition, 0, textLength);
+        lastDialogueSelectionAnchor = Mathf.Clamp(nativeDialogueInput.selectionAnchorPosition, 0, textLength);
+        lastDialogueSelectionFocus = Mathf.Clamp(nativeDialogueInput.selectionFocusPosition, 0, textLength);
+        hasDialogueSelectionSnapshot = true;
     }
 
     public void OpenTarget(string storyPath, string nodeId)
@@ -844,10 +884,7 @@ public class WorkshopStoryNodeEditorPanel : Panel
                     + " / 战斗 " + command.battle?.battleId
                 : command.text ?? string.Empty;
 
-        bool canSelectExpression = !isNarration && command != null
-            && (commandType == "say" || commandType == "choice")
-            && !string.IsNullOrWhiteSpace(command.actor);
-        dialogController.SetStorySpeakerIconClickHandler(canSelectExpression ? OpenExpressionPicker : null);
+        dialogController.SetStorySpeakerIconClickHandler(null);
         dialogController.SetStorySpeakerHint(null);
 
         dialogController.OpenDialog(new DialogInfo
@@ -876,12 +913,27 @@ public class WorkshopStoryNodeEditorPanel : Panel
 
     private void OpenExpressionPicker()
     {
-        if (activeDialogueCommand == null || string.IsNullOrWhiteSpace(activeDialogueCommand.actor))
+        if (nativeDialogueInput == null || !nativeDialogueInput.gameObject.activeInHierarchy)
             return;
 
-        string commandType = (activeDialogueCommand.type ?? string.Empty).Trim().ToLowerInvariant();
-        if (commandType != "say" && commandType != "choice")
-            return;
+        int textLength = nativeDialogueInput.text?.Length ?? 0;
+        // The picker button takes focus before its click callback runs. Always prefer the last
+        // selection captured from the input, because the current caret may already have moved to
+        // the end by the time the button callback executes.
+        int selectionAnchor = hasDialogueSelectionSnapshot
+            ? Mathf.Clamp(lastDialogueSelectionAnchor, 0, textLength)
+            : Mathf.Clamp(nativeDialogueInput.caretPosition, 0, textLength);
+        int selectionFocus = hasDialogueSelectionSnapshot
+            ? Mathf.Clamp(lastDialogueSelectionFocus, 0, textLength)
+            : selectionAnchor;
+        // Unity InputField selects all text when it receives focus for the first
+        // time. That internal selection must not become a replacement range
+        // when the author immediately opens the expression picker.
+        if (!hasDialogueSelectionSnapshot || dialogueSelectionWasAutoSelected)
+            selectionAnchor = selectionFocus = textLength;
+
+        inlineExpressionInsertionIndex = Mathf.Min(selectionAnchor, selectionFocus);
+        inlineExpressionSelectionEnd = Mathf.Max(selectionAnchor, selectionFocus);
 
         CloseExpressionPicker();
 
@@ -913,23 +965,17 @@ public class WorkshopStoryNodeEditorPanel : Panel
         border.effectColor = Cyan;
         border.effectDistance = new Vector2(1f, -1f);
 
-        CreateText("Expression Picker Title", panel, "选择对白表情", 22, TextAnchor.MiddleCenter, Cyan,
+        CreateText("Expression Picker Title", panel, "插入正文表情", 22, TextAnchor.MiddleCenter, Cyan,
             new Vector2(.5f, 1f), new Vector2(.5f, 1f), new Vector2(0f, -16f), new Vector2(260f, 32f));
-        CreateText("Expression Picker Hint", panel, "表情只作用于当前这一句对白", 13,
+        CreateText("Expression Picker Hint", panel, "插入到当前光标位置，可像文字一样删除", 13,
             TextAnchor.MiddleCenter, new Color32(180, 220, 230, 255), new Vector2(.5f, 1f),
             new Vector2(.5f, 1f), new Vector2(0f, -48f), new Vector2(300f, 22f));
         CreateToolbarButton(panel, "关闭", new Vector2(-12f, -12f), new Vector2(66f, 26f),
             CloseExpressionPicker, true);
 
-        CreateExpressionOption(panel, null, "默认", 0);
-        string[] labels =
-        {
-            "警觉", "生气", "不耐", "酷", "哭泣", "眩晕", "坏笑", "开心",
-            "催眠", "大笑", "喜爱", "无语", "震惊", "求饶", "难受", "调皮",
-            "骷髅", "得意", "困倦", "星星眼", "墨镜", "惊讶", "抓狂", "担忧"
-        };
         for (int index = 0; index < StoryExpressionCatalog.Ids.Length; index++)
-            CreateExpressionOption(panel, StoryExpressionCatalog.Ids[index], labels[index], index + 1);
+            CreateExpressionOption(panel, StoryExpressionCatalog.Ids[index],
+                StoryExpressionCatalog.DisplayNames[index], index);
     }
 
     private void CreateExpressionOption(RectTransform panel, string expressionId, string label, int index)
@@ -976,29 +1022,39 @@ public class WorkshopStoryNodeEditorPanel : Panel
             icon.raycastTarget = false;
         }
 
-        if (string.Equals(activeDialogueCommand.expression, expressionId, StringComparison.OrdinalIgnoreCase)
-            || (string.IsNullOrWhiteSpace(activeDialogueCommand.expression) && string.IsNullOrEmpty(expressionId)))
-        {
-            buttonText.color = WarningColor;
-            Outline selected = buttonRoot.gameObject.AddComponent<Outline>();
-            selected.effectColor = WarningColor;
-            selected.effectDistance = new Vector2(1f, -1f);
-        }
     }
 
     private void SelectExpression(string expressionId)
     {
-        if (activeDialogueCommand == null)
+        if (nativeDialogueInput == null)
             return;
 
-        if (!controller.UpdateCommandExpression(activeDialogueCommand.commandId, expressionId, out string error))
-        {
-            Hintbox.OpenHintboxWithContent(error, 16);
+        string token = StoryExpressionCatalog.GetEditorToken(expressionId);
+        if (string.IsNullOrEmpty(token))
             return;
-        }
 
+        string currentText = nativeDialogueInput.text ?? string.Empty;
+        int insertionIndex = Mathf.Clamp(inlineExpressionInsertionIndex, 0, currentText.Length);
+        int selectionEnd = Mathf.Clamp(inlineExpressionSelectionEnd, insertionIndex, currentText.Length);
+        string updatedText = currentText.Remove(insertionIndex, selectionEnd - insertionIndex)
+            .Insert(insertionIndex, token);
+        int nextCaretPosition = insertionIndex + token.Length;
+
+        // Avoid InputField.text's focus/selection side effects while the picker button is
+        // closing. The command is updated explicitly below after the caret is restored.
+        isUpdatingDialogueInput = true;
+        nativeDialogueInput.SetTextWithoutNotify(updatedText);
+        isUpdatingDialogueInput = false;
         CloseExpressionPicker();
-        RefreshCanvas();
+        nativeDialogueInput.caretPosition = nextCaretPosition;
+        nativeDialogueInput.selectionAnchorPosition = nextCaretPosition;
+        nativeDialogueInput.selectionFocusPosition = nextCaretPosition;
+        lastDialogueCaretPosition = nextCaretPosition;
+        lastDialogueSelectionAnchor = nextCaretPosition;
+        lastDialogueSelectionFocus = nextCaretPosition;
+        hasDialogueSelectionSnapshot = true;
+        dialogueSelectionWasAutoSelected = false;
+        OnDialogueTextChanged(updatedText);
     }
 
     private void CloseExpressionPicker()
@@ -1019,6 +1075,8 @@ public class WorkshopStoryNodeEditorPanel : Panel
         {
             if (dialogueInput != null)
                 dialogueInput.gameObject.SetActive(false);
+            if (inlineExpressionButton != null)
+                inlineExpressionButton.SetActive(false);
             return;
         }
 
@@ -1027,8 +1085,13 @@ public class WorkshopStoryNodeEditorPanel : Panel
             return;
 
         dialogueInput.gameObject.SetActive(true);
+        if (inlineExpressionButton != null)
+            inlineExpressionButton.SetActive(true);
         CopyRectTransform(sourceDialogueText.rectTransform, dialogueInput.GetComponent<RectTransform>());
+        LayoutInlineExpressionControls();
         dialogueInput.transform.SetAsLastSibling();
+        if (inlineExpressionButton != null)
+            inlineExpressionButton.transform.SetAsLastSibling();
         nativeDialogueInput.interactable = true;
         nativeDialogueInput.lineType = InputField.LineType.MultiLineNewline;
         nativeDialogueInput.contentType = InputField.ContentType.Standard;
@@ -1040,6 +1103,8 @@ public class WorkshopStoryNodeEditorPanel : Panel
             inputText.fontSize = Mathf.RoundToInt(sourceDialogueText.fontSize);
             inputText.alignment = TextAnchor.UpperLeft;
             inputText.color = sourceDialogueText.color;
+            inputText.horizontalOverflow = HorizontalWrapMode.Wrap;
+            inputText.verticalOverflow = VerticalWrapMode.Overflow;
             inputText.raycastTarget = false;
         }
 
@@ -1050,6 +1115,8 @@ public class WorkshopStoryNodeEditorPanel : Panel
             placeholder.fontSize = Mathf.RoundToInt(sourceDialogueText.fontSize);
             placeholder.alignment = TextAnchor.UpperLeft;
             placeholder.color = new Color(sourceDialogueText.color.r, sourceDialogueText.color.g, sourceDialogueText.color.b, .62f);
+            placeholder.horizontalOverflow = HorizontalWrapMode.Wrap;
+            placeholder.verticalOverflow = VerticalWrapMode.Overflow;
             placeholder.text = command == null ? "点击此处输入旁白" : "";
             placeholder.raycastTarget = false;
         }
@@ -1067,7 +1134,13 @@ public class WorkshopStoryNodeEditorPanel : Panel
         sourceDialogueIsHidden = true;
 
         isUpdatingDialogueInput = true;
-        nativeDialogueInput.SetTextWithoutNotify(command?.text ?? string.Empty);
+        string editorText = StoryExpressionCatalog.ToEditorText(command?.text);
+        nativeDialogueInput.SetTextWithoutNotify(editorText);
+        lastDialogueCaretPosition = editorText.Length;
+        lastDialogueSelectionAnchor = editorText.Length;
+        lastDialogueSelectionFocus = editorText.Length;
+        hasDialogueSelectionSnapshot = true;
+        dialogueSelectionWasAutoSelected = false;
         isUpdatingDialogueInput = false;
     }
 
@@ -1092,6 +1165,98 @@ public class WorkshopStoryNodeEditorPanel : Panel
         nativeDialogueInput.onEndEdit = new InputField.EndEditEvent();
         nativeDialogueInput.onValueChanged.AddListener(OnDialogueTextChanged);
         dialogueInput.SetPlaceHolderText("点击此处输入旁白");
+
+        Transform expressionButtonParent = dialogueTextBar == null
+            ? dialogueInput.transform.parent
+            : dialogueTextBar.parent;
+        Text expressionButtonText = CreateToolbarButton(expressionButtonParent, "表情", Vector2.zero,
+            new Vector2(54f, 22f), OpenExpressionPicker, false);
+        inlineExpressionButton = expressionButtonText == null
+            ? null
+            : expressionButtonText.GetComponentInParent<IButton>()?.gameObject;
+        if (inlineExpressionButton != null)
+            inlineExpressionButton.transform.SetAsLastSibling();
+
+        AddDialogueFocusCorrection();
+    }
+
+    private void LayoutInlineExpressionControls()
+    {
+        if (sourceDialogueText == null || dialogueInput == null)
+            return;
+
+        if (dialogueInput.GetComponent<RectTransform>() == null)
+            return;
+
+        if (inlineExpressionButton == null)
+            return;
+
+        RectTransform sourceRect = dialogueTextBar == null
+            ? sourceDialogueText.rectTransform
+            : dialogueTextBar;
+        RectTransform buttonRect = inlineExpressionButton.GetComponent<RectTransform>();
+        buttonRect.anchorMin = Vector2.zero;
+        buttonRect.anchorMax = Vector2.zero;
+        buttonRect.pivot = new Vector2(0f, 1f);
+        buttonRect.sizeDelta = new Vector2(54f, 22f);
+        Vector3 sourceTopRight = sourceRect.TransformPoint(new Vector3(sourceRect.rect.xMax,
+            sourceRect.rect.yMax, 0f));
+        buttonRect.position = sourceTopRight + sourceRect.TransformVector(new Vector3(8f, -4f, 0f));
+        buttonRect.SetAsLastSibling();
+    }
+
+    private void AddDialogueFocusCorrection()
+    {
+        if (dialogueInput == null)
+            return;
+
+        EventTrigger trigger = dialogueInput.gameObject.GetComponent<EventTrigger>()
+            ?? dialogueInput.gameObject.AddComponent<EventTrigger>();
+        EventTrigger.Entry pointerDown = new EventTrigger.Entry { eventID = EventTriggerType.PointerDown };
+        pointerDown.callback.AddListener(_ =>
+        {
+            if (!dialogueInputWasFocusedLastFrame)
+            {
+                pendingDialoguePointerDown = _ as PointerEventData;
+                dialogueSelectionWasAutoSelected = true;
+                StartCoroutine(CollapseDialogueSelectionAfterFocus());
+            }
+            else
+            {
+                dialogueSelectionWasAutoSelected = false;
+            }
+        });
+        trigger.triggers.Add(pointerDown);
+    }
+
+    private System.Collections.IEnumerator CollapseDialogueSelectionAfterFocus()
+    {
+        yield return null;
+        if (nativeDialogueInput == null || !nativeDialogueInput.gameObject.activeInHierarchy)
+            yield break;
+
+        // InputField intentionally skips hit-position calculation on the first
+        // pointer down because focus selected the whole value. Replaying the
+        // same pointer down after focus lets Unity calculate the actual caret
+        // position using its own text generator and wrapping rules.
+        if (pendingDialoguePointerDown != null)
+        {
+            PointerEventData pointer = pendingDialoguePointerDown;
+            pendingDialoguePointerDown = null;
+            nativeDialogueInput.OnPointerDown(pointer);
+        }
+
+        int textLength = nativeDialogueInput.text?.Length ?? 0;
+        int position = Mathf.Clamp(Mathf.Max(nativeDialogueInput.selectionAnchorPosition,
+            nativeDialogueInput.selectionFocusPosition), 0, textLength);
+        nativeDialogueInput.caretPosition = position;
+        nativeDialogueInput.selectionAnchorPosition = position;
+        nativeDialogueInput.selectionFocusPosition = position;
+        lastDialogueCaretPosition = position;
+        lastDialogueSelectionAnchor = position;
+        lastDialogueSelectionFocus = position;
+        hasDialogueSelectionSnapshot = true;
+        dialogueSelectionWasAutoSelected = false;
     }
 
     private void RestoreSourceDialogueText()
@@ -1117,7 +1282,12 @@ public class WorkshopStoryNodeEditorPanel : Panel
             }
         }
 
-        if (!controller.UpdateCommandText(activeDialogueCommand.commandId, value, out string error))
+        string storedValue = StoryExpressionCatalog.FromEditorText(value);
+        lastDialogueCaretPosition = Mathf.Clamp(nativeDialogueInput.caretPosition, 0, value?.Length ?? 0);
+        lastDialogueSelectionAnchor = lastDialogueCaretPosition;
+        lastDialogueSelectionFocus = lastDialogueCaretPosition;
+        dialogueSelectionWasAutoSelected = false;
+        if (!controller.UpdateCommandText(activeDialogueCommand.commandId, storedValue, out string error))
         {
             Hintbox.OpenHintboxWithContent(error, 16);
             return;

@@ -15,6 +15,8 @@ public sealed class StoryActorStage
     private readonly MonoBehaviour coroutineHost;
     private readonly Action refreshOverlay;
     private readonly Func<string, string> getResourceSource;
+    private readonly bool enableDepthFocus;
+    private readonly StoryPresentationSettings presentationSettings;
     private readonly Dictionary<string, StoryActorRuntime> actors = new Dictionary<string, StoryActorRuntime>();
     private readonly Dictionary<string, int> nextSideOrders = new Dictionary<string, int>();
     private readonly Dictionary<string, StorySceneActorLayoutDocument> sceneActorLayouts = new Dictionary<string, StorySceneActorLayoutDocument>(StringComparer.OrdinalIgnoreCase);
@@ -27,12 +29,15 @@ public sealed class StoryActorStage
         RectTransform actorLayer,
         MonoBehaviour coroutineHost,
         Action refreshOverlay,
-        Func<string, string> getResourceSource)
+        Func<string, string> getResourceSource,
+        bool enableDepthFocus = false)
     {
         this.actorLayer = actorLayer;
         this.coroutineHost = coroutineHost;
         this.refreshOverlay = refreshOverlay;
         this.getResourceSource = getResourceSource;
+        this.enableDepthFocus = enableDepthFocus;
+        presentationSettings = StoryPresentationSettings.Load();
     }
 
     public void Reset(StoryLayoutDocument storyLayout)
@@ -69,6 +74,12 @@ public sealed class StoryActorStage
                 order = actorOrder++,
             };
             runtime.canvasGroup = runtime.image.GetComponent<CanvasGroup>();
+            if (enableDepthFocus && presentationSettings.DepthFocusEnabled)
+            {
+                runtime.depthMaterial = StoryDepthBlurUtility.CreateMaterial(0f);
+                if (runtime.depthMaterial != null)
+                    runtime.image.material = runtime.depthMaterial;
+            }
             actors[actor.id] = runtime;
             isNewActor = true;
             if (!fadeIn && runtime.canvasGroup != null)
@@ -109,6 +120,7 @@ public sealed class StoryActorStage
             return;
 
         StopActorAnimations(runtime);
+        StoryDepthBlurUtility.DestroyMaterial(runtime.depthMaterial);
         if (runtime.image != null)
         {
             runtime.image.gameObject.SetActive(false);
@@ -129,7 +141,13 @@ public sealed class StoryActorStage
 
             StopActorFocus(runtime);
             bool active = !string.IsNullOrEmpty(actorId) && runtime.document.id == actorId;
-            runtime.image.color = active ? Color.white : new Color32(118, 118, 126, 255);
+            if (enableDepthFocus && presentationSettings.DepthFocusEnabled)
+                SetActorDepthFocus(runtime, active);
+            else
+            {
+                StoryDepthBlurUtility.SetBlur(runtime.depthMaterial, 0f);
+                runtime.image.color = active ? Color.white : new Color32(118, 118, 126, 255);
+            }
             if (active)
             {
                 runtime.image.transform.SetAsLastSibling();
@@ -139,6 +157,29 @@ public sealed class StoryActorStage
 
         if (activeRuntime != null)
             PlayActorFocus(activeRuntime, expressionMotion);
+        else
+            ApplyInitialActorLayering();
+    }
+
+    public void SetActorsNeutral()
+    {
+        foreach (StoryActorRuntime runtime in actors.Values)
+        {
+            if (runtime?.image == null)
+                continue;
+
+            StopActorFocus(runtime);
+            if (enableDepthFocus && presentationSettings.DepthFocusEnabled)
+                SetActorDepthFocus(runtime, true);
+            else
+            {
+                StoryDepthBlurUtility.SetBlur(runtime.depthMaterial, 0f);
+                runtime.image.color = Color.white;
+            }
+        }
+
+        ApplyInitialActorLayering();
+        refreshOverlay?.Invoke();
     }
 
     public StorySceneActorLayoutDocument GetPlacement(StoryActorDocument actor)
@@ -170,6 +211,7 @@ public sealed class StoryActorStage
         foreach (StoryActorRuntime runtime in actors.Values)
         {
             StopActorAnimations(runtime);
+            StoryDepthBlurUtility.DestroyMaterial(runtime?.depthMaterial);
 
             if (runtime?.image != null)
             {
@@ -306,6 +348,73 @@ public sealed class StoryActorStage
         runtime.focusCoroutine = coroutineHost.StartCoroutine(ActorFocusCoroutine(runtime, expressionMotion));
     }
 
+    private void SetActorDepthFocus(StoryActorRuntime runtime, bool focused)
+    {
+        if (runtime?.image == null)
+            return;
+
+        if (runtime.depthMaterial == null)
+        {
+            runtime.depthMaterial = StoryDepthBlurUtility.CreateMaterial(0f);
+            if (runtime.depthMaterial != null)
+                runtime.image.material = runtime.depthMaterial;
+        }
+
+        if (runtime.depthCoroutine != null)
+        {
+            coroutineHost.StopCoroutine(runtime.depthCoroutine);
+            runtime.depthCoroutine = null;
+        }
+
+        float targetBlur = focused ? 0f : presentationSettings.InactiveActorBlur;
+        float targetBrightness = focused ? 1f : presentationSettings.InactiveActorBrightness;
+        float duration = presentationSettings.DepthFocusTransitionDuration;
+        if (duration <= 0f || runtime.depthMaterial == null)
+        {
+            ApplyActorDepth(runtime, targetBlur, targetBrightness);
+            return;
+        }
+
+        runtime.depthCoroutine = coroutineHost.StartCoroutine(
+            ActorDepthFocusCoroutine(runtime, targetBlur, targetBrightness, duration));
+    }
+
+    private IEnumerator ActorDepthFocusCoroutine(
+        StoryActorRuntime runtime,
+        float targetBlur,
+        float targetBrightness,
+        float duration)
+    {
+        float startBlur = StoryDepthBlurUtility.GetBlur(runtime.depthMaterial);
+        Color startColor = runtime.image.color;
+        float time = 0f;
+        while (time < duration && runtime.image != null)
+        {
+            float progress = Mathf.Clamp01(time / duration);
+            float eased = progress * progress * (3f - 2f * progress);
+            float brightness = Mathf.Lerp(startColor.r, targetBrightness, eased);
+            ApplyActorDepth(runtime, Mathf.Lerp(startBlur, targetBlur, eased), brightness);
+            time += Time.unscaledDeltaTime;
+            yield return null;
+        }
+
+        if (runtime.image != null)
+            ApplyActorDepth(runtime, targetBlur, targetBrightness);
+        runtime.depthCoroutine = null;
+    }
+
+    private static void ApplyActorDepth(StoryActorRuntime runtime, float blur, float brightness)
+    {
+        if (runtime?.image == null)
+            return;
+        Color color = runtime.image.color;
+        color.r = brightness;
+        color.g = brightness;
+        color.b = brightness;
+        runtime.image.color = color;
+        StoryDepthBlurUtility.SetBlur(runtime.depthMaterial, blur);
+    }
+
     private IEnumerator ActorFocusCoroutine(StoryActorRuntime runtime, StoryExpressionMotion expressionMotion)
     {
         float duration = expressionMotion == StoryExpressionMotion.Shake ? .28f : .24f;
@@ -363,6 +472,11 @@ public sealed class StoryActorStage
         {
             coroutineHost.StopCoroutine(runtime.fadeCoroutine);
             runtime.fadeCoroutine = null;
+        }
+        if (runtime.depthCoroutine != null)
+        {
+            coroutineHost.StopCoroutine(runtime.depthCoroutine);
+            runtime.depthCoroutine = null;
         }
         StopActorFocus(runtime);
     }
@@ -469,11 +583,54 @@ public sealed class StoryActorStage
         public StoryActorDocument document;
         public Image image;
         public CanvasGroup canvasGroup;
+        public Material depthMaterial;
         public Coroutine fadeCoroutine;
         public Coroutine focusCoroutine;
+        public Coroutine depthCoroutine;
         public Vector2 basePosition;
         public Vector3 baseScale = Vector3.one;
         public int order;
         public StorySceneActorLayoutDocument placement;
+    }
+}
+
+internal static class StoryDepthBlurUtility
+{
+    private const string ShaderResourcePath = "Story/StoryDepthBlur";
+    private const string BlurProperty = "_BlurSize";
+    private static Shader blurShader;
+
+    public static Material CreateMaterial(float blur)
+    {
+        if (blurShader == null)
+            blurShader = Resources.Load<Shader>(ShaderResourcePath);
+        if (blurShader == null)
+            return null;
+
+        Material material = new Material(blurShader)
+        {
+            hideFlags = HideFlags.DontSave,
+        };
+        SetBlur(material, blur);
+        return material;
+    }
+
+    public static float GetBlur(Material material)
+    {
+        return material != null && material.HasProperty(BlurProperty)
+            ? material.GetFloat(BlurProperty)
+            : 0f;
+    }
+
+    public static void SetBlur(Material material, float blur)
+    {
+        if (material != null && material.HasProperty(BlurProperty))
+            material.SetFloat(BlurProperty, Mathf.Max(0f, blur));
+    }
+
+    public static void DestroyMaterial(Material material)
+    {
+        if (material != null)
+            UnityEngine.Object.Destroy(material);
     }
 }

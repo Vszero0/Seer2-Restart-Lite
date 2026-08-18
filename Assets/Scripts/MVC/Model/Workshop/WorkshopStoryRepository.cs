@@ -111,12 +111,26 @@ public sealed class WorkshopStoryRepository
 
     public bool TryCreateDraft(out WorkshopStorySummary summary, out string error)
     {
+        return TryCreateDraft(defaultStorageKind, out summary, out error);
+    }
+
+    public bool TryCreateDraft(
+        WorkshopStoryStorageKind storageKind,
+        out WorkshopStorySummary summary,
+        out string error)
+    {
         summary = null;
         error = string.Empty;
         try
         {
-            WorkshopStoryStorageKind storageKind = defaultStorageKind;
             string directory = GetStoryDirectory(storageKind);
+            if (string.IsNullOrWhiteSpace(directory))
+            {
+                error = storageKind == WorkshopStoryStorageKind.Source
+                    ? "源码母稿只能在 Unity Editor 中创建。"
+                    : "当前环境无法创建 Mod 剧本。";
+                return false;
+            }
             if (!Directory.Exists(directory))
                 Directory.CreateDirectory(directory);
 
@@ -271,6 +285,25 @@ public sealed class WorkshopStoryRepository
         }
     }
 
+    public bool TrySaveDraft(string path, StoryDocument document, out string error)
+    {
+        error = string.Empty;
+        if (document == null)
+        {
+            error = "剧本文档不能为空。";
+            return false;
+        }
+
+        if (!StoryDocumentCodec.TryDeserialize(StoryDocumentCodec.Serialize(document), false,
+                out StoryDocument draft, out error))
+        {
+            return false;
+        }
+
+        draft.status = "draft";
+        return TrySave(path, draft, out error);
+    }
+
     /// <summary>
     /// 保存入口页确认的剧本。完整校验通过时直接作为 Mod 剧情生效；
     /// 尚未完成的草稿仍会保存编辑进度，但不会进入运行时数据库。
@@ -302,29 +335,32 @@ public sealed class WorkshopStoryRepository
         }
 
         string originalStatus = document.normalizedStatus;
-        EnsureRuntimeMetadata(path, document);
-        document.status = "published";
-        if (StoryValidator.Validate(document, out string validationError))
+        if (!StoryDocumentCodec.TryDeserialize(StoryDocumentCodec.Serialize(document), false,
+                out StoryDocument runtimeDocument, out string cloneError))
         {
-            if (!TrySave(path, document, out message))
-            {
-                document.status = originalStatus;
+            message = cloneError;
+            return false;
+        }
+
+        EnsureRuntimeMetadata(path, runtimeDocument);
+        runtimeDocument.status = "published";
+        if (StoryValidator.Validate(runtimeDocument, out string validationError))
+        {
+            if (!TrySave(path, runtimeDocument, out message))
                 return false;
-            }
 
             runtimeReady = true;
             message = "剧本已保存并载入 Mod。";
             return true;
         }
 
-        document.status = originalStatus;
         if (!string.Equals(originalStatus, "draft", StringComparison.OrdinalIgnoreCase))
         {
             message = "剧本存在运行问题，本次修改尚未保存：\n" + validationError;
             return false;
         }
 
-        if (!TrySave(path, document, out string saveError))
+        if (!TrySaveDraft(path, document, out string saveError))
         {
             message = saveError;
             return false;
@@ -384,6 +420,11 @@ public sealed class WorkshopStoryRepository
 #else
         return string.Empty;
 #endif
+    }
+
+    public bool CanCreateStorage(WorkshopStoryStorageKind storageKind)
+    {
+        return !string.IsNullOrWhiteSpace(GetStoryDirectory(storageKind));
     }
 
     private static WorkshopStorySummary ReadSummary(string path, WorkshopStoryStorageKind storageKind)

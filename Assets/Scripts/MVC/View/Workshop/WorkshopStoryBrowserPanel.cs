@@ -78,6 +78,7 @@ public class WorkshopStoryBrowserPanel : Panel
     private RectTransform actorResourceOverlay;
     private RectTransform actorResourceContent;
     private RectTransform sourceExportOverlay;
+    private RectTransform storyCreateTargetOverlay;
     private RectTransform sourceRewardPickerOverlay;
     private RectTransform sourceRewardContent;
     private RectTransform actorIndependentIconControls;
@@ -127,9 +128,13 @@ public class WorkshopStoryBrowserPanel : Panel
     private Text sourceRewardPageText;
     private Text storyStatusText;
     private Text storySaveButtonText;
+    private IButton storyPublishButton;
     private Text storyOverviewText;
     private Text storyStructureText;
     private Text storyResourceText;
+    private IButton sourceExportButton;
+    private Text sourceExportLabel;
+    private Text sourceExportHint;
     private Font font;
     private GameObject listButtonPrefab;
     private GameObject actionButtonPrefab;
@@ -177,6 +182,11 @@ public class WorkshopStoryBrowserPanel : Panel
 
     public override void ClosePanel()
     {
+        if (storyCreateTargetOverlay != null && storyCreateTargetOverlay.gameObject.activeSelf)
+        {
+            CloseCreateStoryTarget();
+            return;
+        }
         if (sourceRewardPickerOverlay != null && sourceRewardPickerOverlay.gameObject.activeSelf)
         {
             CloseSourceRewardPicker();
@@ -243,9 +253,9 @@ public class WorkshopStoryBrowserPanel : Panel
         RectTransform storySection = CreateSection("剧本", new Vector2(18f, -76f), new Vector2(236f, 402f));
         RectTransform infoSection = CreateSection("剧本信息", new Vector2(270f, -76f), new Vector2(632f, 402f));
 
-        CreateActionButton(storySection, controller.CanExportSource ? "新建源码" : "新建",
-            new Vector2(32f, -50f), new Vector2(80f, 28f), CreateStory);
-        CreateActionButton(storySection, "删除", new Vector2(124f, -50f), new Vector2(80f, 28f), DeleteStory);
+        CreateActionButton(storySection, "新建剧本",
+            new Vector2(30f, -50f), new Vector2(92f, 28f), OpenCreateStoryTarget);
+        CreateActionButton(storySection, "删除", new Vector2(128f, -50f), new Vector2(76f, 28f), DeleteStory);
         CreateActionButton(storySection, "复制为新剧本", new Vector2(32f, -84f), new Vector2(172f, 28f), CopyStory);
         storyContent = CreateScrollContent(storySection, new Vector2(14f, 14f), new Vector2(-14f, -120f));
 
@@ -275,10 +285,12 @@ public class WorkshopStoryBrowserPanel : Panel
         }
 
         storyStatusText = CreateText("Story Status", infoSection, string.Empty, 13, TextAnchor.UpperLeft, HintColor,
-            new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(358f, -50f), new Vector2(170f, 40f));
-        IButton storySaveButton = CreateActionButton(infoSection, "保存到 Mod", new Vector2(516f, -56f),
+            new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(358f, -50f), new Vector2(170f, 56f));
+        IButton storySaveButton = CreateActionButton(infoSection, "保存草稿", new Vector2(516f, -56f),
             new Vector2(98f, 28f), SaveStory);
         storySaveButtonText = storySaveButton?.GetComponentInChildren<Text>(true);
+        storyPublishButton = CreateActionButton(infoSection, "发布并载入 Mod", new Vector2(438f, -214f),
+            new Vector2(176f, 30f), PublishModStory);
         IButton manageButton = CreateActionButton(infoSection, "管理剧情点", new Vector2(358f, -100f),
             new Vector2(256f, 62f), OpenNodeManager);
         EmphasizePrimaryAction(manageButton);
@@ -290,11 +302,11 @@ public class WorkshopStoryBrowserPanel : Panel
             new Vector2(80f, 30f), PreviewStory);
         if (controller.CanExportSource)
         {
-            CreateText("Source Export Label", infoSection, "源码开发", 14, TextAnchor.MiddleLeft, Cyan,
+            sourceExportLabel = CreateText("Source Export Label", infoSection, "源码开发", 14, TextAnchor.MiddleLeft, Cyan,
                 new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(358f, -214f), new Vector2(74f, 30f));
-            CreateActionButton(infoSection, "导出为……", new Vector2(438f, -214f),
+            sourceExportButton = CreateActionButton(infoSection, "导出为……", new Vector2(438f, -214f),
                 new Vector2(176f, 30f), OpenSourceExport);
-            Text sourceExportHint = CreateText("Source Export Hint", infoSection,
+            sourceExportHint = CreateText("Source Export Hint", infoSection,
                 "仅 Unity Editor · 可导出支线 / 日常 / 活动任务", 11, TextAnchor.MiddleCenter, HintColor,
                 new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(358f, -248f), new Vector2(256f, 22f));
             sourceExportHint.horizontalOverflow = HorizontalWrapMode.Wrap;
@@ -332,6 +344,7 @@ public class WorkshopStoryBrowserPanel : Panel
         storyStructureText.horizontalOverflow = HorizontalWrapMode.Overflow;
         storyStructureText.verticalOverflow = VerticalWrapMode.Truncate;
         BuildModalLayer(root);
+        BuildStoryCreateTargetPicker(modalLayer);
         BuildNodeManager(modalLayer);
         BuildConnectionEditor(modalLayer);
         BuildGraphViewer(modalLayer);
@@ -342,6 +355,39 @@ public class WorkshopStoryBrowserPanel : Panel
         BuildSourceExport(modalLayer);
         BuildSourceRewardPicker(modalLayer);
         modalLayer.gameObject.SetActive(false);
+    }
+
+    private void BuildStoryCreateTargetPicker(RectTransform root)
+    {
+        GameObject overlayObject = new GameObject("Story Create Target Picker",
+            typeof(RectTransform), typeof(CanvasRenderer), typeof(Image), typeof(Outline));
+        overlayObject.transform.SetParent(root, false);
+        storyCreateTargetOverlay = overlayObject.GetComponent<RectTransform>();
+        storyCreateTargetOverlay.anchorMin = new Vector2(.5f, .5f);
+        storyCreateTargetOverlay.anchorMax = storyCreateTargetOverlay.anchorMin;
+        storyCreateTargetOverlay.pivot = new Vector2(.5f, .5f);
+        storyCreateTargetOverlay.sizeDelta = new Vector2(500f, 220f);
+        overlayObject.GetComponent<Image>().color = new Color32(0, 8, 12, 252);
+        Outline outline = overlayObject.GetComponent<Outline>();
+        outline.effectColor = new Color(Cyan.r, Cyan.g, Cyan.b, .86f);
+        outline.effectDistance = new Vector2(2f, -2f);
+
+        CreateText("Story Create Target Heading", storyCreateTargetOverlay, "新建剧本", 22,
+            TextAnchor.MiddleCenter, Cyan, new Vector2(.5f, 1f), new Vector2(.5f, 1f),
+            new Vector2(0f, -24f), new Vector2(240f, 34f));
+        CreateText("Story Create Target Hint", storyCreateTargetOverlay,
+            "请选择剧本的保存来源", 15, TextAnchor.MiddleCenter, HintColor,
+            new Vector2(.5f, 1f), new Vector2(.5f, 1f), new Vector2(0f, -66f),
+            new Vector2(360f, 28f));
+
+        if (controller.CanCreateSource)
+            CreateActionButton(storyCreateTargetOverlay, "源码母稿", new Vector2(56f, -116f),
+                new Vector2(170f, 34f), () => CreateStory(WorkshopStoryStorageKind.Source));
+        if (controller.CanCreateMod)
+            CreateActionButton(storyCreateTargetOverlay, "Mod 剧本", new Vector2(274f, -116f),
+                new Vector2(170f, 34f), () => CreateStory(WorkshopStoryStorageKind.Mod));
+        CreateModalCloseButton(storyCreateTargetOverlay, CloseCreateStoryTarget);
+        storyCreateTargetOverlay.gameObject.SetActive(false);
     }
 
     private static RectTransform CreateOverviewCard(RectTransform parent, string name, float x, float width)
@@ -1247,9 +1293,27 @@ public class WorkshopStoryBrowserPanel : Panel
         RefreshView();
     }
 
-    private void CreateStory()
+    private void OpenCreateStoryTarget()
     {
-        if (!controller.CreateDraft(out string error) && !string.IsNullOrEmpty(error))
+        if (!controller.CanCreateSource)
+        {
+            CreateStory(WorkshopStoryStorageKind.Mod);
+            return;
+        }
+        OpenModal(storyCreateTargetOverlay);
+    }
+
+    private void CloseCreateStoryTarget()
+    {
+        if (storyCreateTargetOverlay != null)
+            storyCreateTargetOverlay.gameObject.SetActive(false);
+        HideModalLayer();
+    }
+
+    private void CreateStory(WorkshopStoryStorageKind storageKind)
+    {
+        CloseCreateStoryTarget();
+        if (!controller.CreateDraft(storageKind, out string error) && !string.IsNullOrEmpty(error))
             Hintbox.OpenHintboxWithContent(error, 16);
         RefreshView();
     }
@@ -1286,33 +1350,37 @@ public class WorkshopStoryBrowserPanel : Panel
 
     private void SaveStory()
     {
-        bool sourceStory = IsSourceStory(controller.SelectedStory);
-        bool runtimeReady = false;
-        bool success;
-        string message;
-        if (sourceStory)
-        {
-            success = controller.SaveSelected(out message);
-            if (success)
-                message = "源码母稿已保存。";
-        }
-        else
-        {
-            success = controller.SaveSelectedForRuntime(out runtimeReady, out message);
-        }
+        bool success = controller.SaveSelectedDraft(out string message);
 
-        if (!string.IsNullOrEmpty(message))
+        if (success)
         {
-            Hintbox hintbox = Hintbox.OpenHintboxWithContent(message,
-                (sourceStory && success) || runtimeReady ? 16 : 14);
-            if ((!sourceStory && !runtimeReady) || !success)
-                hintbox.SetSize(720, 360);
+            Hintbox.OpenHintboxWithContent("草稿已保存。", 16);
+        }
+        else if (!string.IsNullOrEmpty(message))
+        {
+            Hintbox hintbox = Hintbox.OpenHintboxWithContent(message, 14);
+            hintbox.SetSize(720, 360);
         }
         RefreshView();
         if (sceneManagerOverlay != null && sceneManagerOverlay.gameObject.activeSelf)
             RefreshSceneManager();
         if (actorManagerOverlay != null && actorManagerOverlay.gameObject.activeSelf)
             RefreshActorManager();
+    }
+
+    private void PublishModStory()
+    {
+        if (!controller.PublishSelectedMod(out bool runtimeReady, out string message)
+            || !runtimeReady)
+        {
+            Hintbox hintbox = Hintbox.OpenHintboxWithContent(message, 14);
+            hintbox.SetSize(720, 360);
+        }
+        else
+        {
+            Hintbox.OpenHintboxWithContent("剧本已发布并载入 Mod。", 16);
+        }
+        RefreshView();
     }
 
     private void SelectStory(string path)
@@ -1390,7 +1458,8 @@ public class WorkshopStoryBrowserPanel : Panel
 
         string storyPath = controller.SelectedStory.path;
         string nodeId = controller.SelectedNode.id;
-        if (!controller.SaveSelected(out string error))
+        string error;
+        if (controller.HasUnsavedChanges && !controller.SaveSelectedDraft(out error))
         {
             Hintbox.OpenHintboxWithContent(error, 16);
             return;
@@ -2225,7 +2294,7 @@ public class WorkshopStoryBrowserPanel : Panel
         {
             if (IsSourceStory(controller.SelectedStory))
             {
-                if (!controller.SaveSelected(out string saveError))
+                if (!controller.SaveSelectedDraft(out string saveError))
                 {
                     Hintbox.OpenHintboxWithContent(saveError, 14).SetSize(720, 360);
                     return;
@@ -2233,7 +2302,7 @@ public class WorkshopStoryBrowserPanel : Panel
             }
             else
             {
-                bool saved = controller.SaveSelectedForRuntime(out bool runtimeReady, out string saveMessage);
+                bool saved = controller.PublishSelectedMod(out bool runtimeReady, out string saveMessage);
                 if (!saved || !runtimeReady)
                 {
                     Hintbox hintbox = Hintbox.OpenHintboxWithContent(saveMessage, 14);
@@ -2280,7 +2349,7 @@ public class WorkshopStoryBrowserPanel : Panel
         }
         CloseSourceExport();
         RefreshView();
-        string action = result.updatedExisting ? "已更新" : "已新增";
+        string action = result.migratedExisting ? "已迁移并更新" : (result.updatedExisting ? "已更新" : "已新增");
         Hintbox.OpenHintboxWithContent(action + "源码任务 " + result.missionId
             + "。\n剧本资源：" + result.storyResourcePath
             + "\n停止并重新进入播放模式后生效。", 16).SetSize(600, 300);
@@ -2309,6 +2378,8 @@ public class WorkshopStoryBrowserPanel : Panel
             sourceExportOverlay.gameObject.SetActive(sourceExportOverlay == overlay);
         if (sourceRewardPickerOverlay != null)
             sourceRewardPickerOverlay.gameObject.SetActive(sourceRewardPickerOverlay == overlay);
+        if (storyCreateTargetOverlay != null)
+            storyCreateTargetOverlay.gameObject.SetActive(storyCreateTargetOverlay == overlay);
         modalLayer.gameObject.SetActive(true);
         modalLayer.transform.SetAsLastSibling();
         overlay.transform.SetAsLastSibling();
@@ -2324,7 +2395,8 @@ public class WorkshopStoryBrowserPanel : Panel
             || (actorManagerOverlay != null && actorManagerOverlay.gameObject.activeSelf)
             || (actorResourceOverlay != null && actorResourceOverlay.gameObject.activeSelf)
             || (sourceExportOverlay != null && sourceExportOverlay.gameObject.activeSelf)
-            || (sourceRewardPickerOverlay != null && sourceRewardPickerOverlay.gameObject.activeSelf);
+            || (sourceRewardPickerOverlay != null && sourceRewardPickerOverlay.gameObject.activeSelf)
+            || (storyCreateTargetOverlay != null && storyCreateTargetOverlay.gameObject.activeSelf);
         if (!hasOpenModal && modalLayer != null)
             modalLayer.gameObject.SetActive(false);
     }
@@ -2455,9 +2527,7 @@ public class WorkshopStoryBrowserPanel : Panel
         }
 
         if (index == 0)
-            CreateHint(storyContent, controller.CanExportSource
-                ? "点击“新建源码”创建第一个源码母稿。"
-                : "点击“新建”创建第一个剧本。");
+            CreateHint(storyContent, "点击“新建剧本”选择保存来源并创建第一个剧本。");
         else
             storyContent.sizeDelta = new Vector2(0f, 12f + index * 42f);
     }
@@ -2469,7 +2539,15 @@ public class WorkshopStoryBrowserPanel : Panel
 
         bool sourceStory = IsSourceStory(controller.SelectedStory);
         if (storySaveButtonText != null)
-            storySaveButtonText.text = sourceStory ? "保存草稿" : "保存到 Mod";
+            storySaveButtonText.text = "保存草稿";
+        if (storyPublishButton != null)
+            storyPublishButton.gameObject.SetActive(!sourceStory && controller.SelectedDocument != null);
+        if (sourceExportButton != null)
+            sourceExportButton.gameObject.SetActive(sourceStory);
+        if (sourceExportLabel != null)
+            sourceExportLabel.gameObject.SetActive(sourceStory);
+        if (sourceExportHint != null)
+            sourceExportHint.gameObject.SetActive(sourceStory);
 
         StoryDocument document = controller.SelectedDocument;
         if (document == null)
@@ -2495,8 +2573,8 @@ public class WorkshopStoryBrowserPanel : Panel
         SetInputFieldValue(storyTitleInput, document.title, true);
         SetInputFieldValue(storySummaryInput, document.summary, true);
         string storageState = sourceStory
-            ? "源码母稿 · 不载入 Mod"
-            : "当前 Mod · " + (document.isDraft ? "暂未载入" : "已载入");
+            ? "存储：源码母稿\n运行：需导出源码任务"
+            : "存储：Mod\n运行：" + (document.isDraft ? "暂未载入" : "已载入");
         storyStatusText.text = storageState
             + "\n编辑状态：<color=#" + ColorUtility.ToHtmlStringRGB(saveStateColor) + ">" + saveState + "</color>";
         storyStatusText.color = HintColor;

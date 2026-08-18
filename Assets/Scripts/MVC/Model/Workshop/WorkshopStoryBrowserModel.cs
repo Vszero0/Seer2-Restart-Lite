@@ -20,6 +20,8 @@ public sealed class WorkshopStoryBrowserModel
     public StoryNodeDocument SelectedNode { get; private set; }
     public bool HasUnsavedChanges { get; private set; }
     public bool CanExportSource => sourceExporter.CanExport;
+    public bool CanCreateSource => repository.CanCreateStorage(WorkshopStoryStorageKind.Source);
+    public bool CanCreateMod => repository.CanCreateStorage(WorkshopStoryStorageKind.Mod);
 
     public IReadOnlyList<WorkshopStoryChoiceOption> SelectedNodeChoiceOptions => GetSelectedNodeChoiceOptions();
 
@@ -1196,13 +1198,18 @@ public sealed class WorkshopStoryBrowserModel
 
     public bool CreateDraft(out string error)
     {
+        return CreateDraft(repository.defaultStorageKind, out error);
+    }
+
+    public bool CreateDraft(WorkshopStoryStorageKind storageKind, out string error)
+    {
         if (HasUnsavedChanges)
         {
             error = "当前剧本尚未保存，请先保存后再新建。";
             return false;
         }
 
-        if (!repository.TryCreateDraft(out WorkshopStorySummary summary, out error))
+        if (!repository.TryCreateDraft(storageKind, out WorkshopStorySummary summary, out error))
             return false;
 
         SelectedStory = summary;
@@ -1238,6 +1245,11 @@ public sealed class WorkshopStoryBrowserModel
 
     public bool SaveSelected(out string error)
     {
+        return SaveSelectedDraft(out error);
+    }
+
+    public bool SaveSelectedDraft(out string error)
+    {
         if (SelectedStory == null || SelectedDocument == null)
         {
             error = "请先选择要保存的剧本。";
@@ -1245,8 +1257,16 @@ public sealed class WorkshopStoryBrowserModel
         }
 
         string selectedNodeId = SelectedNode?.id;
-        if (!repository.TrySave(SelectedStory.path, SelectedDocument, out error))
+        bool savedModDraft = SelectedStory.storageKind == WorkshopStoryStorageKind.Mod;
+        if (!repository.TrySaveDraft(SelectedStory.path, SelectedDocument, out error))
             return false;
+
+        if (savedModDraft && Database.instance != null)
+        {
+            Database.instance.ReloadStoryMod();
+            if (Player.instance != null)
+                Mission.VersionUpdate();
+        }
 
         bool reloaded = Reload(out error);
         if (reloaded)
@@ -1259,6 +1279,11 @@ public sealed class WorkshopStoryBrowserModel
     }
 
     public bool SaveSelectedForRuntime(out bool runtimeReady, out string message)
+    {
+        return PublishSelectedMod(out runtimeReady, out message);
+    }
+
+    public bool PublishSelectedMod(out bool runtimeReady, out string message)
     {
         runtimeReady = false;
         if (SelectedStory == null || SelectedDocument == null)
@@ -1333,7 +1358,25 @@ public sealed class WorkshopStoryBrowserModel
             error = "当前剧本尚未载入 Mod，请先解决运行校验问题并保存到 Mod 后再导出。";
             return false;
         }
-        return sourceExporter.TryExport(SelectedDocument, request, out result, out error);
+        if (!sourceExporter.TryExport(SelectedDocument, request, out result, out error))
+            return false;
+
+        if (result?.binding != null)
+        {
+            string selectedNodeId = SelectedNode?.id;
+            SelectedDocument.sourceExport = result.binding;
+            bool saved = SelectedStory.storageKind == WorkshopStoryStorageKind.Source
+                ? repository.TrySaveDraft(SelectedStory.path, SelectedDocument, out error)
+                : repository.TrySave(SelectedStory.path, SelectedDocument, out error);
+            if (!saved)
+                return false;
+            if (!Reload(out error))
+                return false;
+            if (!string.IsNullOrWhiteSpace(selectedNodeId))
+                SelectNode(selectedNodeId);
+        }
+        HasUnsavedChanges = false;
+        return true;
     }
 
     public bool DeleteSelected(out string error)

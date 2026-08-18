@@ -1417,7 +1417,7 @@ public sealed class WorkshopStoryNodeEditorModel
             return false;
         }
 
-        if (!repository.TrySave(StoryPath, DraftDocument, out error))
+        if (!repository.TrySaveDraft(StoryPath, DraftDocument, out error))
             return false;
 
         HasUnsavedChanges = false;

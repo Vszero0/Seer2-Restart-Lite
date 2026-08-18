@@ -1,6 +1,9 @@
 using System;
 using System.Collections.Generic;
+using System.Text.RegularExpressions;
+using TMPro;
 using UnityEngine;
+using UnityEngine.TextCore;
 #if UNITY_EDITOR
 using UnityEditor;
 #endif
@@ -307,7 +310,15 @@ public enum StoryExpressionMotion
 public static class StoryExpressionCatalog
 {
     private const string ExternalPathPrefix = "Map/talk bubble/";
+    private const string TmpSpriteNamePrefix = "story_";
+    private const int AtlasColumns = 6;
+    private const int AtlasCellSize = 40;
     private static MapWildNpcTalkController fallbackLibrary;
+    private static TMP_SpriteAsset inlineSpriteAsset;
+
+    private static readonly Regex InlineTagPattern = new Regex(
+        "<emoji\\s+id\\s*=\\s*[\"']([^\"']+)[\"']\\s*/>",
+        RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
     public static readonly string[] Ids =
     {
@@ -317,6 +328,13 @@ public static class StoryExpressionCatalog
         "emoji/toon/shocked", "emoji/toon/shy", "emoji/toon/sick", "emoji/toon/silly",
         "emoji/toon/skull", "emoji/toon/sleepy", "emoji/toon/smug", "emoji/toon/star_eyes",
         "emoji/toon/sunglasses", "emoji/toon/surprised", "emoji/toon/sweat", "emoji/toon/worried"
+    };
+
+    public static readonly string[] DisplayNames =
+    {
+        "警觉", "生气", "不耐", "酷", "哭泣", "眩晕", "坏笑", "开心",
+        "催眠", "大笑", "喜爱", "无语", "震惊", "求饶", "难受", "调皮",
+        "骷髅", "得意", "困倦", "星星眼", "墨镜", "惊讶", "抓狂", "担忧"
     };
 
     public static string Normalize(string id)
@@ -345,6 +363,184 @@ public static class StoryExpressionCatalog
         }
 
         return fallbackLibrary?.GetTalkImage(normalized);
+    }
+
+    public static string GetDisplayName(string id)
+    {
+        string normalized = Normalize(id);
+        int index = normalized == null ? -1 : Array.IndexOf(Ids, normalized);
+        return index >= 0 && index < DisplayNames.Length ? DisplayNames[index] : null;
+    }
+
+    public static string GetEditorToken(string id)
+    {
+        string displayName = GetDisplayName(id);
+        return string.IsNullOrEmpty(displayName) ? string.Empty : "[" + displayName + "]";
+    }
+
+    public static string ToEditorText(string storedText)
+    {
+        if (string.IsNullOrEmpty(storedText))
+            return storedText ?? string.Empty;
+
+        return InlineTagPattern.Replace(storedText, match =>
+        {
+            string token = GetEditorToken(match.Groups[1].Value);
+            return string.IsNullOrEmpty(token) ? match.Value : token;
+        });
+    }
+
+    public static string FromEditorText(string editorText)
+    {
+        string result = editorText ?? string.Empty;
+        for (int index = 0; index < Ids.Length && index < DisplayNames.Length; index++)
+            result = result.Replace("[" + DisplayNames[index] + "]", BuildInlineTag(Ids[index]));
+        return result;
+    }
+
+    public static string ToTmpRichText(string storedText)
+    {
+        if (string.IsNullOrEmpty(storedText) || !InlineTagPattern.IsMatch(storedText)
+            || GetInlineSpriteAsset() == null)
+            return storedText ?? string.Empty;
+
+        return InlineTagPattern.Replace(storedText, match =>
+        {
+            string normalized = Normalize(match.Groups[1].Value);
+            return normalized == null ? match.Value : "<sprite name=\"" + GetTmpSpriteName(normalized) + "\">";
+        });
+    }
+
+    public static bool ContainsInlineExpression(string storedText)
+    {
+        return !string.IsNullOrEmpty(storedText) && InlineTagPattern.IsMatch(storedText);
+    }
+
+    public static TMP_SpriteAsset GetInlineSpriteAsset()
+    {
+        if (inlineSpriteAsset != null)
+            return inlineSpriteAsset;
+
+        List<Sprite> sourceSprites = new List<Sprite>();
+        List<string> sourceIds = new List<string>();
+        for (int index = 0; index < Ids.Length; index++)
+        {
+            Sprite sprite = Load(Ids[index]);
+            if (sprite == null)
+                continue;
+            sourceSprites.Add(sprite);
+            sourceIds.Add(Ids[index]);
+        }
+
+        if (sourceSprites.Count == 0)
+            return null;
+
+        int rows = Mathf.CeilToInt(sourceSprites.Count / (float)AtlasColumns);
+        int atlasWidth = AtlasColumns * AtlasCellSize;
+        int atlasHeight = rows * AtlasCellSize;
+        Texture2D atlas = new Texture2D(atlasWidth, atlasHeight, TextureFormat.RGBA32, false, false)
+        {
+            name = "Story Inline Expressions Atlas",
+            filterMode = FilterMode.Bilinear,
+            wrapMode = TextureWrapMode.Clamp,
+            hideFlags = HideFlags.DontSave,
+        };
+        Color[] clearPixels = new Color[atlasWidth * atlasHeight];
+        atlas.SetPixels(clearPixels);
+
+        RenderTexture cellRenderTexture = RenderTexture.GetTemporary(AtlasCellSize, AtlasCellSize, 0,
+            RenderTextureFormat.ARGB32, RenderTextureReadWrite.sRGB);
+        Texture2D cellPixels = new Texture2D(AtlasCellSize, AtlasCellSize, TextureFormat.RGBA32, false, false);
+        RenderTexture previous = RenderTexture.active;
+        Color[] sourcePixels = new Color[AtlasCellSize * AtlasCellSize];
+        for (int index = 0; index < sourceSprites.Count; index++)
+        {
+            Sprite sprite = sourceSprites[index];
+            Rect textureRect = sprite.textureRect;
+            RenderTexture.active = cellRenderTexture;
+            GL.Clear(true, true, Color.clear);
+            Vector2 scale = new Vector2(textureRect.width / sprite.texture.width,
+                textureRect.height / sprite.texture.height);
+            Vector2 offset = new Vector2(textureRect.x / sprite.texture.width,
+                textureRect.y / sprite.texture.height);
+            Graphics.Blit(sprite.texture, cellRenderTexture, scale, offset);
+            cellPixels.ReadPixels(new Rect(0f, 0f, AtlasCellSize, AtlasCellSize), 0, 0, false);
+            cellPixels.Apply(false, false);
+            sourcePixels = cellPixels.GetPixels();
+            int column = index % AtlasColumns;
+            int row = index / AtlasColumns;
+            atlas.SetPixels(column * AtlasCellSize, row * AtlasCellSize,
+                AtlasCellSize, AtlasCellSize, sourcePixels);
+        }
+
+        RenderTexture.active = previous;
+        RenderTexture.ReleaseTemporary(cellRenderTexture);
+        UnityEngine.Object.Destroy(cellPixels);
+        atlas.Apply(false, false);
+
+        TMP_SpriteAsset asset = ScriptableObject.CreateInstance<TMP_SpriteAsset>();
+        asset.name = "Story Inline Expressions";
+        asset.hideFlags = HideFlags.DontSave;
+        // Runtime-created assets do not pass through TMP's editor importer. Mark the asset as the
+        // current format before assigning a material; otherwise TMP 3.0.7 treats it as a legacy
+        // asset and tries to upgrade the absent spriteInfoList.
+        JsonUtility.FromJsonOverwrite(
+            "{\"m_Version\":\"1.1.0\",\"m_FaceInfo\":{\"m_PointSize\":40,\"m_Scale\":1,"
+            + "\"m_LineHeight\":40,\"m_AscentLine\":32,\"m_CapLine\":32,\"m_Baseline\":0,"
+            + "\"m_DescentLine\":-8,\"m_TabWidth\":40}}", asset);
+        asset.spriteInfoList = new List<TMP_Sprite>();
+        asset.hashCode = TMP_TextUtilities.GetSimpleHashCode(asset.name);
+        asset.spriteSheet = atlas;
+        Shader shader = Shader.Find("TextMeshPro/Sprite");
+        if (shader == null)
+        {
+            UnityEngine.Object.Destroy(atlas);
+            UnityEngine.Object.Destroy(asset);
+            return null;
+        }
+
+        asset.material = new Material(shader)
+        {
+            name = "Story Inline Expressions Material",
+            hideFlags = HideFlags.DontSave,
+        };
+        asset.material.SetTexture("_MainTex", atlas);
+
+        StoryPresentationSettings settings = StoryPresentationSettings.Load();
+        float expressionScale = settings.InlineExpressionScale;
+        float expressionBearingY = AtlasCellSize * .82f + settings.InlineExpressionVerticalOffset;
+        for (int index = 0; index < sourceSprites.Count; index++)
+        {
+            int column = index % AtlasColumns;
+            int row = index / AtlasColumns;
+            GlyphRect glyphRect = new GlyphRect(column * AtlasCellSize, row * AtlasCellSize,
+                AtlasCellSize, AtlasCellSize);
+            GlyphMetrics metrics = new GlyphMetrics(AtlasCellSize, AtlasCellSize, 0f,
+                expressionBearingY, AtlasCellSize);
+            TMP_SpriteGlyph glyph = new TMP_SpriteGlyph((uint)index, metrics, glyphRect, 1f, 0);
+            TMP_SpriteCharacter character = new TMP_SpriteCharacter(0xFFFE, asset, glyph)
+            {
+                name = GetTmpSpriteName(sourceIds[index]),
+                scale = expressionScale,
+            };
+            asset.spriteGlyphTable.Add(glyph);
+            asset.spriteCharacterTable.Add(character);
+        }
+
+        asset.UpdateLookupTables();
+        inlineSpriteAsset = asset;
+        return inlineSpriteAsset;
+    }
+
+    private static string BuildInlineTag(string id)
+    {
+        return "<emoji id=\"" + id + "\"/>";
+    }
+
+    private static string GetTmpSpriteName(string id)
+    {
+        int slash = id.LastIndexOf('/');
+        return TmpSpriteNamePrefix + (slash < 0 ? id : id.Substring(slash + 1));
     }
 
     public static StoryExpressionMotion GetMotion(string id)

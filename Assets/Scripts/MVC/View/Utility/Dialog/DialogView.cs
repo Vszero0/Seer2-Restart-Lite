@@ -24,9 +24,6 @@ public class DialogView : Module
     [SerializeField] private RectTransform contentRect;
     [SerializeField] private RectTransform functionRect;
     [SerializeField] private RectTransform replyRect;
-    [Header("Story Text Layout")]
-    [SerializeField, Min(0f)] private float storyLineSpacing = 10f;
-
     private Action<NpcButtonHandler> replyClickHandler;
     private Image storySpeakerIcon;
     private Image storySpeakerExpression;
@@ -56,6 +53,7 @@ public class DialogView : Module
     private Vector2 defaultTextAnchoredPosition;
     private Vector2 defaultTextSizeDelta;
     private TMP_FontAsset defaultFont;
+    private TMP_SpriteAsset defaultSpriteAsset;
     private Material defaultFontSharedMaterial;
     private float defaultFontSize;
     private float defaultLineSpacing;
@@ -70,27 +68,12 @@ public class DialogView : Module
     private Vector2 storySpeakerExpressionBasePosition;
     private static readonly Color32 StorySpeakerHintColor = new Color32(145, 190, 200, 210);
     private static readonly Color32 StorySpeakerHintHoverColor = new Color32(82, 229, 249, 255);
-    private const float StoryTextInitialDelay = 0.12f;
-    private const float StoryTextCharacterInterval = 0.03f;
-    private const float StoryTextCharacterDuration = 0.12f;
-    private const float StoryTextRiseDistance = 6f;
 
     protected override void Awake()
     {
         base.Awake();
         StoreDefaultLayout();
         StoreDefaultTextStyle();
-    }
-
-    private void OnValidate()
-    {
-        storyLineSpacing = Mathf.Max(0f, storyLineSpacing);
-        if (content == null || content.text == null)
-            return;
-        if (Application.isPlaying && !usesStoryLayout)
-            return;
-
-        ApplyStoryLineSpacing();
     }
 
     public void SetReplyClickHandler(Action<NpcButtonHandler> handler)
@@ -106,7 +89,10 @@ public class DialogView : Module
 
         SetIconAndName(info.icon, info.pos, info.size, info.name);
         SetGif(info.gifInfo, info.icon);
-        SetContent(info.content);
+        content.text.spriteAsset = useStoryLayout && StoryExpressionCatalog.ContainsInlineExpression(info?.content)
+            ? StoryExpressionCatalog.GetInlineSpriteAsset()
+            : defaultSpriteAsset;
+        SetContent(useStoryLayout ? StoryExpressionCatalog.ToTmpRichText(info.content) : info.content);
         if (useStoryLayout)
             ApplyStoryLayout(info, hasIcon, animateStoryText);
         else
@@ -191,18 +177,20 @@ public class DialogView : Module
         if (characterCount == 0 || !Enumerable.Range(0, characterCount).Any(i => textInfo.characterInfo[i].isVisible))
             return;
 
+        StoryPresentationSettings settings = StoryPresentationSettings.Load();
         TMP_MeshInfo[] sourceMeshInfo = textInfo.CopyMeshInfoVertexData();
-        float[] characterStartTimes = BuildStoryCharacterStartTimes(textInfo, characterCount, out float totalDuration);
+        float[] characterStartTimes = BuildStoryCharacterStartTimes(textInfo, characterCount, settings,
+            out float totalDuration);
         isStoryTextRevealing = true;
         storyTextRevealCoroutine = StartCoroutine(StoryTextRevealCoroutine(
-            text, sourceMeshInfo, characterStartTimes, totalDuration));
+            text, sourceMeshInfo, characterStartTimes, totalDuration, settings));
     }
 
     private static float[] BuildStoryCharacterStartTimes(TMP_TextInfo textInfo, int characterCount,
-        out float totalDuration)
+        StoryPresentationSettings settings, out float totalDuration)
     {
         float[] startTimes = new float[characterCount];
-        float time = StoryTextInitialDelay;
+        float time = settings.TextInitialDelay;
         float lastVisibleStart = time;
 
         for (int i = 0; i < characterCount; i++)
@@ -213,35 +201,35 @@ public class DialogView : Module
             if (characterInfo.isVisible)
             {
                 lastVisibleStart = time;
-                time += StoryTextCharacterInterval + GetStoryPunctuationPause(character);
+                time += settings.TextCharacterInterval + GetStoryPunctuationPause(character, settings);
             }
             else if (character == '\n' || character == '\r')
             {
-                time += 0.08f;
+                time += settings.NewlinePause;
             }
         }
 
-        totalDuration = lastVisibleStart + StoryTextCharacterDuration;
+        totalDuration = lastVisibleStart + settings.TextCharacterDuration;
         return startTimes;
     }
 
-    private static float GetStoryPunctuationPause(char character)
+    private static float GetStoryPunctuationPause(char character, StoryPresentationSettings settings)
     {
         return character switch
         {
-            '、' or '，' or ',' or '；' or ';' or '：' or ':' => 0.06f,
-            '。' or '.' or '！' or '!' or '？' or '?' or '…' => 0.12f,
+            '、' or '，' or ',' or '；' or ';' or '：' or ':' => settings.ShortPunctuationPause,
+            '。' or '.' or '！' or '!' or '？' or '?' or '…' => settings.LongPunctuationPause,
             _ => 0f,
         };
     }
 
     private IEnumerator StoryTextRevealCoroutine(TMP_Text text, TMP_MeshInfo[] sourceMeshInfo,
-        float[] characterStartTimes, float totalDuration)
+        float[] characterStartTimes, float totalDuration, StoryPresentationSettings settings)
     {
         float elapsed = 0f;
         while (elapsed < totalDuration)
         {
-            ApplyStoryTextRevealFrame(text, sourceMeshInfo, characterStartTimes, elapsed);
+            ApplyStoryTextRevealFrame(text, sourceMeshInfo, characterStartTimes, elapsed, settings);
             elapsed += Time.unscaledDeltaTime;
             yield return null;
         }
@@ -253,7 +241,7 @@ public class DialogView : Module
     }
 
     private static void ApplyStoryTextRevealFrame(TMP_Text text, TMP_MeshInfo[] sourceMeshInfo,
-        float[] characterStartTimes, float elapsed)
+        float[] characterStartTimes, float elapsed, StoryPresentationSettings settings)
     {
         TMP_TextInfo textInfo = text.textInfo;
         RestoreStoryTextMeshArrays(textInfo, sourceMeshInfo);
@@ -265,13 +253,13 @@ public class DialogView : Module
             if (!characterInfo.isVisible)
                 continue;
 
-            float progress = Mathf.Clamp01((elapsed - characterStartTimes[i]) / StoryTextCharacterDuration);
+            float progress = Mathf.Clamp01((elapsed - characterStartTimes[i]) / settings.TextCharacterDuration);
             float easedProgress = 1f - Mathf.Pow(1f - progress, 3f);
             int materialIndex = characterInfo.materialReferenceIndex;
             int vertexIndex = characterInfo.vertexIndex;
             Vector3[] vertices = textInfo.meshInfo[materialIndex].vertices;
             Color32[] colors = textInfo.meshInfo[materialIndex].colors32;
-            Vector3 offset = Vector3.down * (StoryTextRiseDistance * (1f - easedProgress));
+            Vector3 offset = Vector3.down * (settings.TextRiseDistance * (1f - easedProgress));
 
             for (int vertex = 0; vertex < 4; vertex++)
             {
@@ -360,6 +348,7 @@ public class DialogView : Module
             return;
 
         defaultFont = content.text.font;
+        defaultSpriteAsset = content.text.spriteAsset;
         defaultFontSharedMaterial = content.text.fontSharedMaterial;
         defaultFontSize = content.text.fontSize;
         defaultLineSpacing = content.text.lineSpacing;
@@ -409,7 +398,7 @@ public class DialogView : Module
         content.text.fontSize = style != null && style.fontSize > 0
             ? style.fontSize
             : defaultFontSize;
-        content.text.lineSpacing = storyLineSpacing;
+        content.text.lineSpacing = StoryPresentationSettings.Load().TextLineSpacing;
         content.text.fontStyle = style != null && style.bold
             ? FontStyles.Bold
             : FontStyles.Normal;
@@ -449,6 +438,7 @@ public class DialogView : Module
             return;
 
         content.text.font = defaultFont;
+        content.text.spriteAsset = defaultSpriteAsset;
         content.text.fontSharedMaterial = defaultFontSharedMaterial;
         content.text.fontSize = defaultFontSize;
         content.text.lineSpacing = defaultLineSpacing;
@@ -456,16 +446,6 @@ public class DialogView : Module
         content.text.color = defaultTextColor;
         content.text.outlineColor = defaultOutlineColor;
         content.text.outlineWidth = defaultOutlineWidth;
-    }
-
-    private void ApplyStoryLineSpacing()
-    {
-        content.text.lineSpacing = storyLineSpacing;
-        content.text.SetVerticesDirty();
-        content.text.SetLayoutDirty();
-        content.text.ForceMeshUpdate();
-        if (content.text.rectTransform != null)
-            LayoutRebuilder.ForceRebuildLayoutImmediate(content.text.rectTransform);
     }
 
     private void ApplyStoryLayout(DialogInfo info, bool isActiveSpeaker, bool animateExpression)
