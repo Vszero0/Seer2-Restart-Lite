@@ -62,6 +62,18 @@ public sealed class WorkshopStoryPointAddActorOption
     }
 }
 
+public sealed class WorkshopStoryItemOption
+{
+    public int itemId;
+    public string name;
+    public string sprite;
+    public bool isMod;
+    public Sprite icon;
+
+    public string displayName => (isMod ? "[当前 Mod] " : "[本体] ")
+        + (string.IsNullOrWhiteSpace(name) ? itemId.ToString() : name + "  " + itemId);
+}
+
 /// <summary>
 /// 由场景命令切分出的剧情点时间线区段。场景数据描述静态舞台，
 /// 区段描述该舞台内依次发生的对白、旁白与其他演出命令。
@@ -486,6 +498,156 @@ public sealed class WorkshopStoryNodeEditorModel
     }
 
     public List<StoryBattleOption> GetBattleOptions(string filter) => StoryBattleCatalog.GetOptions(filter);
+
+    public List<WorkshopStoryItemOption> GetItemOptions(string filter)
+    {
+        string query = (filter ?? string.Empty).Trim();
+        return ItemInfo.database
+            .Where(info => info != null && (string.IsNullOrEmpty(query)
+                || info.id.ToString().IndexOf(query, StringComparison.OrdinalIgnoreCase) >= 0
+                || (info.name ?? string.Empty).IndexOf(query, StringComparison.OrdinalIgnoreCase) >= 0))
+            .Select(info => new WorkshopStoryItemOption
+            {
+                itemId = info.id,
+                name = info.name,
+                sprite = GetItemSpritePath(info),
+                isMod = ItemInfo.IsMod(info.id),
+                icon = info.icon,
+            })
+            .Where(option => option.icon != null && !string.IsNullOrWhiteSpace(option.sprite))
+            .Take(200)
+            .ToList();
+    }
+
+    public List<StoryScenePropDocument> GetSceneProps(string sceneId)
+    {
+        return (DraftNode?.GetScene(sceneId)?.props ?? Array.Empty<StoryScenePropDocument>())
+            .Where(prop => prop != null && !string.IsNullOrWhiteSpace(prop.id))
+            .ToList();
+    }
+
+    public bool CreatePropShowCommand(string sceneId, int itemId, out StoryScenePropDocument prop,
+        out StoryCommandDocument command, out string error)
+    {
+        prop = null;
+        command = null;
+        StorySceneDocument scene = DraftNode?.GetScene(sceneId);
+        ItemInfo item = Item.GetItemInfo(itemId);
+        string sprite = GetItemSpritePath(item);
+        if (scene == null)
+        {
+            error = "请先新建并选择一个场景。";
+            return false;
+        }
+        if (item == null || item.icon == null || string.IsNullOrWhiteSpace(sprite))
+        {
+            error = "该物品没有可用于剧情展示的图片资源。";
+            return false;
+        }
+
+        string propId = CreatePropId(scene);
+        prop = new StoryScenePropDocument
+        {
+            id = propId,
+            itemId = item.id,
+            name = item.name,
+            sprite = sprite,
+            layer = "front",
+            x = .5f,
+            y = .55f,
+            scale = 1f,
+        };
+        scene.props = (scene.props ?? Array.Empty<StoryScenePropDocument>()).Append(prop).ToArray();
+        WorkshopStorySceneSection section = GetSceneSections().First(value => value?.scene != null
+            && string.Equals(value.scene.id, sceneId, StringComparison.OrdinalIgnoreCase));
+        command = new StoryCommandDocument
+        {
+            commandId = CreateCommandId(),
+            type = "showprop",
+            sceneId = sceneId,
+            propId = propId,
+        };
+        InsertCommand(section.commandEndIndex, command);
+        HasUnsavedChanges = true;
+        error = string.Empty;
+        return true;
+    }
+
+    public bool CreatePropHideCommand(string sceneId, string propId, out StoryCommandDocument command,
+        out string error)
+        => CreatePropVisibilityCommand(sceneId, propId, false, out command, out error);
+
+    public bool CreatePropShowCommand(string sceneId, string propId, out StoryCommandDocument command,
+        out string error)
+        => CreatePropVisibilityCommand(sceneId, propId, true, out command, out error);
+
+    private bool CreatePropVisibilityCommand(string sceneId, string propId, bool visible,
+        out StoryCommandDocument command, out string error)
+    {
+        command = null;
+        StorySceneDocument scene = DraftNode?.GetScene(sceneId);
+        if (scene?.GetProp(propId) == null)
+        {
+            error = "请先选择当前场景中的物件。";
+            return false;
+        }
+
+        WorkshopStorySceneSection section = GetSceneSections().First(value => value?.scene != null
+            && string.Equals(value.scene.id, sceneId, StringComparison.OrdinalIgnoreCase));
+        command = new StoryCommandDocument
+        {
+            commandId = CreateCommandId(),
+            type = visible ? "showprop" : "hideprop",
+            sceneId = sceneId,
+            propId = propId,
+        };
+        InsertCommand(section.commandEndIndex, command);
+        HasUnsavedChanges = true;
+        error = string.Empty;
+        return true;
+    }
+
+    public bool UpdateSceneProp(string sceneId, string propId, float x, float y, float scale,
+        string layer, out string error)
+    {
+        StoryScenePropDocument prop = DraftNode?.GetScene(sceneId)?.GetProp(propId);
+        if (prop == null)
+        {
+            error = "找不到要调整的场景物件。";
+            return false;
+        }
+
+        prop.x = Mathf.Clamp01(x);
+        prop.y = Mathf.Clamp01(y);
+        prop.scale = Mathf.Clamp(scale, .25f, 4f);
+        prop.layer = string.Equals(layer, "back", StringComparison.OrdinalIgnoreCase) ? "back" : "front";
+        HasUnsavedChanges = true;
+        error = string.Empty;
+        return true;
+    }
+
+    public bool RemoveSceneProp(string sceneId, string propId, out string error)
+    {
+        StorySceneDocument scene = DraftNode?.GetScene(sceneId);
+        StoryScenePropDocument prop = scene?.GetProp(propId);
+        if (prop == null)
+        {
+            error = "找不到要删除的场景物件。";
+            return false;
+        }
+
+        scene.props = (scene.props ?? Array.Empty<StoryScenePropDocument>())
+            .Where(value => value != null && !string.Equals(value.id, propId, StringComparison.OrdinalIgnoreCase))
+            .ToArray();
+        DraftNode.commands = (DraftNode.commands ?? Array.Empty<StoryCommandDocument>())
+            .Where(value => value == null || !string.Equals(value.propId, propId, StringComparison.OrdinalIgnoreCase)
+                || (!string.Equals(value.type, "showprop", StringComparison.OrdinalIgnoreCase)
+                    && !string.Equals(value.type, "hideprop", StringComparison.OrdinalIgnoreCase)))
+            .ToArray();
+        HasUnsavedChanges = true;
+        error = string.Empty;
+        return true;
+    }
 
     public bool CreateBattleCommand(string sceneId, StoryBattleReferenceDocument reference,
         out StoryCommandDocument command, out string error)
@@ -1644,7 +1806,36 @@ public sealed class WorkshopStoryNodeEditorModel
         return command != null && (string.Equals(command.type, "say", StringComparison.OrdinalIgnoreCase)
             || string.Equals(command.type, "narrate", StringComparison.OrdinalIgnoreCase)
             || string.Equals(command.type, "choice", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(command.type, "battle", StringComparison.OrdinalIgnoreCase));
+            || string.Equals(command.type, "battle", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(command.type, "showprop", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(command.type, "hideprop", StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static string GetItemSpritePath(ItemInfo item)
+    {
+        if (item == null || string.IsNullOrWhiteSpace(item.resId) || item.resId == "none")
+            return null;
+        string resourceId = item.resId.Trim();
+        if (!int.TryParse(resourceId, out int numericResourceId))
+        {
+            if (ResourceManager.instance?.GetLocalAddressables<Sprite>(resourceId) != null)
+                return "Builtin/" + resourceId;
+            if (ResourceManager.instance?.GetLocalAddressables<Sprite>(resourceId, true) != null)
+                return "Mod/" + resourceId;
+            return resourceId;
+        }
+
+        string path = "Items/" + resourceId;
+        return (ItemInfo.IsMod(numericResourceId) ? "Mod/" : "Builtin/") + path;
+    }
+
+    private static string CreatePropId(StorySceneDocument scene)
+    {
+        int index = (scene?.props ?? Array.Empty<StoryScenePropDocument>()).Length + 1;
+        string id = "prop_" + index;
+        while (scene?.GetProp(id) != null)
+            id = "prop_" + (++index);
+        return id;
     }
 
     private bool IsChoiceCommandReferenced(StoryCommandDocument command)

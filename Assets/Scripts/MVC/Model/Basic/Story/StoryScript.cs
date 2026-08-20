@@ -45,6 +45,7 @@ public class StoryCommand
     public string expression;
     public string text;
     public StoryActorDocument actorInfo;
+    public StoryScenePropDocument propInfo;
     public StoryActorDocument[] sceneActors;
     public StoryLayoutDocument layout;
     public StorySceneActorLayoutDocument[] actorLayouts;
@@ -86,6 +87,8 @@ public enum StoryCommandType
     Scene,
     Show,
     Hide,
+    ShowProp,
+    HideProp,
     Say,
     Narrate,
     Choice,

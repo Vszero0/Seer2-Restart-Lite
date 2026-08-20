@@ -20,6 +20,8 @@ public static class StoryValidator
         "mission",
         "teleport",
         "battle",
+        "showprop",
+        "hideprop",
         "end",
     };
 
@@ -205,6 +207,25 @@ public static class StoryValidator
                 if (actorLayout.scale <= 0f)
                     errors.Add(location + ".actors[" + actorId + "].scale 必须大于 0");
             }
+
+            HashSet<string> propIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (StoryScenePropDocument prop in scene.props ?? System.Array.Empty<StoryScenePropDocument>())
+            {
+                string propId = prop?.id;
+                if (string.IsNullOrWhiteSpace(propId) || !propIds.Add(propId))
+                    errors.Add(location + ".props 存在重复或为空的物件 id");
+                if (prop == null)
+                    continue;
+                if (string.IsNullOrWhiteSpace(prop.sprite))
+                    errors.Add(location + ".props[" + propId + "].sprite 不能为空");
+                if (prop.x < 0f || prop.x > 1f || prop.y < 0f || prop.y > 1f)
+                    errors.Add(location + ".props[" + propId + "] 的位置必须位于舞台范围内");
+                if (prop.scale < .25f || prop.scale > 4f)
+                    errors.Add(location + ".props[" + propId + "].scale 必须在 0.25 到 4 之间");
+                if (!string.Equals(prop.layer, "front", System.StringComparison.OrdinalIgnoreCase)
+                    && !string.Equals(prop.layer, "back", System.StringComparison.OrdinalIgnoreCase))
+                    errors.Add(location + ".props[" + propId + "].layer 只支持 front 或 back");
+            }
         }
     }
 
@@ -377,6 +398,14 @@ public static class StoryValidator
                         break;
                     }
                     StoryResourceValidator.ValidateBattle(command.battle, errors, location + ".battle");
+                    break;
+                case "showprop":
+                case "hideprop":
+                    StorySceneDocument propScene = node.GetScene(command.sceneId);
+                    if (propScene == null)
+                        errors.Add(location + ".sceneId 引用了不存在的场景：" + (command.sceneId ?? string.Empty));
+                    else if (propScene.GetProp(command.propId) == null)
+                        errors.Add(location + ".propId 引用了不存在的场景物件：" + (command.propId ?? string.Empty));
                     break;
             }
         }

@@ -72,6 +72,19 @@ public static class StoryResourceValidator
             ValidatePath(scene.defaultBgmResourcePath, "audio", "story", errors,
                 location + ".defaultBgmResourcePath");
         }
+
+        foreach (StoryNodeDocument node in document.nodes ?? Array.Empty<StoryNodeDocument>())
+        {
+            foreach (StorySceneDocument scene in node?.scenes ?? Array.Empty<StorySceneDocument>())
+            {
+                foreach (StoryScenePropDocument prop in scene?.props ?? Array.Empty<StoryScenePropDocument>())
+                {
+                    if (prop != null)
+                        ValidatePath(prop.sprite, "sprite", "auto", errors,
+                            "node[" + node.id + "].scenes[" + scene.id + "].props[" + prop.id + "].sprite");
+                }
+            }
+        }
     }
 
     public static Dictionary<string, StoryActorDocument> ValidateActors(StoryDocument document, List<string> errors)

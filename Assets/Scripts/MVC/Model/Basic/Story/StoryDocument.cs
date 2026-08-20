@@ -45,6 +45,7 @@ public class StorySceneDocument
     // 进入当前场景时使用的背景转场。
     public StoryTransitionDocument transition;
     public StorySceneActorLayoutDocument[] actors;
+    public StoryScenePropDocument[] props;
     public StoryLayoutDocument layout;
 
     public StorySceneActorLayoutDocument GetActorLayout(string actorId)
@@ -54,6 +55,36 @@ public class StorySceneDocument
 
         return actors.FirstOrDefault(x => x != null && string.Equals(x.actorId, actorId, StringComparison.OrdinalIgnoreCase));
     }
+
+    public StoryScenePropDocument GetProp(string propId)
+    {
+        if (string.IsNullOrWhiteSpace(propId) || props == null)
+            return null;
+
+        return props.FirstOrDefault(value => value != null
+            && string.Equals(value.id, propId, StringComparison.OrdinalIgnoreCase));
+    }
+}
+
+[Serializable]
+public class StoryScenePropDocument
+{
+    public string id;
+    public int itemId;
+    public string name;
+    public string sprite;
+    public string layer = "front";
+    public float x = .5f;
+    public float y = .5f;
+    public float scale = 1f;
+
+    public string displayName => string.IsNullOrWhiteSpace(name) ? id : name;
+    public string normalizedLayer => string.Equals(layer, "back", StringComparison.OrdinalIgnoreCase)
+        ? "back"
+        : "front";
+    public float normalizedX => Mathf.Clamp01(x);
+    public float normalizedY => Mathf.Clamp01(y);
+    public float normalizedScale => Mathf.Clamp(scale <= 0f ? 1f : scale, .25f, 4f);
 }
 
 [Serializable]
@@ -547,6 +578,7 @@ public class StoryCommandDocument
     public string bg;
     public StoryTransitionDocument transition;
     public string actor;
+    public string propId;
     public string expression;
     public string text;
     public string target;
@@ -609,6 +641,15 @@ public class StoryCommandDocument
                 command.actorId = actor;
                 command.args = string.IsNullOrEmpty(actor) ? args : actor;
                 return command;
+            case "showprop":
+                command.type = StoryCommandType.ShowProp;
+                command.args = propId;
+                command.propInfo = node?.GetScene(sceneId)?.GetProp(propId);
+                return command.propInfo == null ? null : command;
+            case "hideprop":
+                command.type = StoryCommandType.HideProp;
+                command.args = propId;
+                return string.IsNullOrWhiteSpace(propId) ? null : command;
             case "say":
                 command.type = StoryCommandType.Say;
                 command.actorId = actor;

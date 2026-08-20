@@ -740,6 +740,7 @@ public sealed class WorkshopStoryBrowserModel
         Dictionary<string, string> commandIdMap = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         Dictionary<string, string> choiceIdMap = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         Dictionary<string, string> optionIdMap = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        Dictionary<string, string> propIdMap = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
         copy.id = newNodeId;
         copy.displayName = (string.IsNullOrWhiteSpace(source.displayName) ? source.id : source.displayName) + "（副本）";
@@ -747,8 +748,8 @@ public sealed class WorkshopStoryBrowserModel
         copy.fallbackNodeId = GetDefaultFlowTargetForCopy(source);
         copy.endTeleportMapId = 0;
 
-        RemapCopiedScenes(source, copy, newNodeId, sceneIdMap);
-        RemapCopiedCommands(source, copy, newNodeId, sceneIdMap, commandIdMap, choiceIdMap, optionIdMap);
+        RemapCopiedScenes(source, copy, newNodeId, sceneIdMap, propIdMap);
+        RemapCopiedCommands(source, copy, newNodeId, sceneIdMap, commandIdMap, choiceIdMap, optionIdMap, propIdMap);
         RemapCopiedTransitions(source, copy, newNodeId, commandIdMap, choiceIdMap, optionIdMap);
 
         StoryNodeDocument[] nodes = (SelectedDocument.nodes ?? Array.Empty<StoryNodeDocument>())
@@ -1585,7 +1586,8 @@ public sealed class WorkshopStoryBrowserModel
         StoryNodeDocument source,
         StoryNodeDocument copy,
         string newNodeId,
-        Dictionary<string, string> sceneIdMap)
+        Dictionary<string, string> sceneIdMap,
+        Dictionary<string, string> propIdMap)
     {
         StorySceneDocument[] sourceScenes = source?.scenes ?? Array.Empty<StorySceneDocument>();
         StorySceneDocument[] copiedScenes = copy?.scenes ?? Array.Empty<StorySceneDocument>();
@@ -1600,6 +1602,22 @@ public sealed class WorkshopStoryBrowserModel
             if (!string.IsNullOrWhiteSpace(oldId))
                 sceneIdMap[oldId] = newId;
             copiedScene.id = newId;
+
+            StoryScenePropDocument[] sourceProps = i < sourceScenes.Length
+                ? sourceScenes[i]?.props ?? Array.Empty<StoryScenePropDocument>()
+                : Array.Empty<StoryScenePropDocument>();
+            StoryScenePropDocument[] copiedProps = copiedScene.props ?? Array.Empty<StoryScenePropDocument>();
+            for (int propIndex = 0; propIndex < copiedProps.Length; propIndex++)
+            {
+                StoryScenePropDocument copiedProp = copiedProps[propIndex];
+                if (copiedProp == null)
+                    continue;
+                string oldPropId = propIndex < sourceProps.Length ? sourceProps[propIndex]?.id : copiedProp.id;
+                string newPropId = newNodeId + ":prop:" + (i + 1) + ":" + (propIndex + 1);
+                if (!string.IsNullOrWhiteSpace(oldPropId) && !string.IsNullOrWhiteSpace(oldId))
+                    propIdMap[oldId + "|" + oldPropId] = newPropId;
+                copiedProp.id = newPropId;
+            }
         }
     }
 
@@ -1610,7 +1628,8 @@ public sealed class WorkshopStoryBrowserModel
         Dictionary<string, string> sceneIdMap,
         Dictionary<string, string> commandIdMap,
         Dictionary<string, string> choiceIdMap,
-        Dictionary<string, string> optionIdMap)
+        Dictionary<string, string> optionIdMap,
+        Dictionary<string, string> propIdMap)
     {
         StoryCommandDocument[] sourceCommands = source?.commands ?? Array.Empty<StoryCommandDocument>();
         StoryCommandDocument[] copiedCommands = copy?.commands ?? Array.Empty<StoryCommandDocument>();
@@ -1657,6 +1676,9 @@ public sealed class WorkshopStoryBrowserModel
                 commandIdMap[oldCommandId] = newCommandId;
             copiedCommand.commandId = newCommandId;
             copiedCommand.sceneId = RemapId(copiedCommand.sceneId, sceneIdMap);
+            string propMapKey = (sourceCommand?.sceneId ?? string.Empty) + "|" + (sourceCommand?.propId ?? string.Empty);
+            if (propIdMap.TryGetValue(propMapKey, out string remappedPropId))
+                copiedCommand.propId = remappedPropId;
             copiedCommand.target = RemapSelfTarget(copiedCommand.target, source?.id, newNodeId);
             copiedCommand.condition = RemapConditionGroup(copiedCommand.condition, source?.id, newNodeId, commandIdMap, choiceIdMap, optionIdMap);
             copiedCommand.displayCondition = RemapConditionGroup(copiedCommand.displayCondition, source?.id, newNodeId, commandIdMap, choiceIdMap, optionIdMap);

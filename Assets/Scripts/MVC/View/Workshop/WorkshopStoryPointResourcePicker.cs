@@ -148,6 +148,27 @@ public sealed class WorkshopStoryPointResourcePicker
         }, null, null, true, canUseModResources);
     }
 
+    public void OpenItems(Func<string, List<WorkshopStoryItemOption>> getOptions,
+        Action<WorkshopStoryItemOption> onSelected)
+    {
+        bool canUseModResources = (getOptions?.Invoke(string.Empty) ?? new List<WorkshopStoryItemOption>())
+            .Any(option => option != null && option.isMod);
+        Open("添加场景物件", "输入物品名称或 ID", query =>
+        {
+            IEnumerable<WorkshopStoryItemOption> options = getOptions?.Invoke(query)
+                ?? Enumerable.Empty<WorkshopStoryItemOption>();
+            ClearList();
+            int index = 0;
+            foreach (WorkshopStoryItemOption option in options.Where(value => value != null
+                && value.isMod == showModResources))
+            {
+                WorkshopStoryItemOption captured = option;
+                CreateItemListButton(option, index++, () => onSelected?.Invoke(captured));
+            }
+            FinishList(index, showModResources ? "当前 Mod 中没有匹配的物品图片。" : "没有匹配的本体物品图片。");
+        }, null, null, true, canUseModResources);
+    }
+
     public void OpenMapLibrary(Func<List<WorkshopStoryPointResourceOption>> getOptions, Action onAdd,
         Action<int> onRemove)
     {
@@ -480,6 +501,35 @@ public sealed class WorkshopStoryPointResourcePicker
         // 运行时替换为 Zongyi 会让位图字体在该弹窗缩放下发糊。
         text.raycastTarget = false;
         text.text = label;
+    }
+
+    private void CreateItemListButton(WorkshopStoryItemOption option, int index, Action callback)
+    {
+        CreateListButton(option?.displayName ?? string.Empty, index, callback);
+        if (listContent == null || listContent.childCount == 0 || option?.icon == null)
+            return;
+
+        Transform row = listContent.GetChild(listContent.childCount - 1);
+        Text text = row.GetComponentInChildren<Text>(true);
+        if (text != null)
+        {
+            RectTransform textRect = text.rectTransform;
+            textRect.offsetMin = new Vector2(Mathf.Max(34f, textRect.offsetMin.x), textRect.offsetMin.y);
+            text.alignment = TextAnchor.MiddleLeft;
+        }
+
+        GameObject iconObject = new GameObject("Item Icon", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));
+        iconObject.transform.SetParent(row, false);
+        RectTransform iconRect = iconObject.GetComponent<RectTransform>();
+        iconRect.anchorMin = new Vector2(0f, .5f);
+        iconRect.anchorMax = new Vector2(0f, .5f);
+        iconRect.pivot = new Vector2(.5f, .5f);
+        iconRect.anchoredPosition = new Vector2(18f, 0f);
+        iconRect.sizeDelta = new Vector2(26f, 26f);
+        Image image = iconObject.GetComponent<Image>();
+        image.sprite = option.icon;
+        image.preserveAspect = true;
+        image.raycastTarget = false;
     }
 
     private void CreateManagedListItem(string label, int index, Action remove)

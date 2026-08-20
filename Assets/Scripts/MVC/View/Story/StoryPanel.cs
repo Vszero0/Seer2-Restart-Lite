@@ -31,6 +31,7 @@ public class StoryPanel : Panel
     private const string DefaultIconPos = "0,45";
     private StoryScript story;
     private StoryActorStage actorStage;
+    private StoryPropStage propStage;
     private string pendingStoryId;
     private int boundMissionId;
     private bool boundMissionCompleted;
@@ -61,6 +62,7 @@ public class StoryPanel : Panel
     private Image dialogSceneImage;
     private Image dialogTransitionSceneImage;
     private RectTransform actorLayer;
+    private RectTransform visualStageRoot;
     private Material backgroundGaussianMaterial;
     private Material primaryBackgroundMaterial;
     private Material transitionBackgroundMaterial;
@@ -241,6 +243,9 @@ public class StoryPanel : Panel
         RestoreMusicContext();
         ClearDialogHandlers();
         actorStage?.Clear();
+        propStage?.Clear();
+        if (visualStageRoot != null)
+            Destroy(visualStageRoot.gameObject);
         DialogManager.instance?.CloseDialog();
         if (exitButton != null)
             Destroy(exitButton);
@@ -282,12 +287,22 @@ public class StoryPanel : Panel
         actorLayer = DialogManager.instance != null
             ? DialogManager.instance.GetStoryActorLayer()
             : CreateRect("Story Actors", transform, Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero, Vector2.zero);
+        visualStageRoot = CreateRect("Story Visual Stage", actorLayer, Vector2.zero, Vector2.one,
+            Vector2.zero, Vector2.zero, Vector2.zero);
+        RectTransform backPropLayer = CreateRect("Story Back Props", visualStageRoot, Vector2.zero, Vector2.one,
+            Vector2.zero, Vector2.zero, Vector2.zero);
+        RectTransform actorVisualLayer = CreateRect("Story Actor Visuals", visualStageRoot, Vector2.zero, Vector2.one,
+            Vector2.zero, Vector2.zero, Vector2.zero);
+        RectTransform frontPropLayer = CreateRect("Story Front Props", visualStageRoot, Vector2.zero, Vector2.one,
+            Vector2.zero, Vector2.zero, Vector2.zero);
         actorStage = new StoryActorStage(
-            actorLayer,
+            actorVisualLayer,
             this,
             RefreshOverlayLayering,
             path => story?.GetResourceSource(path) ?? "auto",
             true);
+        propStage = new StoryPropStage(backPropLayer, frontPropLayer, this,
+            path => story?.GetResourceSource(path) ?? "auto");
         CreateExitButton();
         if (isPreviewMode)
             CreatePreviewIndicator();
@@ -579,6 +594,12 @@ public class StoryPanel : Panel
                     continue;
                 case StoryCommandType.Hide:
                     UnregisterActor(command.args);
+                    continue;
+                case StoryCommandType.ShowProp:
+                    propStage?.Show(command.propInfo);
+                    continue;
+                case StoryCommandType.HideProp:
+                    propStage?.Hide(command.args);
                     continue;
                 case StoryCommandType.Say:
                     SetDialogue(command.actorInfo, command.speaker, command.text, command.expression);
@@ -1328,6 +1349,7 @@ public class StoryPanel : Panel
         DialogManager.instance?.SetStoryDialogReplyClickHandler(null);
         DialogManager.instance?.SetStoryContentVisible(false);
         actorStage?.Clear();
+        propStage?.Clear();
     }
 
     private void ApplySceneSprite(Sprite sprite)

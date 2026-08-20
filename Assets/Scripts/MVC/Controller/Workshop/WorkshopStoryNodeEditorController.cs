@@ -95,6 +95,29 @@ public sealed class WorkshopStoryNodeEditorController
 
     public List<StoryBattleOption> GetBattleOptions(string filter) => model.GetBattleOptions(filter);
 
+    public List<WorkshopStoryItemOption> GetItemOptions(string filter) => model.GetItemOptions(filter);
+
+    public List<StoryScenePropDocument> GetSceneProps(string sceneId) => model.GetSceneProps(sceneId);
+
+    public bool CreatePropShowCommand(string sceneId, int itemId, out StoryScenePropDocument prop,
+        out StoryCommandDocument command, out string error)
+        => model.CreatePropShowCommand(sceneId, itemId, out prop, out command, out error);
+
+    public bool CreatePropHideCommand(string sceneId, string propId, out StoryCommandDocument command,
+        out string error)
+        => model.CreatePropHideCommand(sceneId, propId, out command, out error);
+
+    public bool CreatePropShowCommand(string sceneId, string propId, out StoryCommandDocument command,
+        out string error)
+        => model.CreatePropShowCommand(sceneId, propId, out command, out error);
+
+    public bool UpdateSceneProp(string sceneId, string propId, float x, float y, float scale,
+        string layer, out string error)
+        => model.UpdateSceneProp(sceneId, propId, x, y, scale, layer, out error);
+
+    public bool RemoveSceneProp(string sceneId, string propId, out string error)
+        => model.RemoveSceneProp(sceneId, propId, out error);
+
     public bool CreateBattleCommand(string sceneId, StoryBattleReferenceDocument reference,
         out StoryCommandDocument command, out string error)
     {
