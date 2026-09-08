@@ -44,6 +44,9 @@ public class StorySceneDocument
     public string bgmResourcePath;
     // 进入当前场景时使用的背景转场。
     public StoryTransitionDocument transition;
+    // 兼容早期单环境字段；新编辑器写入 environments。
+    public StoryEnvironmentDocument environment;
+    public StoryEnvironmentDocument[] environments;
     public StorySceneActorLayoutDocument[] actors;
     public StoryScenePropDocument[] props;
     public StoryLayoutDocument layout;
@@ -64,6 +67,53 @@ public class StorySceneDocument
         return props.FirstOrDefault(value => value != null
             && string.Equals(value.id, propId, StringComparison.OrdinalIgnoreCase));
     }
+
+    public StoryEnvironmentDocument GetEnvironmentSlot(int index)
+    {
+        if (index < 0 || index > 1)
+            return null;
+        if (environments != null && index < environments.Length)
+            return environments[index];
+        return index == 0 ? environment : null;
+    }
+
+    public StoryEnvironmentDocument[] GetActiveEnvironments()
+    {
+        StoryEnvironmentDocument[] values = environments != null && environments.Length > 0
+            ? environments
+            : environment == null ? Array.Empty<StoryEnvironmentDocument>() : new[] { environment };
+        return values.Where(value => value != null && value.normalizedType != "none").Take(2).ToArray();
+    }
+}
+
+[Serializable]
+public class StoryEnvironmentDocument
+{
+    public string type = "none";
+    public float intensity = .6f;
+    public float speed = 1f;
+    public float duration = 3.5f;
+
+    public string normalizedType
+    {
+        get
+        {
+            string value = (type ?? string.Empty).Trim().ToLowerInvariant();
+            switch (value)
+            {
+                case "rain":
+                case "crowd":
+                case "celebration":
+                    return value;
+                default:
+                    return "none";
+            }
+        }
+    }
+
+    public float normalizedIntensity => Mathf.Clamp(intensity <= 0f ? .6f : intensity, .2f, 1f);
+    public float normalizedSpeed => Mathf.Clamp(speed <= 0f ? 1f : speed, .25f, 2f);
+    public float normalizedDuration => Mathf.Clamp(duration <= 0f ? 3.5f : duration, 1f, 8f);
 }
 
 [Serializable]
@@ -214,7 +264,7 @@ public class StorySourceExportBindingDocument
 [Serializable]
 public class StoryDocument
 {
-    public int schemaVersion = 10;
+    public int schemaVersion = 11;
     public string status = "published";
     public string id;
     public string title;
@@ -577,6 +627,7 @@ public class StoryCommandDocument
     public string bgmResourcePath;
     public string bg;
     public StoryTransitionDocument transition;
+    public StoryEnvironmentDocument effect;
     public string actor;
     public string propId;
     public string expression;
@@ -624,6 +675,7 @@ public class StoryCommandDocument
                 command.layout = scene?.layout ?? GetSceneLayout();
                 command.actorLayouts = scene?.actors;
                 command.transition = scene?.transition ?? transition;
+                command.environments = scene?.GetActiveEnvironments();
                 command.sceneActors = (scene?.actors ?? Array.Empty<StorySceneActorLayoutDocument>())
                     .Where(layout => layout != null && !string.IsNullOrWhiteSpace(layout.actorId))
                     .Select(layout => document?.GetActor(layout.actorId))
@@ -690,6 +742,10 @@ public class StoryCommandDocument
                 command.type = StoryCommandType.Battle;
                 command.battle = battle;
                 return command.battle == null ? null : command;
+            case "effect":
+                command.type = StoryCommandType.Effect;
+                command.effect = effect;
+                return command.effect == null || command.effect.normalizedType == "none" ? null : command;
             case "end":
                 command.type = StoryCommandType.End;
                 command.args = (node?.endTeleportMapId ?? 0) == 0 ? null : node.endTeleportMapId.ToString();

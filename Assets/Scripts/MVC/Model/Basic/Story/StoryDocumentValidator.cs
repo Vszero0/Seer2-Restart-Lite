@@ -20,6 +20,7 @@ public static class StoryValidator
         "mission",
         "teleport",
         "battle",
+        "effect",
         "showprop",
         "hideprop",
         "end",
@@ -182,6 +183,21 @@ public static class StoryValidator
                 errors.Add(location + ".sceneResourceId 引用了不存在的自制场景：" + scene.sceneResourceId);
             StoryResourceValidator.ValidatePath(scene.bgmResourcePath, "audio", "auto", errors, location + ".bgmResourcePath");
             ValidateTransition(scene.transition, false, errors, location + ".transition");
+            if ((scene.environments?.Length ?? 0) > 2)
+                errors.Add(location + ".environments 最多只能配置两个持续氛围");
+            StoryEnvironmentDocument[] environments = scene.environments != null && scene.environments.Length > 0
+                ? scene.environments.Where(value => value != null).ToArray()
+                : scene.environment == null ? Array.Empty<StoryEnvironmentDocument>() : new[] { scene.environment };
+            HashSet<string> environmentTypes = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            for (int environmentIndex = 0; environmentIndex < environments.Length; environmentIndex++)
+            {
+                StoryEnvironmentDocument environment = environments[environmentIndex];
+                string environmentLocation = location + ".environments[" + environmentIndex + "]";
+                ValidateEnvironment(environment, false, errors, environmentLocation);
+                string type = environment.normalizedType;
+                if (type != "none" && !environmentTypes.Add(type))
+                    errors.Add(environmentLocation + ".type 不能与另一个持续氛围重复");
+            }
 
             HashSet<string> sceneActorIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             foreach (StorySceneActorLayoutDocument actorLayout in scene.actors ?? Array.Empty<StorySceneActorLayoutDocument>())
@@ -399,6 +415,11 @@ public static class StoryValidator
                     }
                     StoryResourceValidator.ValidateBattle(command.battle, errors, location + ".battle");
                     break;
+                case "effect":
+                    ValidateEnvironment(command.effect, true, errors, location + ".effect");
+                    if (node.GetScene(command.sceneId) == null)
+                        errors.Add(location + ".sceneId 引用了不存在的场景：" + (command.sceneId ?? string.Empty));
+                    break;
                 case "showprop":
                 case "hideprop":
                     StorySceneDocument propScene = node.GetScene(command.sceneId);
@@ -500,6 +521,29 @@ public static class StoryValidator
             errors.Add(location + ".type 使用了不支持的转场类型");
         if (transition.duration < .1f || transition.duration > 2f)
             errors.Add(location + ".duration 必须在 0.1 到 2 秒之间");
+    }
+
+    private static void ValidateEnvironment(StoryEnvironmentDocument environment, bool oneShot,
+        List<string> errors, string location)
+    {
+        if (environment == null)
+        {
+            errors.Add(location + " 不能为空");
+            return;
+        }
+
+        string rawType = (environment.type ?? string.Empty).Trim().ToLowerInvariant();
+        bool supported = oneShot
+            ? rawType == "celebration"
+            : rawType == "none" || rawType == "rain" || rawType == "crowd";
+        if (!supported)
+            errors.Add(location + ".type " + (oneShot ? "只支持 celebration" : "只支持 none、rain 或 crowd"));
+        if (environment.intensity < .2f || environment.intensity > 1f)
+            errors.Add(location + ".intensity 必须在 0.2 到 1 之间");
+        if (environment.speed < .25f || environment.speed > 2f)
+            errors.Add(location + ".speed 必须在 0.25 到 2 之间");
+        if (oneShot && (environment.duration < 1f || environment.duration > 8f))
+            errors.Add(location + ".duration 必须在 1 到 8 秒之间");
     }
 
     private static void ValidateConditionGroup(ConditionGroupDocument group, List<string> errors, string location)

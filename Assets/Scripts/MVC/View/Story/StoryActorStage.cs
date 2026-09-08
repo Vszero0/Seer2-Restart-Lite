@@ -12,6 +12,7 @@ using UnityEngine.UI;
 public sealed class StoryActorStage
 {
     private readonly RectTransform actorLayer;
+    private readonly RectTransform focusActorLayer;
     private readonly MonoBehaviour coroutineHost;
     private readonly Action refreshOverlay;
     private readonly Func<string, string> getResourceSource;
@@ -31,8 +32,20 @@ public sealed class StoryActorStage
         Action refreshOverlay,
         Func<string, string> getResourceSource,
         bool enableDepthFocus = false)
+        : this(actorLayer, null, coroutineHost, refreshOverlay, getResourceSource, enableDepthFocus)
+    {
+    }
+
+    public StoryActorStage(
+        RectTransform actorLayer,
+        RectTransform focusActorLayer,
+        MonoBehaviour coroutineHost,
+        Action refreshOverlay,
+        Func<string, string> getResourceSource,
+        bool enableDepthFocus = false)
     {
         this.actorLayer = actorLayer;
+        this.focusActorLayer = focusActorLayer;
         this.coroutineHost = coroutineHost;
         this.refreshOverlay = refreshOverlay;
         this.getResourceSource = getResourceSource;
@@ -150,15 +163,19 @@ public sealed class StoryActorStage
             }
             if (active)
             {
+                MoveToLayer(runtime, focusActorLayer ?? actorLayer);
                 runtime.image.transform.SetAsLastSibling();
                 activeRuntime = runtime;
             }
+            else
+            {
+                MoveToLayer(runtime, actorLayer);
+            }
         }
 
+        ApplyActorLayering(activeRuntime);
         if (activeRuntime != null)
             PlayActorFocus(activeRuntime, expressionMotion);
-        else
-            ApplyInitialActorLayering();
     }
 
     public void SetActorsNeutral()
@@ -562,14 +579,35 @@ public sealed class StoryActorStage
 
     private void ApplyInitialActorLayering()
     {
+        ApplyActorLayering(null);
+    }
+
+    private void ApplyActorLayering(StoryActorRuntime focusedRuntime)
+    {
         foreach (StoryActorRuntime runtime in actors.Values
-            .Where(x => x?.image != null)
+            .Where(x => x?.image != null && x != focusedRuntime)
             .OrderBy(x => x.placement?.normalizedPlacementMode == "manual" ? 1 : 0)
             .ThenBy(x => x.placement?.normalizedPlacementMode == "manual" ? -x.placement.y : x.placement?.order ?? 0)
             .ThenBy(x => x.order))
         {
+            MoveToLayer(runtime, actorLayer);
             runtime.image.transform.SetAsLastSibling();
         }
+    }
+
+    private static void MoveToLayer(StoryActorRuntime runtime, RectTransform layer)
+    {
+        if (runtime?.image == null || layer == null || runtime.image.transform.parent == layer)
+            return;
+
+        RectTransform rect = runtime.image.rectTransform;
+        Vector2 position = rect.anchoredPosition;
+        Vector2 size = rect.sizeDelta;
+        Vector3 scale = rect.localScale;
+        rect.SetParent(layer, false);
+        rect.anchoredPosition = position;
+        rect.sizeDelta = size;
+        rect.localScale = scale;
     }
 
     private static bool ShouldFlip(StoryActorRuntime runtime)

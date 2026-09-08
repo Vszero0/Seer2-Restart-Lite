@@ -758,7 +758,7 @@ public sealed class WorkshopStoryNodeEditorModel
         StoryCommandDocument target = DraftNode.commands[commandIndex];
         if (!IsSceneContentCommand(target))
         {
-            error = "这里只能删除对白、旁白或选项。";
+            error = "这里只能删除当前场景中的内容命令。";
             return false;
         }
 
@@ -811,7 +811,7 @@ public sealed class WorkshopStoryNodeEditorModel
 
         if (currentIndex < 0 || !IsSceneContentCommand(DraftNode.commands[currentIndex]))
         {
-            error = "找不到要调整的旁白或对白。";
+            error = "找不到要调整顺序的剧情内容。";
             return false;
         }
 
@@ -1085,6 +1085,100 @@ public sealed class WorkshopStoryNodeEditorModel
         value.type = normalizedType;
         value.duration = value.normalizedDuration;
         scene.transition = value;
+        HasUnsavedChanges = true;
+        error = string.Empty;
+        return true;
+    }
+
+    public bool CreateCelebrationEffectCommand(string sceneId, out StoryCommandDocument command,
+        out string error)
+    {
+        command = null;
+        WorkshopStorySceneSection section = GetSceneSections().FirstOrDefault(value => value?.scene != null
+            && string.Equals(value.scene.id, sceneId, StringComparison.OrdinalIgnoreCase));
+        if (section == null)
+        {
+            error = "请先新建并选择一个场景。";
+            return false;
+        }
+
+        command = new StoryCommandDocument
+        {
+            commandId = CreateCommandId(),
+            type = "effect",
+            sceneId = sceneId,
+            effect = new StoryEnvironmentDocument
+            {
+                type = "celebration",
+                intensity = .8f,
+                speed = 1f,
+                duration = 3.5f,
+            },
+        };
+        InsertCommand(section.commandEndIndex, command);
+        HasUnsavedChanges = true;
+        error = string.Empty;
+        return true;
+    }
+
+    public bool SetSceneEnvironment(string sceneId, string type, float intensity, float speed, out string error)
+    {
+        return SetSceneEnvironment(sceneId, 0, type, intensity, speed, out error);
+    }
+
+    public bool SetSceneEnvironment(string sceneId, int slotIndex, string type, float intensity, float speed,
+        out string error)
+    {
+        StorySceneDocument scene = DraftNode?.GetScene(sceneId);
+        if (scene == null)
+        {
+            error = "当前场景无效。";
+            return false;
+        }
+
+        if (slotIndex < 0 || slotIndex > 1)
+        {
+            error = "环境氛围槽位无效。";
+            return false;
+        }
+
+        StoryEnvironmentDocument value = new StoryEnvironmentDocument
+        {
+            type = type,
+            intensity = intensity,
+            speed = speed,
+        };
+        string normalizedType = value.normalizedType;
+        string requestedType = (type ?? string.Empty).Trim().ToLowerInvariant();
+        if ((normalizedType != "none" && normalizedType != "rain" && normalizedType != "crowd")
+            || normalizedType != requestedType)
+        {
+            error = "请选择有效的环境效果。";
+            return false;
+        }
+
+        value.type = normalizedType;
+        value.intensity = value.normalizedIntensity;
+        value.speed = value.normalizedSpeed;
+        List<StoryEnvironmentDocument> environments = scene.environments != null && scene.environments.Length > 0
+            ? scene.environments.Take(2).ToList()
+            : scene.environment == null
+                ? new List<StoryEnvironmentDocument>()
+                : new List<StoryEnvironmentDocument> { scene.environment };
+        while (environments.Count < 2)
+            environments.Add(new StoryEnvironmentDocument());
+        for (int index = 0; index < environments.Count; index++)
+            environments[index] = environments[index] ?? new StoryEnvironmentDocument();
+        if (normalizedType != "none" && environments.Where((_, index) => index != slotIndex)
+                .Any(environment => environment != null && environment.normalizedType == normalizedType))
+        {
+            error = "两个环境氛围不能使用同一种效果。";
+            return false;
+        }
+
+        environments[slotIndex] = value;
+        scene.environments = environments.ToArray();
+        scene.environment = null;
         HasUnsavedChanges = true;
         error = string.Empty;
         return true;
@@ -1807,6 +1901,7 @@ public sealed class WorkshopStoryNodeEditorModel
             || string.Equals(command.type, "narrate", StringComparison.OrdinalIgnoreCase)
             || string.Equals(command.type, "choice", StringComparison.OrdinalIgnoreCase)
             || string.Equals(command.type, "battle", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(command.type, "effect", StringComparison.OrdinalIgnoreCase)
             || string.Equals(command.type, "showprop", StringComparison.OrdinalIgnoreCase)
             || string.Equals(command.type, "hideprop", StringComparison.OrdinalIgnoreCase));
     }

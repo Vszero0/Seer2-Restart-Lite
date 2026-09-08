@@ -124,6 +124,12 @@ public sealed class WorkshopStoryNodeEditorController
         return model.CreateBattleCommand(sceneId, reference, out command, out error);
     }
 
+    public bool CreateCelebrationEffectCommand(string sceneId, out StoryCommandDocument command,
+        out string error)
+    {
+        return model.CreateCelebrationEffectCommand(sceneId, out command, out error);
+    }
+
     public bool CreateScene(string sceneResourceId, out StorySceneDocument scene, out string error)
         => model.CreateScene(sceneResourceId, out scene, out error);
 
@@ -198,6 +204,17 @@ public sealed class WorkshopStoryNodeEditorController
     public bool SetSceneTransition(string sceneId, string type, float duration, out string error)
     {
         return model.SetSceneTransition(sceneId, type, duration, out error);
+    }
+
+    public bool SetSceneEnvironment(string sceneId, string type, float intensity, float speed, out string error)
+    {
+        return model.SetSceneEnvironment(sceneId, type, intensity, speed, out error);
+    }
+
+    public bool SetSceneEnvironment(string sceneId, int slotIndex, string type, float intensity, float speed,
+        out string error)
+    {
+        return model.SetSceneEnvironment(sceneId, slotIndex, type, intensity, speed, out error);
     }
 
     public bool AddPetActor(int petId, string sceneId, out StoryActorDocument actor, out string error)

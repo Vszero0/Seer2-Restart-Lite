@@ -32,6 +32,7 @@ public class StoryPanel : Panel
     private StoryScript story;
     private StoryActorStage actorStage;
     private StoryPropStage propStage;
+    private StoryEnvironmentStage environmentStage;
     private string pendingStoryId;
     private int boundMissionId;
     private bool boundMissionCompleted;
@@ -56,6 +57,7 @@ public class StoryPanel : Panel
     private string activeMusicIdentity;
     private AudioSystem.MusicPlaybackSnapshot musicSnapshot;
     private Coroutine sceneTransitionCoroutine;
+    private Coroutine effectHoldCoroutine;
 
     private Image sceneImage;
     private Image transitionSceneImage;
@@ -238,12 +240,14 @@ public class StoryPanel : Panel
         if (sceneTransitionCoroutine != null)
             StopCoroutine(sceneTransitionCoroutine);
         sceneTransitionCoroutine = null;
+        CancelEffectHold();
         ResetTransitionImages();
         RestoreDepthFocusMaterials();
         RestoreMusicContext();
         ClearDialogHandlers();
         actorStage?.Clear();
         propStage?.Clear();
+        environmentStage?.Clear();
         if (visualStageRoot != null)
             Destroy(visualStageRoot.gameObject);
         DialogManager.instance?.CloseDialog();
@@ -289,20 +293,31 @@ public class StoryPanel : Panel
             : CreateRect("Story Actors", transform, Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero, Vector2.zero);
         visualStageRoot = CreateRect("Story Visual Stage", actorLayer, Vector2.zero, Vector2.one,
             Vector2.zero, Vector2.zero, Vector2.zero);
+        RectTransform farEnvironmentLayer = CreateRect("Story Far Environment", visualStageRoot, Vector2.zero, Vector2.one,
+            Vector2.zero, Vector2.zero, Vector2.zero);
         RectTransform backPropLayer = CreateRect("Story Back Props", visualStageRoot, Vector2.zero, Vector2.one,
             Vector2.zero, Vector2.zero, Vector2.zero);
         RectTransform actorVisualLayer = CreateRect("Story Actor Visuals", visualStageRoot, Vector2.zero, Vector2.one,
             Vector2.zero, Vector2.zero, Vector2.zero);
         RectTransform frontPropLayer = CreateRect("Story Front Props", visualStageRoot, Vector2.zero, Vector2.one,
             Vector2.zero, Vector2.zero, Vector2.zero);
+        RectTransform atmosphereEnvironmentLayer = CreateRect("Story Atmosphere Environment", visualStageRoot,
+            Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero, Vector2.zero);
+        RectTransform nearEnvironmentLayer = CreateRect("Story Near Environment", visualStageRoot, Vector2.zero, Vector2.one,
+            Vector2.zero, Vector2.zero, Vector2.zero);
+        RectTransform focusActorLayer = CreateRect("Story Focus Actor Visuals", visualStageRoot, Vector2.zero, Vector2.one,
+            Vector2.zero, Vector2.zero, Vector2.zero);
         actorStage = new StoryActorStage(
             actorVisualLayer,
+            focusActorLayer,
             this,
             RefreshOverlayLayering,
             path => story?.GetResourceSource(path) ?? "auto",
             true);
         propStage = new StoryPropStage(backPropLayer, frontPropLayer, this,
             path => story?.GetResourceSource(path) ?? "auto");
+        environmentStage = new StoryEnvironmentStage(farEnvironmentLayer, atmosphereEnvironmentLayer,
+            nearEnvironmentLayer);
         CreateExitButton();
         if (isPreviewMode)
             CreatePreviewIndicator();
@@ -527,6 +542,7 @@ public class StoryPanel : Panel
 
     private void LoadRuntimeStory(StoryScript runtimeStory, string startNodeId)
     {
+        CancelEffectHold();
         story = runtimeStory;
         if (story == null)
             return;
@@ -632,6 +648,14 @@ public class StoryPanel : Panel
                     }
                     ShowBattlePreparation(command);
                     return;
+                case StoryCommandType.Effect:
+                    environmentStage?.PlayEffect(command.effect);
+                    if (!HasPresentationPauseBeforeBoundary(commandIndex))
+                    {
+                        StartEffectHold(command.effect?.normalizedDuration ?? 1f);
+                        return;
+                    }
+                    continue;
                 case StoryCommandType.End:
                     if (StoryConditionEvaluator.Evaluate(story, command.condition))
                     {
@@ -648,8 +672,62 @@ public class StoryPanel : Panel
         FinishStory();
     }
 
+    private bool HasPresentationPauseBeforeBoundary(int startIndex)
+    {
+        if (story?.commands == null)
+            return false;
+        for (int index = Mathf.Max(0, startIndex); index < story.commands.Count; index++)
+        {
+            StoryCommandType type = story.commands[index]?.type ?? StoryCommandType.End;
+            switch (type)
+            {
+                case StoryCommandType.Say:
+                case StoryCommandType.Narrate:
+                case StoryCommandType.Choice:
+                case StoryCommandType.Battle:
+                    return true;
+                case StoryCommandType.Scene:
+                case StoryCommandType.Jump:
+                case StoryCommandType.Teleport:
+                case StoryCommandType.End:
+                    return false;
+            }
+        }
+        return false;
+    }
+
+    private void StartEffectHold(float duration)
+    {
+        if (effectHoldCoroutine != null)
+            StopCoroutine(effectHoldCoroutine);
+        isTransitioning = true;
+        effectHoldCoroutine = StartCoroutine(EffectHoldCoroutine(Mathf.Max(.1f, duration)));
+    }
+
+    private void CancelEffectHold()
+    {
+        if (effectHoldCoroutine != null)
+            StopCoroutine(effectHoldCoroutine);
+        effectHoldCoroutine = null;
+    }
+
+    private IEnumerator EffectHoldCoroutine(float duration)
+    {
+        float elapsed = 0f;
+        while (elapsed < duration && !isClosing)
+        {
+            elapsed += Time.unscaledDeltaTime;
+            yield return null;
+        }
+        effectHoldCoroutine = null;
+        isTransitioning = false;
+        if (!isClosing)
+            ShowNextCommand();
+    }
+
     private void ResumeAfterBattle(StoryBattleSession session)
     {
+        CancelEffectHold();
         pendingBattleResume = null;
         story = session.story;
         commandIndex = Mathf.Clamp(session.commandIndex, 0, story.commands.Count);
@@ -1335,6 +1413,7 @@ public class StoryPanel : Panel
 
     private void ApplySceneActors(StoryCommand command)
     {
+        environmentStage?.Apply(command.environments);
         actorStage.ApplyScene(command.actorLayouts, command.layout);
         foreach (StoryActorDocument actor in command.sceneActors ?? Array.Empty<StoryActorDocument>())
             actorStage.Show(actor, false);
@@ -1343,6 +1422,7 @@ public class StoryPanel : Panel
 
     private void PrepareSceneBoundary()
     {
+        environmentStage?.ClearEffects();
         waitingForChoice = false;
         lastDialogInfo = null;
         DialogManager.instance?.SetStoryDialogBackgroundClickHandler(null);

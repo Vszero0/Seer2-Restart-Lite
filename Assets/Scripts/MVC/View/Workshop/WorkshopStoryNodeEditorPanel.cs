@@ -45,6 +45,7 @@ public class WorkshopStoryNodeEditorPanel : Panel
     private DialogController dialogController;
     private StoryActorStage actorStage;
     private StoryPropStage propStage;
+    private StoryEnvironmentStage environmentStage;
     private RectTransform actorLayer;
     private RectTransform visualStageRoot;
     private RectTransform toolbar;
@@ -58,11 +59,13 @@ public class WorkshopStoryNodeEditorPanel : Panel
     private Text sceneStateText;
     private Dropdown sceneDropdown;
     private Dropdown sceneTransitionDropdown;
+    private Dropdown sceneEnvironmentDropdown;
     private Dropdown sceneActorDropdown;
     private Dropdown scenePropDropdown;
     private Dropdown sceneContentDropdown;
     private Text sceneDropdownValueText;
     private Text sceneTransitionDropdownValueText;
+    private Text sceneEnvironmentDropdownValueText;
     private Text sceneActorDropdownValueText;
     private Text scenePropDropdownValueText;
     private Text sceneContentDropdownValueText;
@@ -74,9 +77,15 @@ public class WorkshopStoryNodeEditorPanel : Panel
     private Text restoreChoiceButtonText;
     private Text sceneTransitionDurationText;
     private Text sceneTransitionPreviewButtonText;
+    private Text sceneEnvironmentIntensityText;
+    private Text sceneEnvironmentSpeedText;
+    private Text sceneEnvironmentVisibilityText;
+    private Text sceneEnvironmentSlotText;
     private string activeSceneActorId;
     private string activeScenePropId;
     private bool isUpdatingSceneSelectors;
+    private bool environmentPreviewHidden;
+    private int activeEnvironmentSlotIndex;
     private TextMeshProUGUI sourceDialogueText;
     private IInputField dialogueInput;
     private InputField nativeDialogueInput;
@@ -163,6 +172,7 @@ public class WorkshopStoryNodeEditorPanel : Panel
         CloseExpressionPicker();
         actorStage?.Clear();
         propStage?.Clear();
+        environmentStage?.Clear();
         base.ClosePanel();
         onClosed?.Invoke();
     }
@@ -261,15 +271,26 @@ public class WorkshopStoryNodeEditorPanel : Panel
             : sceneImage == null ? 0 : sceneImage.transform.GetSiblingIndex() + 1);
         visualStageRoot = CreateRect("Story Editor Visual Stage", actorLayer, Vector2.zero, Vector2.one,
             Vector2.zero, Vector2.zero);
+        RectTransform farEnvironmentLayer = CreateRect("Story Editor Far Environment", visualStageRoot, Vector2.zero,
+            Vector2.one, Vector2.zero, Vector2.zero);
         RectTransform backPropLayer = CreateRect("Story Editor Back Props", visualStageRoot, Vector2.zero,
             Vector2.one, Vector2.zero, Vector2.zero);
         RectTransform actorVisualLayer = CreateRect("Story Editor Actor Visuals", visualStageRoot, Vector2.zero,
             Vector2.one, Vector2.zero, Vector2.zero);
         RectTransform frontPropLayer = CreateRect("Story Editor Front Props", visualStageRoot, Vector2.zero,
             Vector2.one, Vector2.zero, Vector2.zero);
-        actorStage = new StoryActorStage(actorVisualLayer, this, RefreshOverlayLayering, controller.GetResourceSource);
+        RectTransform atmosphereEnvironmentLayer = CreateRect("Story Editor Atmosphere Environment", visualStageRoot,
+            Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero);
+        RectTransform nearEnvironmentLayer = CreateRect("Story Editor Near Environment", visualStageRoot, Vector2.zero,
+            Vector2.one, Vector2.zero, Vector2.zero);
+        RectTransform focusActorLayer = CreateRect("Story Editor Focus Actor Visuals", visualStageRoot, Vector2.zero,
+            Vector2.one, Vector2.zero, Vector2.zero);
+        actorStage = new StoryActorStage(actorVisualLayer, focusActorLayer, this, RefreshOverlayLayering,
+            controller.GetResourceSource);
         propStage = new StoryPropStage(backPropLayer, frontPropLayer, this, controller.GetResourceSource, true,
             SelectSceneProp, UpdateScenePropPosition);
+        environmentStage = new StoryEnvironmentStage(farEnvironmentLayer, atmosphereEnvironmentLayer,
+            nearEnvironmentLayer);
         sourceDialogueText = layer.GetComponentsInChildren<TextMeshProUGUI>(true)
             .FirstOrDefault(text => text.gameObject.name == "Dialog");
         if (sourceDialogueText != null)
@@ -292,7 +313,7 @@ public class WorkshopStoryNodeEditorPanel : Panel
         CreateNodeNameInput();
 
         editorActions = CreateRect("Story Editor Console", transform, new Vector2(0f, 1f), new Vector2(1f, 1f),
-            new Vector2(0f, -58f), new Vector2(-28f, 148f));
+            new Vector2(0f, -58f), new Vector2(-28f, 176f));
         editorActions.pivot = new Vector2(.5f, 1f);
         Image consoleBackground = editorActions.gameObject.AddComponent<Image>();
         consoleBackground.color = new Color(0f, 0f, 0f, .72f);
@@ -301,6 +322,7 @@ public class WorkshopStoryNodeEditorPanel : Panel
         CreateConsoleDivider(-59f, .18f);
         CreateConsoleDivider(-87f, .18f);
         CreateConsoleDivider(-115f, .18f);
+        CreateConsoleDivider(-143f, .18f);
 
         CreateText("Scene Group", editorActions, "场景", 13, TextAnchor.MiddleLeft, Cyan,
             new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(10f, -7f), new Vector2(34f, 20f));
@@ -342,11 +364,13 @@ public class WorkshopStoryNodeEditorPanel : Panel
         CreateToolbarButton(editorActions, "+对白", new Vector2(390f, -61f), new Vector2(54f, 25f), OpenSayActorPicker, false);
         CreateToolbarButton(editorActions, "+选项", new Vector2(452f, -61f), new Vector2(60f, 25f), ConvertActiveContentToChoice, false);
         CreateToolbarButton(editorActions, "+战斗", new Vector2(520f, -61f), new Vector2(60f, 25f), OpenBattlePicker, false);
-        restoreChoiceButtonText = CreateToolbarButton(editorActions, "还原内容", new Vector2(588f, -61f), new Vector2(76f, 25f),
+        CreateToolbarButton(editorActions, "+礼花", new Vector2(588f, -61f), new Vector2(60f, 25f),
+            CreateCelebrationEffect, false);
+        restoreChoiceButtonText = CreateToolbarButton(editorActions, "还原内容", new Vector2(656f, -61f), new Vector2(76f, 25f),
             RestoreActiveChoiceToContent, false);
-        CreateToolbarButton(editorActions, "上移", new Vector2(672f, -61f), new Vector2(42f, 25f), () => MoveActiveSceneContent(false), false);
-        CreateToolbarButton(editorActions, "下移", new Vector2(722f, -61f), new Vector2(42f, 25f), () => MoveActiveSceneContent(true), false);
-        CreateToolbarButton(editorActions, "删除", new Vector2(772f, -61f), new Vector2(60f, 25f), RemoveActiveSceneContent, false);
+        CreateToolbarButton(editorActions, "上移", new Vector2(740f, -61f), new Vector2(42f, 25f), () => MoveActiveSceneContent(false), false);
+        CreateToolbarButton(editorActions, "下移", new Vector2(790f, -61f), new Vector2(42f, 25f), () => MoveActiveSceneContent(true), false);
+        CreateToolbarButton(editorActions, "删除", new Vector2(840f, -61f), new Vector2(60f, 25f), RemoveActiveSceneContent, false);
         CreateText("Prop Group", editorActions, "物件", 13, TextAnchor.MiddleLeft, Cyan,
             new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(10f, -91f), new Vector2(34f, 20f));
         scenePropDropdown = CreateDropdown(editorActions, new Vector2(46f, -89f), new Vector2(200f, 25f), OnScenePropDropdownChanged);
@@ -368,6 +392,19 @@ public class WorkshopStoryNodeEditorPanel : Panel
             new Vector2(104f, 25f), CycleSceneTransitionDuration, false);
         sceneTransitionPreviewButtonText = CreateToolbarButton(editorActions, "预览", new Vector2(366f, -117f),
             new Vector2(68f, 25f), PreviewActiveSceneTransition, false);
+        CreateText("Environment Group", editorActions, "环境", 13, TextAnchor.MiddleLeft, Cyan,
+            new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(10f, -147f), new Vector2(34f, 20f));
+        sceneEnvironmentSlotText = CreateToolbarButton(editorActions, "氛围 1", new Vector2(46f, -145f),
+            new Vector2(66f, 25f), CycleActiveEnvironmentSlot, false);
+        sceneEnvironmentDropdown = CreateDropdown(editorActions, new Vector2(120f, -145f), new Vector2(126f, 25f),
+            OnSceneEnvironmentChanged);
+        sceneEnvironmentDropdownValueText = CreateSelectorValueText(sceneEnvironmentDropdown);
+        sceneEnvironmentIntensityText = CreateToolbarButton(editorActions, "强度 60%", new Vector2(254f, -145f),
+            new Vector2(88f, 25f), CycleSceneEnvironmentIntensity, false);
+        sceneEnvironmentSpeedText = CreateToolbarButton(editorActions, "速度 1.0x", new Vector2(350f, -145f),
+            new Vector2(88f, 25f), CycleSceneEnvironmentSpeed, false);
+        sceneEnvironmentVisibilityText = CreateToolbarButton(editorActions, "临时隐藏", new Vector2(446f, -145f),
+            new Vector2(76f, 25f), ToggleEnvironmentPreview, false);
         BuildChoiceEditor();
         toolbar.SetAsLastSibling();
         editorActions.SetAsLastSibling();
@@ -706,6 +743,11 @@ public class WorkshopStoryNodeEditorPanel : Panel
 
         RefreshActorStage(document, activeScene);
         RefreshPropStage(activeScene, textCommands);
+        environmentStage?.Apply(activeScene?.GetActiveEnvironments());
+        bool isEffectCommand = string.Equals(activeDialogueCommand?.type, "effect", StringComparison.OrdinalIgnoreCase);
+        environmentStage?.PreviewEffect(isEffectCommand ? activeDialogueCommand.effect : null,
+            isEffectCommand ? activeDialogueCommand.commandId : null);
+        environmentStage?.SetVisible(!environmentPreviewHidden);
 
         SetSceneBackground(activeScene);
         PlaySceneMusic(activeScene);
@@ -906,10 +948,11 @@ public class WorkshopStoryNodeEditorPanel : Panel
         string commandType = (command?.type ?? string.Empty).Trim().ToLowerInvariant();
         bool isBattle = commandType == "battle";
         bool isProp = commandType == "showprop" || commandType == "hideprop";
+        bool isEffect = commandType == "effect";
         StoryActorDocument actor = commandType == "narrate" ? null : document.GetActor(command?.actor);
         StorySceneActorLayoutDocument placement = scene?.GetActorLayout(actor?.id);
-        bool isNarration = command == null || commandType == "narrate" || actor == null;
-        bool canEditDialogue = scene != null && !isBattle && !isProp;
+        bool isNarration = command == null || commandType == "narrate" || isBattle || isProp || isEffect || actor == null;
+        bool canEditDialogue = scene != null && !isBattle && !isProp && !isEffect;
         StoryScenePropDocument prop = scene?.GetProp(command?.propId);
         string content = command == null
             ? (canEditDialogue ? "点击此处输入旁白" : "请先新建场景并选择地图")
@@ -919,6 +962,8 @@ public class WorkshopStoryNodeEditorPanel : Panel
                 : isProp
                     ? (commandType == "showprop" ? "物件出现：" : "物件消失：")
                         + (prop?.displayName ?? command.propId ?? "未指定")
+                : isEffect
+                    ? "瞬时特效：双侧礼花"
                 : command.text ?? string.Empty;
 
         dialogController.SetStorySpeakerIconClickHandler(null);
@@ -930,7 +975,8 @@ public class WorkshopStoryNodeEditorPanel : Panel
             iconId = isNarration ? "none" : actor.icon,
             iconSize = isNarration ? "0,0" : DefaultIconSize,
             iconPos = isNarration ? "0,0" : DefaultIconPosition,
-            name = isBattle ? "战斗" : isProp ? "场景物件" : isNarration ? "旁白" : actor.displayName,
+            name = isBattle ? "战斗" : isProp ? "场景物件" : isEffect ? "环境特效"
+                : isNarration ? "旁白" : actor.displayName,
             storySpeakerSide = placement?.normalizedSide ?? "left",
             storyFlipIcon = placement != null && (placement.flipIcon != (actor?.sourceFacesLeft ?? false)),
             storyUseIconCrop = actor != null && actor.usesPortraitIcon,
@@ -1878,6 +1924,39 @@ public class WorkshopStoryNodeEditorPanel : Panel
             if (sceneTransitionPreviewButtonText != null)
                 sceneTransitionPreviewButtonText.transform.parent.gameObject.SetActive(activeScene != null);
 
+            if (sceneEnvironmentDropdown != null)
+            {
+                string[] types = GetSceneEnvironmentTypes();
+                sceneEnvironmentDropdown.ClearOptions();
+                sceneEnvironmentDropdown.AddOptions(GetSceneEnvironmentLabels().ToList());
+                string activeType = activeScene?.GetEnvironmentSlot(activeEnvironmentSlotIndex)?.normalizedType ?? "none";
+                sceneEnvironmentDropdown.SetValueWithoutNotify(Mathf.Max(0, Array.IndexOf(types, activeType)));
+                sceneEnvironmentDropdown.interactable = activeScene != null;
+                SetSelectorValueText(sceneEnvironmentDropdownValueText, sceneEnvironmentDropdown, "无环境效果");
+            }
+            if (sceneEnvironmentSlotText != null)
+            {
+                sceneEnvironmentSlotText.text = "氛围 " + (activeEnvironmentSlotIndex + 1);
+                sceneEnvironmentSlotText.transform.parent.gameObject.SetActive(activeScene != null);
+            }
+            StoryEnvironmentDocument environment = activeScene?.GetEnvironmentSlot(activeEnvironmentSlotIndex);
+            if (sceneEnvironmentIntensityText != null)
+            {
+                sceneEnvironmentIntensityText.text = "强度 "
+                    + Mathf.RoundToInt((environment?.normalizedIntensity ?? .6f) * 100f) + "%";
+                sceneEnvironmentIntensityText.transform.parent.gameObject.SetActive(activeScene != null);
+            }
+            if (sceneEnvironmentSpeedText != null)
+            {
+                sceneEnvironmentSpeedText.text = "速度 " + (environment?.normalizedSpeed ?? 1f).ToString("0.0") + "x";
+                sceneEnvironmentSpeedText.transform.parent.gameObject.SetActive(activeScene != null);
+            }
+            if (sceneEnvironmentVisibilityText != null)
+            {
+                sceneEnvironmentVisibilityText.text = environmentPreviewHidden ? "显示效果" : "临时隐藏";
+                sceneEnvironmentVisibilityText.transform.parent.gameObject.SetActive(activeScene != null);
+            }
+
         }
         finally
         {
@@ -1972,6 +2051,87 @@ public class WorkshopStoryNodeEditorPanel : Panel
             return;
         }
         RefreshCanvas();
+    }
+
+    private void CreateCelebrationEffect()
+    {
+        if (!controller.CreateCelebrationEffectCommand(activeSceneId, out activeDialogueCommand, out string error))
+        {
+            Hintbox.OpenHintboxWithContent(error, 16);
+            return;
+        }
+        RefreshCanvas();
+    }
+
+    private void OnSceneEnvironmentChanged(int index)
+    {
+        if (isUpdatingSceneSelectors)
+            return;
+
+        string[] types = GetSceneEnvironmentTypes();
+        if (index < 0 || index >= types.Length)
+            return;
+        StoryEnvironmentDocument environment = controller.DraftNode?.GetScene(activeSceneId)
+            ?.GetEnvironmentSlot(activeEnvironmentSlotIndex);
+        if (!controller.SetSceneEnvironment(activeSceneId, activeEnvironmentSlotIndex, types[index],
+                environment?.normalizedIntensity ?? .6f,
+                environment?.normalizedSpeed ?? 1f, out string error))
+        {
+            RefreshCanvas();
+            Hintbox.OpenHintboxWithContent(error, 16);
+            return;
+        }
+        RefreshCanvas();
+    }
+
+    private void CycleSceneEnvironmentIntensity()
+    {
+        StoryEnvironmentDocument environment = controller.DraftNode?.GetScene(activeSceneId)
+            ?.GetEnvironmentSlot(activeEnvironmentSlotIndex);
+        float[] values = { .35f, .6f, .85f, 1f };
+        float current = environment?.normalizedIntensity ?? .6f;
+        int index = Array.FindIndex(values, value => Mathf.Abs(value - current) < .01f);
+        float next = values[(index + 1 + values.Length) % values.Length];
+        if (!controller.SetSceneEnvironment(activeSceneId, activeEnvironmentSlotIndex,
+                environment?.normalizedType ?? "none", next,
+                environment?.normalizedSpeed ?? 1f, out string error))
+        {
+            Hintbox.OpenHintboxWithContent(error, 16);
+            return;
+        }
+        RefreshCanvas();
+    }
+
+    private void CycleSceneEnvironmentSpeed()
+    {
+        StoryEnvironmentDocument environment = controller.DraftNode?.GetScene(activeSceneId)
+            ?.GetEnvironmentSlot(activeEnvironmentSlotIndex);
+        float[] values = { .5f, 1f, 1.5f, 2f };
+        float current = environment?.normalizedSpeed ?? 1f;
+        int index = Array.FindIndex(values, value => Mathf.Abs(value - current) < .01f);
+        float next = values[(index + 1 + values.Length) % values.Length];
+        if (!controller.SetSceneEnvironment(activeSceneId, activeEnvironmentSlotIndex,
+                environment?.normalizedType ?? "none",
+                environment?.normalizedIntensity ?? .6f, next, out string error))
+        {
+            Hintbox.OpenHintboxWithContent(error, 16);
+            return;
+        }
+        RefreshCanvas();
+    }
+
+    private void CycleActiveEnvironmentSlot()
+    {
+        activeEnvironmentSlotIndex = 1 - activeEnvironmentSlotIndex;
+        RefreshCanvas();
+    }
+
+    private void ToggleEnvironmentPreview()
+    {
+        environmentPreviewHidden = !environmentPreviewHidden;
+        environmentStage?.SetVisible(!environmentPreviewHidden);
+        if (sceneEnvironmentVisibilityText != null)
+            sceneEnvironmentVisibilityText.text = environmentPreviewHidden ? "显示效果" : "临时隐藏";
     }
 
     private void PreviewActiveSceneTransition()
@@ -2300,6 +2460,16 @@ public class WorkshopStoryNodeEditorPanel : Panel
         SetSelectorValueText(sceneActorDropdownValueText, sceneActorDropdown, "未添加角色");
     }
 
+    private static string[] GetSceneEnvironmentTypes()
+    {
+        return new[] { "none", "rain", "crowd" };
+    }
+
+    private static string[] GetSceneEnvironmentLabels()
+    {
+        return new[] { "无环境效果", "降雨", "拥挤人群" };
+    }
+
     private void RefreshScenePropSelector(StorySceneDocument scene)
     {
         if (scenePropDropdown == null)
@@ -2401,11 +2571,14 @@ public class WorkshopStoryNodeEditorPanel : Panel
         string type = string.Equals(command?.type, "say", StringComparison.OrdinalIgnoreCase) ? "对白"
             : string.Equals(command?.type, "choice", StringComparison.OrdinalIgnoreCase) ? "选项"
             : string.Equals(command?.type, "battle", StringComparison.OrdinalIgnoreCase) ? "战斗"
+            : string.Equals(command?.type, "effect", StringComparison.OrdinalIgnoreCase) ? "礼花"
             : string.Equals(command?.type, "showprop", StringComparison.OrdinalIgnoreCase) ? "物件出现"
             : string.Equals(command?.type, "hideprop", StringComparison.OrdinalIgnoreCase) ? "物件消失" : "旁白";
         bool isProp = string.Equals(command?.type, "showprop", StringComparison.OrdinalIgnoreCase)
             || string.Equals(command?.type, "hideprop", StringComparison.OrdinalIgnoreCase);
-        string preview = string.Equals(command?.type, "battle", StringComparison.OrdinalIgnoreCase)
+        string preview = string.Equals(command?.type, "effect", StringComparison.OrdinalIgnoreCase)
+            ? "双侧礼花"
+            : string.Equals(command?.type, "battle", StringComparison.OrdinalIgnoreCase)
             ? command.battle?.mapId + "/" + command.battle?.npcId + "/" + command.battle?.battleId
             : isProp
                 ? (controller.DraftNode?.GetScene(command.sceneId)?.GetProp(command.propId)?.displayName ?? command.propId)
@@ -2581,6 +2754,7 @@ public class WorkshopStoryNodeEditorPanel : Panel
             || string.Equals(command.type, "narrate", StringComparison.OrdinalIgnoreCase)
             || string.Equals(command.type, "choice", StringComparison.OrdinalIgnoreCase)
             || string.Equals(command.type, "battle", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(command.type, "effect", StringComparison.OrdinalIgnoreCase)
             || string.Equals(command.type, "showprop", StringComparison.OrdinalIgnoreCase)
             || string.Equals(command.type, "hideprop", StringComparison.OrdinalIgnoreCase));
     }

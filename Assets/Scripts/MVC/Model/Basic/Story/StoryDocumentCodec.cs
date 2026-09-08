@@ -60,7 +60,9 @@ public static class StoryDocumentCodec
         int sourceVersion = document.schemaVersion;
         if (sourceVersion < 6)
             MigrateConnectionTransitionsToScenes(document);
-        document.schemaVersion = Math.Max(10, document.schemaVersion);
+        if (sourceVersion < 11)
+            MigrateSceneEnvironments(document);
+        document.schemaVersion = Math.Max(11, document.schemaVersion);
         foreach (StoryActorDocument actor in document.actors ?? Array.Empty<StoryActorDocument>())
         {
             if (actor == null)
@@ -127,6 +129,19 @@ public static class StoryDocumentCodec
             EnsureAutoEnding(document);
         if (sourceVersion < 10)
             MigrateEndingTeleportCommands(document);
+    }
+
+    private static void MigrateSceneEnvironments(StoryDocument document)
+    {
+        foreach (StorySceneDocument scene in (document?.nodes ?? Array.Empty<StoryNodeDocument>())
+                     .Where(node => node != null)
+                     .SelectMany(node => node.scenes ?? Array.Empty<StorySceneDocument>())
+                     .Where(scene => scene != null))
+        {
+            if ((scene.environments == null || scene.environments.Length == 0) && scene.environment != null)
+                scene.environments = new[] { scene.environment };
+            scene.environment = null;
+        }
     }
 
     private static void MigrateEndingTeleportCommands(StoryDocument document)

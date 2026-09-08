@@ -52,6 +52,8 @@ public class StoryCommand
     public int mapId;
     public string bgmResourcePath;
     public StoryTransitionDocument transition;
+    public StoryEnvironmentDocument[] environments;
+    public StoryEnvironmentDocument effect;
     public List<StoryChoice> choices = new List<StoryChoice>();
     public ConditionGroupDocument condition;
     public ConditionGroupDocument displayCondition;
@@ -96,5 +98,6 @@ public enum StoryCommandType
     Mission,
     Teleport,
     Battle,
+    Effect,
     End,
 }
