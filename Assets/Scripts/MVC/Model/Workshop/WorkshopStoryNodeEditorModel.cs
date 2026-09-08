@@ -1155,6 +1155,39 @@ public sealed class WorkshopStoryNodeEditorModel
         return true;
     }
 
+    public List<string> GetModMusicOptions()
+    {
+        string root = Path.Combine(Application.persistentDataPath, "Mod");
+        if (!Directory.Exists(root)) return new List<string>();
+        return Directory.EnumerateFiles(root, "*", SearchOption.AllDirectories)
+            .Where(path => string.Equals(Path.GetExtension(path), ".mp3", StringComparison.OrdinalIgnoreCase))
+            .Select(path => "Mod/" + path.Substring(root.Length + 1).Replace('\\', '/'))
+            .OrderBy(path => path, StringComparer.OrdinalIgnoreCase).ToList();
+    }
+
+    public bool SetSceneMusic(string sceneId, string resourcePath, out string error)
+    {
+        error = string.Empty;
+        StorySceneDocument scene = DraftNode?.GetScene(sceneId);
+        if (scene == null) { error = "请先选择场景。"; return false; }
+        if (!string.IsNullOrEmpty(resourcePath))
+        {
+            // 只接受当前 Mod 中实际存在的 MP3，保存相对引用。
+            if (!GetModMusicOptions().Contains(resourcePath, StringComparer.OrdinalIgnoreCase))
+            {
+                error = "音乐文件不存在，请重新选择 Mod 目录中的 MP3。";
+                return false;
+            }
+        }
+        scene.bgmResourcePath = string.IsNullOrEmpty(resourcePath) ? null : resourcePath;
+        // 清除旧格式场景命令中的覆盖值，恢复默认后播放器不能再回退到旧音乐。
+        foreach (var command in DraftNode.commands ?? Array.Empty<StoryCommandDocument>())
+            if (command != null && command.type == "scene" && command.sceneId == sceneId)
+                command.bgmResourcePath = null;
+        HasUnsavedChanges = true;
+        return true;
+    }
+
     public bool AddScene(Map map, out StorySceneDocument scene, out string error)
     {
         scene = null;

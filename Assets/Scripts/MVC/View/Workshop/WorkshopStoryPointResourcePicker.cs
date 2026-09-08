@@ -25,8 +25,62 @@ public sealed class WorkshopStoryPointResourcePicker
     private Text sourceButtonText;
     private bool showModResources;
     private bool hasModResources;
+    private Action onClose;
+    private int musicRequest;
 
     public bool isOpen => root != null;
+
+    public void OpenMusic(IReadOnlyList<string> paths, Action<string> onConfirmed)
+    {
+        string selected = null;
+        string previewIdentity = null;
+        AudioSystem.MusicPlaybackSnapshot snapshot = null;
+        Open("选择场景音乐 · 点击曲目试听", "搜索 Mod 内的 MP3 文件", query =>
+        {
+            ClearList();
+            int index = 0;
+            foreach (string path in paths.Where(value => value.IndexOf(query ?? string.Empty,
+                         StringComparison.OrdinalIgnoreCase) >= 0))
+            {
+                string captured = path;
+                CreateListButton((selected == captured ? "[已试听] " : "[试听] ") + captured.Substring(4), index++, () =>
+                {
+                    selected = null;
+                    int request = ++musicRequest;
+                    ResourceManager.instance.GetLocalAddressables<AudioClip>(captured.Substring(4), true, clip =>
+                    {
+                        if (root == null || request != musicRequest) return;
+                        if (clip == null || AudioSystem.instance == null) return;
+                        if (snapshot == null) snapshot = AudioSystem.instance.CaptureMusic();
+                        previewIdentity = AudioSystem.BuildResourceMusicIdentity("mod", captured.Substring(4));
+                        AudioSystem.instance.PlayMusicTracked(clip, AudioVolumeType.BGM, previewIdentity);
+                        selected = captured;
+                        refresh?.Invoke(searchInput?.text ?? string.Empty);
+                    }, error =>
+                    {
+                        if (root != null && request == musicRequest)
+                            Hintbox.OpenHintboxWithContent("无法试听该音乐：" + error, 16);
+                    });
+                });
+            }
+            FinishList(index, "没有匹配的 MP3。请将音乐放入 Mod/BGM 后重新打开。 ");
+        }, "使用所选音乐", () =>
+        {
+            if (selected == null)
+            {
+                Hintbox.OpenHintboxWithContent("请先点击一首音乐，加载并试听后再确认。", 16);
+                return;
+            }
+            string chosen = selected;
+            Close();
+            onConfirmed?.Invoke(chosen);
+        });
+        onClose = () =>
+        {
+            if (snapshot != null && AudioSystem.instance != null)
+                AudioSystem.instance.TryRestoreMusic(snapshot, previewIdentity);
+        };
+    }
 
     public WorkshopStoryPointResourcePicker(Transform parent, GameObject actionButtonPrefab,
         GameObject listButtonPrefab, GameObject inputPrefab, Font font)
@@ -227,6 +281,10 @@ public sealed class WorkshopStoryPointResourcePicker
 
     public void Close()
     {
+        musicRequest++;
+        Action closing = onClose;
+        onClose = null;
+        closing?.Invoke();
         if (root != null)
             UnityEngine.Object.Destroy(root);
 

@@ -211,6 +211,11 @@ public sealed class WorkshopStoryNodeEditorController
         return model.SetSceneEnvironment(sceneId, type, intensity, speed, out error);
     }
 
+    public List<string> GetModMusicOptions() => model.GetModMusicOptions();
+
+    public bool SetSceneMusic(string sceneId, string resourcePath, out string error)
+        => model.SetSceneMusic(sceneId, resourcePath, out error);
+
 
     public bool AddPetActor(int petId, string sceneId, out StoryActorDocument actor, out string error)
     {

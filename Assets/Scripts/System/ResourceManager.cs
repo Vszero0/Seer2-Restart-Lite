@@ -148,7 +148,7 @@ public class ResourceManager : Singleton<ResourceManager>
 
         if (typeof(T) == typeof(AudioClip)) 
         {
-            loadPath += (item.EndsWith(".mp3") ? string.Empty : ".mp3");
+            loadPath += (item.EndsWith(".mp3", System.StringComparison.OrdinalIgnoreCase) ? string.Empty : ".mp3");
             RequestManager.instance.DownloadAudioClip("file://" + loadPath, (clip) => onSuccess?.Invoke(clip as T), onFail);
             return default(T);
         }

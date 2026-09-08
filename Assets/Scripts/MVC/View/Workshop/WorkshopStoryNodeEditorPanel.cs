@@ -50,6 +50,8 @@ public class WorkshopStoryNodeEditorPanel : Panel
     private RectTransform visualStageRoot;
     private RectTransform toolbar;
     private RectTransform editorActions;
+    private Text sceneMusicText;
+    private int musicLabelRequest;
     private RectTransform choiceEditor;
     private RectTransform expressionPickerOverlay;
     private Text nodeTitleText;
@@ -165,8 +167,9 @@ public class WorkshopStoryNodeEditorPanel : Panel
         closedCallback = null;
         sceneMusicRequestVersion++;
         StopSceneTransitionPreview(false);
-        RestoreMusicContext();
         resourcePicker?.Close();
+        sceneMusicRequestVersion++;
+        RestoreMusicContext();
         CloseExpressionPicker();
         actorStage?.Clear();
         propStage?.Clear();
@@ -314,7 +317,7 @@ public class WorkshopStoryNodeEditorPanel : Panel
         CreateNodeNameInput();
 
         editorActions = CreateRect("Story Editor Console", transform, new Vector2(0f, 1f), new Vector2(1f, 1f),
-            new Vector2(0f, -58f), new Vector2(-28f, 176f));
+            new Vector2(0f, -58f), new Vector2(-28f, 204f));
         editorActions.pivot = new Vector2(.5f, 1f);
         Image consoleBackground = editorActions.gameObject.AddComponent<Image>();
         consoleBackground.color = new Color(0f, 0f, 0f, .72f);
@@ -405,6 +408,15 @@ public class WorkshopStoryNodeEditorPanel : Panel
         sceneEnvironmentVisibilityText = CreateToolbarButton(editorActions, "临时隐藏", new Vector2(446f, -145f),
             new Vector2(76f, 25f), ToggleEnvironmentPreview, false);
         BuildChoiceEditor();
+        CreateConsoleDivider(-171f, .18f);
+        CreateText("Music Group", editorActions, "音乐", 13, TextAnchor.MiddleLeft, Cyan,
+            new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(10f, -175f), new Vector2(34f, 20f));
+        sceneMusicText = CreateText("Scene Music", editorActions, "未选择场景", 13, TextAnchor.MiddleLeft, Cyan,
+            new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(46f, -175f), new Vector2(300f, 20f));
+        sceneMusicText.horizontalOverflow = HorizontalWrapMode.Wrap;
+        CreateToolbarButton(editorActions, "更换", new Vector2(354f, -173f), new Vector2(60f, 25f), OpenSceneMusic, false);
+        CreateToolbarButton(editorActions, "恢复默认", new Vector2(422f, -173f), new Vector2(90f, 25f),
+            () => SetSceneMusic(null), false);
         toolbar.SetAsLastSibling();
         editorActions.SetAsLastSibling();
     }
@@ -833,7 +845,12 @@ public class WorkshopStoryNodeEditorPanel : Panel
         if (string.IsNullOrWhiteSpace(resourcePath))
         {
             if (scene.mapId == 0)
+            {
+                hasChangedMusicIdentity = true;
+                hasRestartedMusic |= AudioSystem.instance.PlayMusicTracked(null);
+                activeMusicIdentity = null;
                 return;
+            }
             Map.GetMap(scene.mapId, map =>
             {
                 if (requestVersion == sceneMusicRequestVersion && map?.resources?.bgm != null)
@@ -991,6 +1008,77 @@ public class WorkshopStoryNodeEditorPanel : Panel
 
         actorStage.SetActiveActor(isNarration ? null : actor.id);
         RefreshDialogueInput(command, canEditDialogue);
+    }
+
+    private void OpenSceneMusic()
+    {
+        if (controller.DraftNode?.GetScene(activeSceneId) == null)
+        {
+            Hintbox.OpenHintboxWithContent("请先选择场景。", 16);
+            return;
+        }
+        string sceneId = activeSceneId;
+        try
+        {
+            // 试听接管音乐后，不允许之前的地图音乐异步请求覆盖它。
+            sceneMusicRequestVersion++;
+            resourcePicker.OpenMusic(controller.GetModMusicOptions(), path =>
+            {
+                if (sceneId == activeSceneId) SetSceneMusic(path);
+            });
+        }
+        catch (Exception exception)
+        {
+            Hintbox.OpenHintboxWithContent("无法读取 Mod 音乐目录：" + exception.Message, 16);
+        }
+    }
+
+    private void SetSceneMusic(string path)
+    {
+        try
+        {
+            if (!controller.SetSceneMusic(activeSceneId, path, out string error))
+            {
+                Hintbox.OpenHintboxWithContent(error, 16);
+                return;
+            }
+            requestedSceneMusicSignature = null;
+            RefreshCanvas();
+        }
+        catch (Exception exception)
+        {
+            Hintbox.OpenHintboxWithContent("无法设置音乐：" + exception.Message, 16);
+        }
+    }
+
+    private void RefreshSceneMusicLabel(StorySceneDocument scene)
+    {
+        int request = ++musicLabelRequest;
+        if (sceneMusicText == null) return;
+        if (scene == null) { sceneMusicText.text = "未选择场景"; return; }
+        string path = scene.bgmResourcePath;
+        if (!string.IsNullOrWhiteSpace(path))
+        {
+            sceneMusicText.text = "自定义 · " + System.IO.Path.GetFileNameWithoutExtension(path);
+            return;
+        }
+        var custom = controller.GetStorySceneResource(scene.sceneResourceId);
+        if (scene.mapId == 0)
+        {
+            sceneMusicText.text = string.IsNullOrWhiteSpace(custom?.defaultBgmResourcePath) ? "场景默认 · 无音乐"
+                : "场景默认 · " + System.IO.Path.GetFileNameWithoutExtension(custom.defaultBgmResourcePath);
+            return;
+        }
+        sceneMusicText.text = "地图默认 · 加载中";
+        Map.GetMap(scene.mapId, map =>
+        {
+            if (sceneMusicText != null && request == musicLabelRequest)
+                sceneMusicText.text = "地图默认 · " + (map?.music?.bgm ?? "无音乐");
+        }, _ =>
+        {
+            if (sceneMusicText != null && request == musicLabelRequest)
+                sceneMusicText.text = "地图默认 · 无法读取";
+        });
     }
 
     private void RefreshPropStage(StorySceneDocument scene, IReadOnlyList<StoryCommandDocument> commands)
@@ -1939,6 +2027,7 @@ public class WorkshopStoryNodeEditorPanel : Panel
                 sceneEnvironmentDropdown.interactable = activeScene != null;
                 SetSelectorValueText(sceneEnvironmentDropdownValueText, sceneEnvironmentDropdown, "无环境效果");
             }
+            RefreshSceneMusicLabel(activeScene);
             StoryEnvironmentDocument environment = GetEditableEnvironment();
             if (sceneEnvironmentIntensityText != null)
             {

@@ -974,7 +974,12 @@ public class StoryPanel : Panel
         if (string.IsNullOrWhiteSpace(resourcePath))
         {
             if (mapId == 0)
+            {
+                hasChangedMusicIdentity = true;
+                hasRestartedMusic |= AudioSystem.instance.PlayMusicTracked(null);
+                activeMusicIdentity = null;
                 return;
+            }
 
             Map.GetMap(mapId, map =>
             {
