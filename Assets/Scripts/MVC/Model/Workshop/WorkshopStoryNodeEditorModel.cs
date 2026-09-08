@@ -1123,22 +1123,10 @@ public sealed class WorkshopStoryNodeEditorModel
 
     public bool SetSceneEnvironment(string sceneId, string type, float intensity, float speed, out string error)
     {
-        return SetSceneEnvironment(sceneId, 0, type, intensity, speed, out error);
-    }
-
-    public bool SetSceneEnvironment(string sceneId, int slotIndex, string type, float intensity, float speed,
-        out string error)
-    {
         StorySceneDocument scene = DraftNode?.GetScene(sceneId);
         if (scene == null)
         {
             error = "当前场景无效。";
-            return false;
-        }
-
-        if (slotIndex < 0 || slotIndex > 1)
-        {
-            error = "环境氛围槽位无效。";
             return false;
         }
 
@@ -1160,24 +1148,7 @@ public sealed class WorkshopStoryNodeEditorModel
         value.type = normalizedType;
         value.intensity = value.normalizedIntensity;
         value.speed = value.normalizedSpeed;
-        List<StoryEnvironmentDocument> environments = scene.environments != null && scene.environments.Length > 0
-            ? scene.environments.Take(2).ToList()
-            : scene.environment == null
-                ? new List<StoryEnvironmentDocument>()
-                : new List<StoryEnvironmentDocument> { scene.environment };
-        while (environments.Count < 2)
-            environments.Add(new StoryEnvironmentDocument());
-        for (int index = 0; index < environments.Count; index++)
-            environments[index] = environments[index] ?? new StoryEnvironmentDocument();
-        if (normalizedType != "none" && environments.Where((_, index) => index != slotIndex)
-                .Any(environment => environment != null && environment.normalizedType == normalizedType))
-        {
-            error = "两个环境氛围不能使用同一种效果。";
-            return false;
-        }
-
-        environments[slotIndex] = value;
-        scene.environments = environments.ToArray();
+        scene.environments = normalizedType == "none" ? Array.Empty<StoryEnvironmentDocument>() : new[] { value };
         scene.environment = null;
         HasUnsavedChanges = true;
         error = string.Empty;

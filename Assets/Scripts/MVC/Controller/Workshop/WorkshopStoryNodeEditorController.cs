@@ -211,11 +211,6 @@ public sealed class WorkshopStoryNodeEditorController
         return model.SetSceneEnvironment(sceneId, type, intensity, speed, out error);
     }
 
-    public bool SetSceneEnvironment(string sceneId, int slotIndex, string type, float intensity, float speed,
-        out string error)
-    {
-        return model.SetSceneEnvironment(sceneId, slotIndex, type, intensity, speed, out error);
-    }
 
     public bool AddPetActor(int petId, string sceneId, out StoryActorDocument actor, out string error)
     {

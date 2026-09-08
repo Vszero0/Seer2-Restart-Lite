@@ -183,8 +183,8 @@ public static class StoryValidator
                 errors.Add(location + ".sceneResourceId 引用了不存在的自制场景：" + scene.sceneResourceId);
             StoryResourceValidator.ValidatePath(scene.bgmResourcePath, "audio", "auto", errors, location + ".bgmResourcePath");
             ValidateTransition(scene.transition, false, errors, location + ".transition");
-            if ((scene.environments?.Length ?? 0) > 2)
-                errors.Add(location + ".environments 最多只能配置两个持续氛围");
+            if (scene.GetActiveEnvironments().Length > 1)
+                errors.Add(location + " 使用了旧版多环境配置，请在剧情点编辑器的环境下拉框中选择保留一种效果");
             StoryEnvironmentDocument[] environments = scene.environments != null && scene.environments.Length > 0
                 ? scene.environments.Where(value => value != null).ToArray()
                 : scene.environment == null ? Array.Empty<StoryEnvironmentDocument>() : new[] { scene.environment };

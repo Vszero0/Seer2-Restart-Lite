@@ -472,6 +472,8 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 1882320614666563356}
+  - component: {fileID: 794800000000000001}
+  - component: {fileID: 794800000000000002}
   m_Layer: 5
   m_Name: Text Bar
   m_TagString: Untagged
@@ -499,6 +501,35 @@ RectTransform:
   m_AnchoredPosition: {x: 0, y: -1.9599915}
   m_SizeDelta: {x: 0, y: -1.2200012}
   m_Pivot: {x: 0, y: 1}
+--- !u!222 &794800000000000001
+CanvasRenderer:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1882320614666563357}
+  m_CullTransparentMesh: 1
+--- !u!114 &794800000000000002
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1882320614666563357}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 7948b3fa764d4b54b7058cfa87889dd4, type: 3}
+  m_Name:
+  m_EditorClassIdentifier:
+  m_Material: {fileID: 0}
+  m_Color: {r: 0, g: 0, b: 0, a: 0.62}
+  m_RaycastTarget: 0
+  m_Maskable: 1
+  m_OnCullStateChanged:
+    m_PersistentCalls:
+      m_Calls: []
+  m_Sprite: {fileID: 0}
+  m_Type: 0
 --- !u!1 &1882320614673685910
 GameObject:
   m_ObjectHideFlags: 0

@@ -80,12 +80,10 @@ public class WorkshopStoryNodeEditorPanel : Panel
     private Text sceneEnvironmentIntensityText;
     private Text sceneEnvironmentSpeedText;
     private Text sceneEnvironmentVisibilityText;
-    private Text sceneEnvironmentSlotText;
     private string activeSceneActorId;
     private string activeScenePropId;
     private bool isUpdatingSceneSelectors;
     private bool environmentPreviewHidden;
-    private int activeEnvironmentSlotIndex;
     private TextMeshProUGUI sourceDialogueText;
     private IInputField dialogueInput;
     private InputField nativeDialogueInput;
@@ -260,12 +258,15 @@ public class WorkshopStoryNodeEditorPanel : Panel
         dialogueTextBar = textBar;
         if (textBar != null)
         {
-            Image textBarBackground = textBar.GetComponent<Image>() ?? textBar.gameObject.AddComponent<Image>();
+            Image textBarBackground = textBar.GetComponent<Image>() ?? textBar.gameObject.AddComponent<StoryDialogueBackground>();
             textBarBackground.color = new Color(0f, 0f, 0f, .62f);
             textBarBackground.raycastTarget = false;
         }
 
-        actorLayer = CreateRect("Story Editor Actor Layer", storyLayer, Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero);
+        // 与背景和对白使用同一父节点，跨父节点的 sibling index 无法控制遮挡顺序。
+        Transform stageParent = sceneImage != null ? sceneImage.transform.parent
+            : dialogueTextBar != null ? dialogueTextBar.parent : storyLayer;
+        actorLayer = CreateRect("Story Editor Actor Layer", stageParent, Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero);
         actorLayer.SetSiblingIndex(sceneTransitionPreviewImage != null
             ? sceneTransitionPreviewImage.transform.GetSiblingIndex() + 1
             : sceneImage == null ? 0 : sceneImage.transform.GetSiblingIndex() + 1);
@@ -394,9 +395,7 @@ public class WorkshopStoryNodeEditorPanel : Panel
             new Vector2(68f, 25f), PreviewActiveSceneTransition, false);
         CreateText("Environment Group", editorActions, "环境", 13, TextAnchor.MiddleLeft, Cyan,
             new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(10f, -147f), new Vector2(34f, 20f));
-        sceneEnvironmentSlotText = CreateToolbarButton(editorActions, "氛围 1", new Vector2(46f, -145f),
-            new Vector2(66f, 25f), CycleActiveEnvironmentSlot, false);
-        sceneEnvironmentDropdown = CreateDropdown(editorActions, new Vector2(120f, -145f), new Vector2(126f, 25f),
+        sceneEnvironmentDropdown = CreateDropdown(editorActions, new Vector2(46f, -145f), new Vector2(200f, 25f),
             OnSceneEnvironmentChanged);
         sceneEnvironmentDropdownValueText = CreateSelectorValueText(sceneEnvironmentDropdown);
         sceneEnvironmentIntensityText = CreateToolbarButton(editorActions, "强度 60%", new Vector2(254f, -145f),
@@ -1928,28 +1927,29 @@ public class WorkshopStoryNodeEditorPanel : Panel
             {
                 string[] types = GetSceneEnvironmentTypes();
                 sceneEnvironmentDropdown.ClearOptions();
-                sceneEnvironmentDropdown.AddOptions(GetSceneEnvironmentLabels().ToList());
-                string activeType = activeScene?.GetEnvironmentSlot(activeEnvironmentSlotIndex)?.normalizedType ?? "none";
-                sceneEnvironmentDropdown.SetValueWithoutNotify(Mathf.Max(0, Array.IndexOf(types, activeType)));
+                var labels = GetSceneEnvironmentLabels().ToList();
+                var activeEnvironments = activeScene?.GetActiveEnvironments() ?? Array.Empty<StoryEnvironmentDocument>();
+                bool needsSelection = activeEnvironments.Length > 1;
+                if (needsSelection)
+                    labels.Add("旧版多环境：请选择保留项");
+                sceneEnvironmentDropdown.AddOptions(labels);
+                string activeType = activeEnvironments.FirstOrDefault()?.normalizedType ?? "none";
+                sceneEnvironmentDropdown.SetValueWithoutNotify(needsSelection ? types.Length
+                    : Mathf.Max(0, Array.IndexOf(types, activeType)));
                 sceneEnvironmentDropdown.interactable = activeScene != null;
                 SetSelectorValueText(sceneEnvironmentDropdownValueText, sceneEnvironmentDropdown, "无环境效果");
             }
-            if (sceneEnvironmentSlotText != null)
-            {
-                sceneEnvironmentSlotText.text = "氛围 " + (activeEnvironmentSlotIndex + 1);
-                sceneEnvironmentSlotText.transform.parent.gameObject.SetActive(activeScene != null);
-            }
-            StoryEnvironmentDocument environment = activeScene?.GetEnvironmentSlot(activeEnvironmentSlotIndex);
+            StoryEnvironmentDocument environment = GetEditableEnvironment();
             if (sceneEnvironmentIntensityText != null)
             {
                 sceneEnvironmentIntensityText.text = "强度 "
                     + Mathf.RoundToInt((environment?.normalizedIntensity ?? .6f) * 100f) + "%";
-                sceneEnvironmentIntensityText.transform.parent.gameObject.SetActive(activeScene != null);
+                sceneEnvironmentIntensityText.transform.parent.gameObject.SetActive(environment != null);
             }
             if (sceneEnvironmentSpeedText != null)
             {
                 sceneEnvironmentSpeedText.text = "速度 " + (environment?.normalizedSpeed ?? 1f).ToString("0.0") + "x";
-                sceneEnvironmentSpeedText.transform.parent.gameObject.SetActive(activeScene != null);
+                sceneEnvironmentSpeedText.transform.parent.gameObject.SetActive(environment != null);
             }
             if (sceneEnvironmentVisibilityText != null)
             {
@@ -2072,8 +2072,8 @@ public class WorkshopStoryNodeEditorPanel : Panel
         if (index < 0 || index >= types.Length)
             return;
         StoryEnvironmentDocument environment = controller.DraftNode?.GetScene(activeSceneId)
-            ?.GetEnvironmentSlot(activeEnvironmentSlotIndex);
-        if (!controller.SetSceneEnvironment(activeSceneId, activeEnvironmentSlotIndex, types[index],
+            ?.GetActiveEnvironments().FirstOrDefault(value => value.normalizedType == types[index]);
+        if (!controller.SetSceneEnvironment(activeSceneId, types[index],
                 environment?.normalizedIntensity ?? .6f,
                 environment?.normalizedSpeed ?? 1f, out string error))
         {
@@ -2086,13 +2086,13 @@ public class WorkshopStoryNodeEditorPanel : Panel
 
     private void CycleSceneEnvironmentIntensity()
     {
-        StoryEnvironmentDocument environment = controller.DraftNode?.GetScene(activeSceneId)
-            ?.GetEnvironmentSlot(activeEnvironmentSlotIndex);
+        StoryEnvironmentDocument environment = GetEditableEnvironment();
+        if (environment == null) return;
         float[] values = { .35f, .6f, .85f, 1f };
         float current = environment?.normalizedIntensity ?? .6f;
         int index = Array.FindIndex(values, value => Mathf.Abs(value - current) < .01f);
         float next = values[(index + 1 + values.Length) % values.Length];
-        if (!controller.SetSceneEnvironment(activeSceneId, activeEnvironmentSlotIndex,
+        if (!controller.SetSceneEnvironment(activeSceneId,
                 environment?.normalizedType ?? "none", next,
                 environment?.normalizedSpeed ?? 1f, out string error))
         {
@@ -2104,13 +2104,13 @@ public class WorkshopStoryNodeEditorPanel : Panel
 
     private void CycleSceneEnvironmentSpeed()
     {
-        StoryEnvironmentDocument environment = controller.DraftNode?.GetScene(activeSceneId)
-            ?.GetEnvironmentSlot(activeEnvironmentSlotIndex);
+        StoryEnvironmentDocument environment = GetEditableEnvironment();
+        if (environment == null) return;
         float[] values = { .5f, 1f, 1.5f, 2f };
         float current = environment?.normalizedSpeed ?? 1f;
         int index = Array.FindIndex(values, value => Mathf.Abs(value - current) < .01f);
         float next = values[(index + 1 + values.Length) % values.Length];
-        if (!controller.SetSceneEnvironment(activeSceneId, activeEnvironmentSlotIndex,
+        if (!controller.SetSceneEnvironment(activeSceneId,
                 environment?.normalizedType ?? "none",
                 environment?.normalizedIntensity ?? .6f, next, out string error))
         {
@@ -2120,10 +2120,10 @@ public class WorkshopStoryNodeEditorPanel : Panel
         RefreshCanvas();
     }
 
-    private void CycleActiveEnvironmentSlot()
+    private StoryEnvironmentDocument GetEditableEnvironment()
     {
-        activeEnvironmentSlotIndex = 1 - activeEnvironmentSlotIndex;
-        RefreshCanvas();
+        var values = controller.DraftNode?.GetScene(activeSceneId)?.GetActiveEnvironments();
+        return values != null && values.Length == 1 ? values[0] : null;
     }
 
     private void ToggleEnvironmentPreview()
@@ -2743,6 +2743,7 @@ public class WorkshopStoryNodeEditorPanel : Panel
                 ? sceneTransitionPreviewImage.transform.GetSiblingIndex() + 1
                 : sceneImage == null ? 0 : sceneImage.transform.GetSiblingIndex() + 1);
         toolbar?.SetAsLastSibling();
+        dialogueTextBar?.SetAsLastSibling();
         editorActions?.SetAsLastSibling();
         if (choiceEditor != null && choiceEditor.gameObject.activeSelf)
             choiceEditor.SetAsLastSibling();

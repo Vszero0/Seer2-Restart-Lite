@@ -145,7 +145,7 @@ public class DialogManager : Manager<DialogManager>
             return null;
 
         GameObject obj = new GameObject("Story Transition Background", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));
-        obj.transform.SetParent(dialogStoryLayer, false);
+        obj.transform.SetParent(storyDialogBackground.transform.parent, false);
         RectTransform rect = obj.GetComponent<RectTransform>();
         rect.anchorMin = Vector2.zero;
         rect.anchorMax = Vector2.one;
@@ -398,7 +398,7 @@ public class DialogManager : Manager<DialogManager>
 
         Image image = textBar.GetComponent<Image>();
         if (image == null)
-            image = textBar.gameObject.AddComponent<Image>();
+            image = textBar.gameObject.AddComponent<StoryDialogueBackground>();
 
         image.color = new Color(0f, 0f, 0f, 0.62f);
         image.raycastTarget = false;
@@ -489,7 +489,9 @@ public class DialogManager : Manager<DialogManager>
             return null;
 
         GameObject obj = new GameObject("Story Actor Layer", typeof(RectTransform));
-        obj.transform.SetParent(dialogStoryLayer, false);
+        // 背景和 Text Bar 位于预制体内部的 View，舞台也必须在这一层排序。
+        obj.transform.SetParent(storyDialogBackground != null ? storyDialogBackground.transform.parent
+            : storyTextBar != null ? storyTextBar.parent : dialogStoryLayer, false);
 
         RectTransform rect = obj.GetComponent<RectTransform>();
         rect.anchorMin = Vector2.zero;
@@ -519,7 +521,7 @@ public class DialogManager : Manager<DialogManager>
         int backgroundIndex = storyTransitionBackground != null
             ? storyTransitionBackground.transform.GetSiblingIndex()
             : storyDialogBackground.transform.GetSiblingIndex();
-        return Mathf.Min(backgroundIndex + 1, dialogStoryLayer.childCount - 1);
+        return Mathf.Min(backgroundIndex + 1, storyDialogBackground.transform.parent.childCount - 1);
     }
 
     private Button CreateStoryChoiceButton(RectTransform parent, string label, Action onClick)

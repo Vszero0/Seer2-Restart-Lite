@@ -197,7 +197,7 @@ public sealed class StoryEnvironmentGraphic : MaskableGraphic
         switch (type)
         {
             case "rain": return layer >= 0 && layer <= 2;
-            case "crowd": return layer == 2;
+            case "crowd": return layer == 0 || layer == 2;
             case "celebration": return layer == 1 || layer == 2;
             default: return false;
         }
@@ -336,8 +336,8 @@ public sealed class StoryEnvironmentGraphic : MaskableGraphic
     {
         if (rect.width <= 0f || rect.height <= 0f)
             return;
-        // 先画远排、再画近排，肩部互相遮挡；中间低、两侧高，留出主要角色的空间。
-        for (int row = 0; row < 2; row++)
+        // 主要人群位于角色后方，前景仅在侧边探入，中央保持在对白框下缘以下。
+        int row = depth == 0 ? 0 : 1;
         {
             float nominalHeight = rect.height * (row == 0 ? .22f : .27f);
             float nominalWidth = nominalHeight * .64f;
@@ -347,16 +347,20 @@ public sealed class StoryEnvironmentGraphic : MaskableGraphic
             {
                 int index = row * 48 + column;
                 float u = column / (float)(count - 1);
-                float edge = Mathf.SmoothStep(0f, 1f, Mathf.Abs(u - .5f) * 2f);
+                float edge = Mathf.SmoothStep(0f, 1f,
+                    Mathf.InverseLerp(.76f, 1f, Mathf.Abs(u - .5f) * 2f));
                 float x = rect.xMin + step * column + (points[index].x - .5f) * step * .3f;
                 x += Mathf.Sin(phase * .48f * velocities[index] + index * 1.71f) * rect.height * .0025f;
                 float personHeight = nominalHeight * (.85f + sizes[index] * .16f)
                     * (.72f + intensity * .28f);
                 float personWidth = nominalWidth * (.92f + points[index].y * .2f);
-                float top = rect.yMin + rect.height * ((row == 0 ? .16f : .10f)
-                    + edge * (.14f + intensity * .08f) + points[index].y * .035f);
+                float top = rect.yMin + rect.height * (row == 0
+                    ? .32f + points[index].y * .09f + intensity * .035f
+                    : .055f + edge * (.17f + intensity * .06f) + points[index].y * .015f);
                 Color silhouette = Color.Lerp(new Color(.055f, .085f, .12f, 1f),
                     new Color(.12f, .17f, .21f, 1f), points[index].x);
+                if (row == 0)
+                    silhouette = Color.Lerp(silhouette, new Color(.25f, .3f, .34f, 1f), .45f);
                 if (row == 1)
                     silhouette = Color.Lerp(silhouette, new Color(.025f, .04f, .065f, 1f), .5f);
                 DrawCrowdSilhouette(vh, new Vector2(x, top - personHeight), personWidth, personHeight,
@@ -365,11 +369,14 @@ public sealed class StoryEnvironmentGraphic : MaskableGraphic
         }
         // 偶尔有一位从前方经过；一轮大部分时间留空，不形成持续横向传送带。
         float crossing = Mathf.Repeat(phase / 26f + .66f, 1f);
-        if (crossing < .36f)
+        if (depth == 2 && crossing < .36f)
         {
             float u = Mathf.Lerp(-.14f, 1.14f, crossing / .36f);
             float height = rect.height * .24f;
-            DrawCrowdSilhouette(vh, new Vector2(rect.xMin + u * rect.width, rect.yMin - height * .32f),
+            float edge = Mathf.SmoothStep(0f, 1f,
+                Mathf.InverseLerp(.76f, 1f, Mathf.Abs(u - .5f) * 2f));
+            DrawCrowdSilhouette(vh, new Vector2(rect.xMin + u * rect.width,
+                rect.yMin - height * .76f + edge * rect.height * .13f),
                 height * .68f, height, new Color(.025f, .04f, .06f, 1f), 2, rect.yMin);
         }
     }
