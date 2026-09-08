@@ -163,7 +163,12 @@ public sealed class StoryEnvironmentStage
 /// </summary>
 public sealed class StoryEnvironmentGraphic : MaskableGraphic
 {
-    private const int MaxParticles = 120;
+    private const int MaxParticles = 320;
+    private static readonly int[] RainCounts = { 190, 280, 32 };
+    private static readonly float[] RainSpeeds = { .48f, .78f, 1.16f };
+    private static readonly float[] RainLengths = { 36f, 68f, 124f };
+    private static readonly float[] RainWidths = { .8f, 1.35f, 2.8f };
+    private static readonly float[] RainAlphas = { .42f, .76f, .46f };
     private static readonly Color[] CelebrationPalette =
     {
         new Color(1f, .79f, .2f, 1f),
@@ -192,7 +197,7 @@ public sealed class StoryEnvironmentGraphic : MaskableGraphic
         switch (type)
         {
             case "rain": return layer >= 0 && layer <= 2;
-            case "crowd": return layer == 0 || layer == 1;
+            case "crowd": return layer == 2;
             case "celebration": return layer == 1 || layer == 2;
             default: return false;
         }
@@ -251,44 +256,39 @@ public sealed class StoryEnvironmentGraphic : MaskableGraphic
 
     private void DrawRain(VertexHelper vh, Rect rect)
     {
+        if (rect.width <= 0f || rect.height <= 0f)
+            return;
+        float scale = rect.height / 600f;
         float atmosphere = Mathf.InverseLerp(.32f, 1f, intensity);
         if (depth == 0)
         {
             // 二维背景需要整体色调变化，单靠细雨丝很容易被高饱和地图吃掉。
-            AddRect(vh, rect, new Color(.035f, .075f, .14f, .035f + intensity * .11f));
+            AddRect(vh, rect, new Color(.035f, .075f, .14f, .08f + intensity * .16f));
         }
         if (depth == 1)
         {
-            AddRect(vh, rect, new Color(.18f, .27f, .36f, .025f + atmosphere * .05f));
             if (atmosphere > 0f)
-            {
-                DrawRainMist(vh, rect, atmosphere);
-                DrawRainSplashes(vh, rect, atmosphere);
-            }
+                DrawRainMist(vh, rect, atmosphere * .45f);
+            DrawRainSplashes(vh, rect, scale);
         }
 
-        int[] counts = { 110, 54, 18 };
-        float[] layerSpeeds = { .27f, .43f, .66f };
-        float[] layerLengths = { 24f, 48f, 92f };
-        float[] layerWidths = { .85f, 1.45f, 3.6f };
-        float[] layerAlphas = { .28f, .44f, .22f };
-        int count = Mathf.Clamp(Mathf.RoundToInt(counts[depth] * (.45f + intensity * .55f)), 1, MaxParticles);
+        int count = Mathf.Clamp(Mathf.RoundToInt(RainCounts[depth] * (.35f + intensity * .65f)), 1, MaxParticles);
         for (int i = 0; i < count; i++)
         {
-            float fall = phase * layerSpeeds[depth] * velocities[i];
+            float fall = phase * RainSpeeds[depth] * velocities[i];
             float cycle = Mathf.Repeat(points[i].y + fall, 1.28f);
             float lifetime = cycle / 1.28f;
             float lifetimeAlpha = Mathf.SmoothStep(0f, 1f, Mathf.Clamp01(lifetime / .07f))
                 * (1f - Mathf.SmoothStep(0f, 1f, Mathf.Clamp01((lifetime - .9f) / .1f)));
             float y = 1.14f - cycle;
-            float sway = Mathf.Sin((phase * .8f + points[i].y * 6.283f) * velocities[i]) * .004f;
-            float x = Mathf.Repeat(points[i].x + phase * winds[i] + sway + .06f, 1.12f) - .06f;
+            float slant = .16f + points[i].y * .06f;
+            float x = Mathf.Repeat(points[i].x - fall * slant * rect.height / rect.width, 1.16f) - .08f;
             Vector2 start = new Vector2(rect.xMin + x * rect.width, rect.yMin + y * rect.height);
-            float length = layerLengths[depth] * sizes[i];
-            float width = layerWidths[depth] * (.72f + sizes[i] * .28f);
-            Color color = new Color(.76f, .9f, 1f,
-                layerAlphas[depth] * intensity * opacities[i] * lifetimeAlpha);
-            AddSoftStreak(vh, start, start + new Vector2(-length * .2f, -length), width, color);
+            float length = RainLengths[depth] * sizes[i] * scale;
+            float width = RainWidths[depth] * (.72f + sizes[i] * .28f) * scale;
+            Color color = new Color(.8f, .91f, 1f,
+                RainAlphas[depth] * (.55f + intensity * .45f) * opacities[i] * lifetimeAlpha);
+            AddRainStreak(vh, start, start + new Vector2(-length * slant, -length), width, color);
         }
     }
 
@@ -306,125 +306,117 @@ public sealed class StoryEnvironmentGraphic : MaskableGraphic
         }
     }
 
-    private void DrawRainSplashes(VertexHelper vh, Rect rect, float atmosphere)
+    private void DrawRainSplashes(VertexHelper vh, Rect rect, float scale)
     {
-        int count = Mathf.RoundToInt(15f * atmosphere);
+        int count = Mathf.RoundToInt(24f + 44f * intensity);
         for (int i = 0; i < count; i++)
         {
             int seed = 96 + i;
-            float cycle = Mathf.Repeat(points[seed].x + phase * (1.05f + velocities[seed] * .28f), 1f);
-            if (cycle >= .2f)
+            float cycle = Mathf.Repeat(points[seed].x + phase * (.85f + velocities[seed] * .28f), 1f);
+            if (cycle >= .32f)
                 continue;
 
-            float progress = cycle / .2f;
-            float alpha = Mathf.Sin(progress * Mathf.PI) * (1f - progress * .35f) * atmosphere;
+            float progress = cycle / .32f;
+            float alpha = Mathf.Sin(progress * Mathf.PI) * (1f - progress * .35f) * (.5f + intensity * .5f);
             float x = Mathf.Repeat(points[seed].y + phase * winds[seed] * .18f, 1f);
-            float y = .055f + points[seed].x * .18f;
+            // 分布在整个下部地面，左右侧与对白框上方也能看到水花。
+            float y = .035f + points[seed].x * .32f;
             Vector2 center = new Vector2(rect.xMin + x * rect.width, rect.yMin + y * rect.height);
-            float spread = (5f + progress * 10f) * sizes[seed];
-            float rise = (4f + Mathf.Sin(progress * Mathf.PI) * 10f) * sizes[seed];
-            Color splashColor = new Color(.76f, .9f, 1f, .42f * alpha * opacities[seed]);
-            AddSoftStreak(vh, center, center + new Vector2(-spread, rise), 1.15f, splashColor);
-            AddSoftStreak(vh, center, center + new Vector2(spread * .82f, rise * .82f), 1.05f, splashColor);
+            float spread = (4f + progress * 11f) * sizes[seed] * scale;
+            float rise = (3f + Mathf.Sin(progress * Mathf.PI) * 8f) * sizes[seed] * scale;
+            Color splashColor = new Color(.8f, .92f, 1f, .72f * alpha * opacities[seed]);
+            AddRainStreak(vh, center, center + new Vector2(-spread, rise), .85f * scale, splashColor);
+            AddRainStreak(vh, center, center + new Vector2(spread * .82f, rise * .82f), .8f * scale, splashColor);
             AddSoftStreak(vh, center + Vector2.left * spread * .75f,
-                center + Vector2.right * spread * .75f, .7f + progress, splashColor);
+                center + Vector2.right * spread * .75f, (.7f + progress) * scale, splashColor);
         }
     }
 
     private void DrawCrowd(VertexHelper vh, Rect rect)
     {
-        if (depth == 0)
-        {
-            DrawCrowdSilhouettes(vh, rect);
+        if (rect.width <= 0f || rect.height <= 0f)
             return;
-        }
-
-        DrawCrowdNoise(vh, rect);
-    }
-
-    private void DrawCrowdSilhouettes(VertexHelper vh, Rect rect)
-    {
-        int rowCount = intensity >= .72f ? 3 : 2;
-        int seed = 0;
-        for (int row = 0; row < rowCount; row++)
+        // 先画远排、再画近排，肩部互相遮挡；中间低、两侧高，留出主要角色的空间。
+        for (int row = 0; row < 2; row++)
         {
-            int count = Mathf.Clamp(Mathf.RoundToInt((10f + row * 3f) * (.65f + intensity * .55f)), 7, 18);
-            float rowDepth = rowCount <= 1 ? 1f : row / (float)(rowCount - 1);
-            float baseY = rect.yMin + rect.height * (.025f + row * .105f);
-            float rowScale = Mathf.Lerp(.58f, 1.04f, rowDepth);
-            for (int column = 0; column < count; column++, seed++)
+            float nominalHeight = rect.height * (row == 0 ? .22f : .27f);
+            float nominalWidth = nominalHeight * .64f;
+            int count = Mathf.Clamp(Mathf.CeilToInt(rect.width / (nominalWidth * .7f)), 12, 48);
+            float step = rect.width / (count - 1);
+            for (int column = 0; column < count; column++)
             {
-                int index = seed % MaxParticles;
-                float step = rect.width / count;
-                float x = rect.xMin + step * (column + .5f)
-                    + (points[index].x - .5f) * step * .72f;
-                x += Mathf.Sin(phase * (.36f + velocities[index] * .12f) + index * 1.71f)
-                    * (1.1f + rowDepth * 1.6f);
-                float personHeight = rect.height * (.105f + sizes[index] * .035f) * rowScale;
-                float personWidth = personHeight * (.38f + points[index].y * .12f);
-                float y = baseY + points[index].y * rect.height * .018f
-                    + Mathf.Sin(phase * .55f + index * .93f) * 1.2f;
-                float alpha = (.13f + rowDepth * .13f) * (.48f + intensity * .52f) * opacities[index];
-                Color silhouette = Color.Lerp(new Color(.025f, .055f, .09f, alpha),
-                    new Color(.075f, .11f, .145f, alpha), points[index].x);
-                DrawCrowdPerson(vh, new Vector2(x, y), personWidth, personHeight, silhouette,
-                    index % 5 == 0);
+                int index = row * 48 + column;
+                float u = column / (float)(count - 1);
+                float edge = Mathf.SmoothStep(0f, 1f, Mathf.Abs(u - .5f) * 2f);
+                float x = rect.xMin + step * column + (points[index].x - .5f) * step * .3f;
+                x += Mathf.Sin(phase * .48f * velocities[index] + index * 1.71f) * rect.height * .0025f;
+                float personHeight = nominalHeight * (.85f + sizes[index] * .16f)
+                    * (.72f + intensity * .28f);
+                float personWidth = nominalWidth * (.92f + points[index].y * .2f);
+                float top = rect.yMin + rect.height * ((row == 0 ? .16f : .10f)
+                    + edge * (.14f + intensity * .08f) + points[index].y * .035f);
+                Color silhouette = Color.Lerp(new Color(.055f, .085f, .12f, 1f),
+                    new Color(.12f, .17f, .21f, 1f), points[index].x);
+                if (row == 1)
+                    silhouette = Color.Lerp(silhouette, new Color(.025f, .04f, .065f, 1f), .5f);
+                DrawCrowdSilhouette(vh, new Vector2(x, top - personHeight), personWidth, personHeight,
+                    silhouette, Mathf.Min(5, Mathf.FloorToInt(points[index].x * 6f)), rect.yMin);
             }
         }
-
-        // 低位的半透明暗带把剪影连成群体，但不会像整块遮罩一样吞掉地图细节。
-        Rect baseBand = new Rect(rect.xMin, rect.yMin, rect.width, rect.height * (.045f + intensity * .035f));
-        AddRect(vh, baseBand, new Color(.02f, .045f, .075f, .055f + intensity * .075f));
+        // 偶尔有一位从前方经过；一轮大部分时间留空，不形成持续横向传送带。
+        float crossing = Mathf.Repeat(phase / 26f + .66f, 1f);
+        if (crossing < .36f)
+        {
+            float u = Mathf.Lerp(-.14f, 1.14f, crossing / .36f);
+            float height = rect.height * .24f;
+            DrawCrowdSilhouette(vh, new Vector2(rect.xMin + u * rect.width, rect.yMin - height * .32f),
+                height * .68f, height, new Color(.025f, .04f, .06f, 1f), 2, rect.yMin);
+        }
     }
 
-    private static void DrawCrowdPerson(VertexHelper vh, Vector2 feet, float width, float height,
-        Color color, bool robotHead)
+    private static void DrawCrowdSilhouette(VertexHelper vh, Vector2 feet, float width, float height,
+        Color color, int variant, float bottomY)
     {
-        float bodyHeight = height * .62f;
-        float shoulderY = feet.y + bodyHeight;
-        float headRadius = width * (robotHead ? .31f : .27f);
-        float neckY = shoulderY + headRadius * .15f;
-        Vector2 bodyLeft = new Vector2(feet.x - width * .42f, feet.y);
-        Vector2 bodyRight = new Vector2(feet.x + width * .42f, feet.y);
-        Vector2 shoulderLeft = new Vector2(feet.x - width * .58f, shoulderY - height * .08f);
-        Vector2 shoulderRight = new Vector2(feet.x + width * .58f, shoulderY - height * .08f);
-        AddQuad(vh, bodyLeft, shoulderLeft, shoulderRight, bodyRight, color);
-
-        Vector2 headCenter = new Vector2(feet.x, neckY + headRadius);
-        if (robotHead)
-        {
-            float halfWidth = headRadius * 1.12f;
-            float halfHeight = headRadius * .88f;
-            AddRect(vh, new Rect(headCenter.x - halfWidth, headCenter.y - halfHeight,
-                halfWidth * 2f, halfHeight * 2f), color);
-            return;
-        }
-        AddCircle(vh, headCenter, headRadius, color, 8);
+        // 只表现头肩体积，不带面孔、耳部、天线或服饰等身份特征。
+        float shoulderY = feet.y + height * .5f;
+        float shoulderWidth = width * (variant == 1 || variant == 4 ? .6f : .53f);
+        float shoulderRise = height * (variant == 3 ? .19f : .14f);
+        float bodyBottom = Mathf.Min(feet.y, bottomY);
+        AddQuad(vh, new Vector2(feet.x - width * .48f, bodyBottom),
+            new Vector2(feet.x - shoulderWidth, shoulderY),
+            new Vector2(feet.x + shoulderWidth, shoulderY),
+            new Vector2(feet.x + width * .48f, bodyBottom), color);
+        AddCrowdContour(vh, new Vector2(feet.x, shoulderY),
+            new Vector2(shoulderWidth, shoulderRise), 0f, 16, color);
+        float lean = (variant % 3 - 1) * width * .045f;
+        AddRect(vh, new Rect(feet.x + lean - width * .12f, shoulderY,
+            width * .24f, height * .24f), color);
+        Vector2 head = new Vector2(feet.x + lean, feet.y + height * .79f);
+        float headWidth = width * (variant == 1 ? .39f : variant == 2 ? .25f : .32f);
+        float headHeight = height * (variant == 2 ? .2f : variant == 4 ? .14f : .17f);
+        AddCrowdContour(vh, head, new Vector2(headWidth, headHeight),
+            (variant % 3 - 1) * .12f, variant >= 4 ? 8 : 16, color);
     }
 
-    private void DrawCrowdNoise(VertexHelper vh, Rect rect)
+    private static void AddCrowdContour(VertexHelper vh, Vector2 center, Vector2 radius,
+        float tilt, int segments, Color color)
     {
-        int count = Mathf.Clamp(Mathf.RoundToInt(4f + intensity * 7f), 4, 11);
-        for (int i = 0; i < count; i++)
+        int first = vh.currentVertCount;
+        UIVertex vertex = UIVertex.simpleVert;
+        vertex.color = color;
+        vertex.position = center;
+        vh.AddVert(vertex);
+        float cos = Mathf.Cos(tilt);
+        float sin = Mathf.Sin(tilt);
+        for (int i = 0; i <= segments; i++)
         {
-            int index = 48 + i;
-            float pulse = .62f + Mathf.Sin(phase * (1.2f + velocities[index] * .35f) + i * 2.17f) * .38f;
-            float x = rect.xMin + rect.width * (.07f + points[index].x * .86f);
-            float y = rect.yMin + rect.height * (.22f + points[index].y * .42f);
-            float scale = (5.5f + sizes[index] * 4.5f) * (.72f + intensity * .35f);
-            Color line = new Color(.66f, .84f, .92f, (.06f + intensity * .1f) * pulse * opacities[index]);
-            bool faceRight = index % 2 == 0;
-            float direction = faceRight ? 1f : -1f;
-            Vector2 origin = new Vector2(x, y);
-            for (int arc = 0; arc < 2; arc++)
-            {
-                float radius = scale * (1f + arc * .7f);
-                Vector2 middle = origin + new Vector2(direction * radius * .65f, radius * .3f);
-                Vector2 end = origin + new Vector2(direction * radius, radius);
-                AddSoftStreak(vh, origin + Vector2.up * arc * 1.4f, middle, .65f + arc * .2f, line);
-                AddSoftStreak(vh, middle, end, .65f + arc * .2f, line);
-            }
+            float angle = i / (float)segments * Mathf.PI * 2f;
+            Vector2 point = new Vector2(Mathf.Cos(angle) * radius.x, Mathf.Sin(angle) * radius.y);
+            vertex.position = center + new Vector2(point.x * cos - point.y * sin, point.x * sin + point.y * cos);
+            vh.AddVert(vertex);
         }
+        for (int i = 0; i < segments; i++)
+            vh.AddTriangle(first, first + i + 1, first + i + 2);
     }
 
     private void DrawCelebration(VertexHelper vh, Rect rect)
@@ -542,10 +534,21 @@ public sealed class StoryEnvironmentGraphic : MaskableGraphic
 
     private static void AddSoftStreak(VertexHelper vh, Vector2 start, Vector2 end, float width, Color color)
     {
+        AddStreak(vh, start, end, width, color, false);
+    }
+
+    private static void AddRainStreak(VertexHelper vh, Vector2 start, Vector2 end, float width, Color color)
+    {
+        AddStreak(vh, start, end, width, color, true);
+    }
+
+    private static void AddStreak(VertexHelper vh, Vector2 start, Vector2 end, float width, Color color,
+        bool solidCore)
+    {
         Vector2 direction = end - start;
         Vector2 normal = new Vector2(-direction.y, direction.x).normalized * width;
         const int rows = 4;
-        const int columns = 3;
+        int columns = solidCore ? 4 : 3;
         int first = vh.currentVertCount;
         for (int row = 0; row < rows; row++)
         {
@@ -554,10 +557,11 @@ public sealed class StoryEnvironmentGraphic : MaskableGraphic
             float lengthFade = row == 0 || row == rows - 1 ? 0f : 1f;
             for (int column = 0; column < columns; column++)
             {
-                float across = column - 1f;
+                float across = solidCore ? (column == 0 ? -1f : column == 1 ? -.4f : column == 2 ? .4f : 1f)
+                    : column - 1f;
                 UIVertex vertex = UIVertex.simpleVert;
                 Color vertexColor = color;
-                vertexColor.a *= lengthFade * (column == 1 ? 1f : 0f);
+                vertexColor.a *= lengthFade * (column > 0 && column < columns - 1 ? 1f : 0f);
                 vertex.color = vertexColor;
                 vertex.position = center + normal * across;
                 vh.AddVert(vertex);
