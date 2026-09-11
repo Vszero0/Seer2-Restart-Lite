@@ -29,3 +29,7 @@ MonoBehaviour:
   inactiveActorBlur: 0.6
   inactiveActorBrightness: 0.75
   depthFocusTransitionDuration: 0.2
+  backgroundMotionEnabled: 1
+  backgroundMotionMaxOffset: 18
+  backgroundMotionSmoothing: 0.12
+  backgroundMotionScale: 1.06

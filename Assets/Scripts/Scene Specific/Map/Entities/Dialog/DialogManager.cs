@@ -269,11 +269,15 @@ public class DialogManager : Manager<DialogManager>
         if (dialogStoryLayer == null)
             return;
 
+        Transform backgroundParent = storyDialogBackground != null
+            ? storyDialogBackground.transform.parent
+            : dialogStoryLayer;
+
         if (storyDialogBackground != null)
             storyDialogBackground.transform.SetAsFirstSibling();
 
-        if (storyTransitionBackground != null)
-            storyTransitionBackground.transform.SetSiblingIndex(Mathf.Min(1, dialogStoryLayer.childCount - 1));
+        if (storyTransitionBackground != null && storyTransitionBackground.transform.parent == backgroundParent)
+            storyTransitionBackground.transform.SetSiblingIndex(Mathf.Min(1, backgroundParent.childCount - 1));
 
         if (storyActorLayer != null)
             storyActorLayer.SetSiblingIndex(GetStoryOverlayInsertIndex());
@@ -518,10 +522,14 @@ public class DialogManager : Manager<DialogManager>
         if (storyDialogBackground == null)
             return 0;
 
-        int backgroundIndex = storyTransitionBackground != null
+        Transform backgroundParent = storyDialogBackground.transform.parent;
+        int backgroundIndex = storyDialogBackground.transform.GetSiblingIndex();
+        int transitionIndex = storyTransitionBackground != null
+            && storyTransitionBackground.transform.parent == backgroundParent
             ? storyTransitionBackground.transform.GetSiblingIndex()
-            : storyDialogBackground.transform.GetSiblingIndex();
-        return Mathf.Min(backgroundIndex + 1, storyDialogBackground.transform.parent.childCount - 1);
+            : -1;
+        int visualIndex = Mathf.Max(backgroundIndex, transitionIndex) + 1;
+        return Mathf.Min(visualIndex, backgroundParent.childCount - 1);
     }
 
     private Button CreateStoryChoiceButton(RectTransform parent, string label, Action onClick)

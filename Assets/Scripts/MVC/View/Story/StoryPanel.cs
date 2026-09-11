@@ -74,6 +74,8 @@ public class StoryPanel : Panel
     private Material transitionSceneOriginalMaterial;
     private Material dialogSceneOriginalMaterial;
     private Material dialogTransitionSceneOriginalMaterial;
+    private StoryPresentationSettings presentationSettings;
+    private StoryBackgroundMotion backgroundMotion;
     private GameObject exitButton;
     private GameObject previewIndicator;
     private TextMeshProUGUI previewIndicatorText;
@@ -257,9 +259,19 @@ public class StoryPanel : Panel
             Destroy(previewIndicator);
         if (battlePromptMask != null)
             Destroy(battlePromptMask.gameObject);
+        backgroundMotion?.Reset();
+        backgroundMotion = null;
 
         base.ClosePanel();
         onPreviewClosed?.Invoke();
+    }
+
+    private void LateUpdate()
+    {
+        if (!isBuilt || isClosing || backgroundMotion == null)
+            return;
+
+        backgroundMotion.Tick(presentationSettings, Time.unscaledDeltaTime);
     }
 
     public void OpenStory(string storyId, int fallbackMapId = 0, int missionId = 0)
@@ -276,17 +288,22 @@ public class StoryPanel : Panel
 
     private void BuildUI()
     {
+        presentationSettings = StoryPresentationSettings.Load();
         Button clickButton = GetComponent<Button>();
         clickButton.onClick.RemoveAllListeners();
         clickButton.onClick.AddListener(Advance);
 
-        sceneImage = CreateImage("Scene", transform, Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero, Vector2.zero, new Color32(8, 11, 18, 255));
+        sceneImage = CreateImage("Scene", transform, Vector2.zero, Vector2.one, new Vector2(.5f, .5f), Vector2.zero, Vector2.zero, new Color32(8, 11, 18, 255));
         sceneImage.raycastTarget = false;
-        transitionSceneImage = CreateImage("Transition Scene", transform, Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero, Vector2.zero, Color.clear);
+        transitionSceneImage = CreateImage("Transition Scene", transform, Vector2.zero, Vector2.one, new Vector2(.5f, .5f), Vector2.zero, Vector2.zero, Color.clear);
         transitionSceneImage.raycastTarget = false;
         transitionSceneImage.gameObject.SetActive(false);
         dialogSceneImage = DialogManager.instance?.GetStoryDialogBackgroundImage();
         dialogTransitionSceneImage = DialogManager.instance?.GetStoryTransitionBackgroundImage();
+        backgroundMotion = new StoryBackgroundMotion(
+            transform as RectTransform,
+            new[] { sceneImage?.rectTransform, dialogSceneImage?.rectTransform },
+            new[] { transitionSceneImage?.rectTransform, dialogTransitionSceneImage?.rectTransform });
         ConfigureDepthFocusMaterials();
         actorLayer = DialogManager.instance != null
             ? DialogManager.instance.GetStoryActorLayer()
@@ -1262,6 +1279,8 @@ public class StoryPanel : Panel
 
     private void PrepareTransitionImage(Sprite sprite)
     {
+        SetTransitionPosition(Vector2.zero);
+        SetTransitionScale(Vector3.one);
         ApplyBackgroundBlur(sprite, true);
         PrepareTransitionImage(transitionSceneImage, sprite);
         PrepareTransitionImage(dialogTransitionSceneImage, sprite);
@@ -1273,6 +1292,7 @@ public class StoryPanel : Panel
         SetPrimaryImageAlpha(1f);
         SetPrimaryImageBrightness(1f);
         SetPrimaryScale(Vector3.one);
+        SetTransitionPosition(Vector2.zero);
         SetTransitionScale(Vector3.one);
         ResetTransitionImage(transitionSceneImage);
         ResetTransitionImage(dialogTransitionSceneImage);
@@ -1358,6 +1378,12 @@ public class StoryPanel : Panel
 
     private void SetPrimaryScale(Vector3 scale)
     {
+        if (backgroundMotion != null)
+        {
+            backgroundMotion.SetPrimaryScale(scale);
+            return;
+        }
+
         if (sceneImage != null)
             sceneImage.rectTransform.localScale = scale;
         if (dialogSceneImage != null)
@@ -1366,6 +1392,12 @@ public class StoryPanel : Panel
 
     private void SetTransitionScale(Vector3 scale)
     {
+        if (backgroundMotion != null)
+        {
+            backgroundMotion.SetTransitionScale(scale);
+            return;
+        }
+
         if (transitionSceneImage != null)
             transitionSceneImage.rectTransform.localScale = scale;
         if (dialogTransitionSceneImage != null)
@@ -1382,6 +1414,12 @@ public class StoryPanel : Panel
 
     private void SetPrimaryPosition(Vector2 position)
     {
+        if (backgroundMotion != null)
+        {
+            backgroundMotion.SetPrimaryPosition(position);
+            return;
+        }
+
         if (sceneImage != null)
             sceneImage.rectTransform.anchoredPosition = position;
         if (dialogSceneImage != null)
@@ -1390,6 +1428,12 @@ public class StoryPanel : Panel
 
     private void SetTransitionPosition(Vector2 position)
     {
+        if (backgroundMotion != null)
+        {
+            backgroundMotion.SetTransitionPosition(position);
+            return;
+        }
+
         if (transitionSceneImage != null)
             transitionSceneImage.rectTransform.anchoredPosition = position;
         if (dialogTransitionSceneImage != null)

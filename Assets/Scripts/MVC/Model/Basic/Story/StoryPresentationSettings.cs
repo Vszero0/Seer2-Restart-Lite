@@ -52,6 +52,16 @@ public sealed class StoryPresentationSettings : ScriptableObject
     [InspectorName("焦点切换时长")]
     [SerializeField, Min(0f)] private float depthFocusTransitionDuration = 0.2f;
 
+    [Header("背景鼠标视差")]
+    [InspectorName("启用背景鼠标视差")]
+    [SerializeField] private bool backgroundMotionEnabled = true;
+    [InspectorName("最大偏移")]
+    [SerializeField, Min(0f)] private float backgroundMotionMaxOffset = 18f;
+    [InspectorName("跟随平滑时间")]
+    [SerializeField, Min(0.001f)] private float backgroundMotionSmoothing = 0.12f;
+    [InspectorName("背景放大")]
+    [SerializeField, Range(1f, 1.25f)] private float backgroundMotionScale = 1.06f;
+
     public float TextInitialDelay => Mathf.Max(0f, textInitialDelay);
     public float TextCharacterInterval => Mathf.Max(0.001f, textCharacterInterval);
     public float TextCharacterDuration => Mathf.Max(0.001f, textCharacterDuration);
@@ -69,6 +79,10 @@ public sealed class StoryPresentationSettings : ScriptableObject
     public float InactiveActorBlur => Mathf.Clamp(inactiveActorBlur, 0f, 4f);
     public float InactiveActorBrightness => Mathf.Clamp(inactiveActorBrightness, 0.3f, 1f);
     public float DepthFocusTransitionDuration => Mathf.Max(0f, depthFocusTransitionDuration);
+    public bool BackgroundMotionEnabled => backgroundMotionEnabled;
+    public float BackgroundMotionMaxOffset => Mathf.Max(0f, backgroundMotionMaxOffset);
+    public float BackgroundMotionSmoothing => Mathf.Max(0.001f, backgroundMotionSmoothing);
+    public float BackgroundMotionScale => Mathf.Clamp(backgroundMotionScale, 1f, 1.25f);
 
     private static StoryPresentationSettings runtimeFallback;
 
