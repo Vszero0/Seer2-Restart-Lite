@@ -1,5 +1,12 @@
 using UnityEngine;
 
+public enum StoryTextRevealStyle
+{
+    FadeScale,
+    Fade,
+    RiseFade,
+}
+
 /// <summary>
 /// Shared presentation tuning for story playback and story previews.
 /// Keep this separate from StoryDocument so changing the visual style does not
@@ -17,6 +24,10 @@ public sealed class StoryPresentationSettings : ScriptableObject
     [SerializeField, Min(0.001f)] private float textCharacterInterval = 0.055f;
     [InspectorName("单字动画时长")]
     [SerializeField, Min(0.001f)] private float textCharacterDuration = 0.18f;
+    [InspectorName("文字出现方式")]
+    [SerializeField] private StoryTextRevealStyle textRevealStyle = StoryTextRevealStyle.FadeScale;
+    [InspectorName("初始缩放比例")]
+    [SerializeField, Range(0.9f, 1f)] private float textRevealScaleFrom = 0.98f;
     [InspectorName("上滑距离")]
     [SerializeField, Min(0f)] private float textRiseDistance = 6f;
     [InspectorName("短标点停顿")]
@@ -73,6 +84,8 @@ public sealed class StoryPresentationSettings : ScriptableObject
     public float TextInitialDelay => Mathf.Max(0f, textInitialDelay);
     public float TextCharacterInterval => Mathf.Max(0.001f, textCharacterInterval);
     public float TextCharacterDuration => Mathf.Max(0.001f, textCharacterDuration);
+    public StoryTextRevealStyle TextRevealStyle => textRevealStyle;
+    public float TextRevealScaleFrom => Mathf.Clamp(textRevealScaleFrom, 0.9f, 1f);
     public float TextRiseDistance => Mathf.Max(0f, textRiseDistance);
     public float ShortPunctuationPause => Mathf.Max(0f, shortPunctuationPause);
     public float LongPunctuationPause => Mathf.Max(0f, longPunctuationPause);

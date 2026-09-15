@@ -315,12 +315,22 @@ public class DialogView : Module
             int vertexIndex = characterInfo.vertexIndex;
             Vector3[] vertices = textInfo.meshInfo[materialIndex].vertices;
             Color32[] colors = textInfo.meshInfo[materialIndex].colors32;
-            Vector3 offset = Vector3.down * (settings.TextRiseDistance * (1f - easedProgress));
+            bool useScaleReveal = settings.TextRevealStyle == StoryTextRevealStyle.FadeScale;
+            bool useRiseReveal = settings.TextRevealStyle == StoryTextRevealStyle.RiseFade;
+            Vector3 offset = useRiseReveal
+                ? Vector3.down * (settings.TextRiseDistance * (1f - easedProgress))
+                : Vector3.zero;
+            Vector3 center = useScaleReveal
+                ? (vertices[vertexIndex] + vertices[vertexIndex + 2]) * 0.5f
+                : Vector3.zero;
+            float scale = useScaleReveal
+                ? Mathf.Lerp(settings.TextRevealScaleFrom, 1f, easedProgress)
+                : 1f;
 
             for (int vertex = 0; vertex < 4; vertex++)
             {
                 int index = vertexIndex + vertex;
-                vertices[index] += offset;
+                vertices[index] = center + (vertices[index] - center) * scale + offset;
                 Color32 color = colors[index];
                 color.a = (byte)Mathf.RoundToInt(color.a * easedProgress);
                 colors[index] = color;
