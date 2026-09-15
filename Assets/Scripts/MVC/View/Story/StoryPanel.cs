@@ -300,6 +300,10 @@ public class StoryPanel : Panel
         transitionSceneImage.gameObject.SetActive(false);
         dialogSceneImage = DialogManager.instance?.GetStoryDialogBackgroundImage();
         dialogTransitionSceneImage = DialogManager.instance?.GetStoryTransitionBackgroundImage();
+        NormalizeBackgroundRect(sceneImage?.rectTransform);
+        NormalizeBackgroundRect(transitionSceneImage?.rectTransform);
+        NormalizeBackgroundRect(dialogSceneImage?.rectTransform);
+        NormalizeBackgroundRect(dialogTransitionSceneImage?.rectTransform);
         backgroundMotion = new StoryBackgroundMotion(
             transform as RectTransform,
             new[] { sceneImage?.rectTransform, dialogSceneImage?.rectTransform },
@@ -1603,6 +1607,7 @@ public class StoryPanel : Panel
             storyUseIconCrop = actor != null && actor.usesPortraitIcon,
             storyIconCrop = actor?.normalizedIconCrop ?? new Rect(0f, 0f, 1f, 1f),
             storyExpression = expression,
+            storyDynamicExpressions = true,
             storyTextStyle = story?.textStyle,
             rawContent = content ?? string.Empty,
             functionHandler = new List<NpcButtonHandler>(),
@@ -1759,6 +1764,20 @@ public class StoryPanel : Panel
         Image image = obj.GetComponent<Image>();
         image.color = color;
         return image;
+    }
+
+    private static void NormalizeBackgroundRect(RectTransform rect)
+    {
+        if (rect == null)
+            return;
+
+        rect.anchorMin = Vector2.zero;
+        rect.anchorMax = Vector2.one;
+        rect.offsetMin = Vector2.zero;
+        rect.offsetMax = Vector2.zero;
+        rect.pivot = new Vector2(.5f, .5f);
+        rect.anchoredPosition = Vector2.zero;
+        rect.localScale = Vector3.one;
     }
 
     private RectTransform CreateRect(string name, Transform parent, Vector2 anchorMin, Vector2 anchorMax, Vector2 pivot, Vector2 anchoredPosition, Vector2 sizeDelta)

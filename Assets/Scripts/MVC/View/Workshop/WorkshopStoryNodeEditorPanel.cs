@@ -998,6 +998,7 @@ public class WorkshopStoryNodeEditorPanel : Panel
             storyUseIconCrop = actor != null && actor.usesPortraitIcon,
             storyIconCrop = actor?.normalizedIconCrop ?? new Rect(0f, 0f, 1f, 1f),
             storyExpression = command?.expression,
+            storyDynamicExpressions = false,
             storyTextStyle = node.style ?? document.style,
             rawContent = content,
             functionHandler = new List<NpcButtonHandler>(),
@@ -1173,9 +1174,34 @@ public class WorkshopStoryNodeEditorPanel : Panel
         CreateToolbarButton(panel, "关闭", new Vector2(-12f, -12f), new Vector2(66f, 26f),
             CloseExpressionPicker, true);
 
+        RectTransform viewport = CreateRect("Expression Picker Viewport", panel,
+            Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero);
+        viewport.offsetMin = new Vector2(12f, 12f);
+        viewport.offsetMax = new Vector2(-12f, -72f);
+        Image viewportImage = viewport.gameObject.AddComponent<Image>();
+        viewportImage.color = new Color(0f, 0f, 0f, 0f);
+        viewportImage.raycastTarget = true;
+        viewport.gameObject.AddComponent<RectMask2D>();
+
+        RectTransform options = CreateRect("Expression Picker Options", viewport,
+            new Vector2(0f, 1f), new Vector2(0f, 1f), Vector2.zero, Vector2.zero);
+        options.pivot = new Vector2(0f, 1f);
+        int rows = Mathf.CeilToInt(StoryExpressionCatalog.Ids.Length / 5f);
+        options.sizeDelta = new Vector2(410f, rows * 52f + 8f);
+
+        ScrollRect scroll = panel.gameObject.AddComponent<ScrollRect>();
+        scroll.viewport = viewport;
+        scroll.content = options;
+        scroll.horizontal = false;
+        scroll.vertical = true;
+        scroll.movementType = ScrollRect.MovementType.Clamped;
+        scroll.scrollSensitivity = 42f;
+
         for (int index = 0; index < StoryExpressionCatalog.Ids.Length; index++)
-            CreateExpressionOption(panel, StoryExpressionCatalog.Ids[index],
+            CreateExpressionOption(options, StoryExpressionCatalog.Ids[index],
                 StoryExpressionCatalog.DisplayNames[index], index);
+
+        scroll.verticalNormalizedPosition = 1f;
     }
 
     private void CreateExpressionOption(RectTransform panel, string expressionId, string label, int index)
@@ -1186,7 +1212,7 @@ public class WorkshopStoryNodeEditorPanel : Panel
         int column = index % columns;
         int row = index / columns;
         float x = 25f + column * cellWidth;
-        float y = -79f - row * cellHeight;
+        float y = -4f - row * cellHeight;
 
         Text buttonText = CreateToolbarButton(panel, label, new Vector2(x, y), new Vector2(68f, 45f),
             () => SelectExpression(expressionId), false);

@@ -22,6 +22,9 @@ MonoBehaviour:
   textLineSpacing: 10
   inlineExpressionScale: 1.25
   inlineExpressionVerticalOffset: 0
+  storyExpressionAnimationEnabled: 1
+  storyExpressionAnimationSpeed: 1
+  storyExpressionSheetCacheSize: 8
   depthFocusEnabled: 1
   backgroundBlur: 1.2
   backgroundBlurStrength: 1

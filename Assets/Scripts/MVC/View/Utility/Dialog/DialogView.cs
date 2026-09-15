@@ -39,6 +39,8 @@ public class DialogView : Module
     private CanvasGroup storyIconCanvasGroup;
     private Coroutine storyFadeCoroutine;
     private Coroutine storyExpressionCoroutine;
+    private Coroutine storySpeakerExpressionAnimationCoroutine;
+    private Coroutine storyInlineExpressionAnimationCoroutine;
     private Coroutine storyTextRevealCoroutine;
     private Action storyTextRevealCompletedHandler;
     private bool isStoryTextRevealing;
@@ -87,12 +89,19 @@ public class DialogView : Module
         usesStoryLayout = useStoryLayout;
         bool hasIcon = info?.icon != null && info.icon != SpriteSet.Empty && info.size.x > 0 && info.size.y > 0;
 
+        StopStoryInlineExpressionAnimation();
+        StoryExpressionCatalog.SetActiveExpressionIds(
+            useStoryLayout && info != null && info.storyDynamicExpressions
+                ? GetActiveStoryExpressionIds(info)
+                : null);
         SetIconAndName(info.icon, info.pos, info.size, info.name);
         SetGif(info.gifInfo, info.icon);
         content.text.spriteAsset = useStoryLayout && StoryExpressionCatalog.ContainsInlineExpression(info?.content)
             ? StoryExpressionCatalog.GetInlineSpriteAsset()
             : defaultSpriteAsset;
         SetContent(useStoryLayout ? StoryExpressionCatalog.ToTmpRichText(info.content) : info.content);
+        if (useStoryLayout && info != null && info.storyDynamicExpressions)
+            StartStoryInlineExpressionAnimation(info.content);
         if (useStoryLayout)
             ApplyStoryLayout(info, hasIcon, animateStoryText);
         else
@@ -184,6 +193,53 @@ public class DialogView : Module
         isStoryTextRevealing = true;
         storyTextRevealCoroutine = StartCoroutine(StoryTextRevealCoroutine(
             text, sourceMeshInfo, characterStartTimes, totalDuration, settings));
+    }
+
+    private void StartStoryInlineExpressionAnimation(string storedText)
+    {
+        StopStoryInlineExpressionAnimation();
+        StoryPresentationSettings settings = StoryPresentationSettings.Load();
+        if (!settings.StoryExpressionAnimationEnabled)
+            return;
+
+        List<string> expressionIds = StoryExpressionCatalog.GetInlineExpressionIds(storedText);
+        if (!expressionIds.Any(StoryExpressionCatalog.IsAnimated))
+            return;
+
+        storyInlineExpressionAnimationCoroutine = StartCoroutine(
+            StoryInlineExpressionAnimationCoroutine(expressionIds));
+    }
+
+    private IEnumerator StoryInlineExpressionAnimationCoroutine(List<string> expressionIds)
+    {
+        float elapsed = 0f;
+        while (usesStoryLayout && expressionIds != null && expressionIds.Count > 0)
+        {
+            StoryExpressionCatalog.RefreshInlineExpressionFrames(expressionIds, elapsed);
+            elapsed += Time.unscaledDeltaTime;
+            yield return null;
+        }
+
+        storyInlineExpressionAnimationCoroutine = null;
+    }
+
+    private void StopStoryInlineExpressionAnimation()
+    {
+        if (storyInlineExpressionAnimationCoroutine == null)
+            return;
+
+        StopCoroutine(storyInlineExpressionAnimationCoroutine);
+        storyInlineExpressionAnimationCoroutine = null;
+    }
+
+    private static List<string> GetActiveStoryExpressionIds(DialogInfo info)
+    {
+        List<string> expressionIds = StoryExpressionCatalog.GetInlineExpressionIds(info?.content);
+        string speakerExpressionId = StoryExpressionCatalog.Normalize(info?.storyExpression);
+        if (!string.IsNullOrEmpty(speakerExpressionId)
+            && !expressionIds.Any(id => string.Equals(id, speakerExpressionId, StringComparison.OrdinalIgnoreCase)))
+            expressionIds.Add(speakerExpressionId);
+        return expressionIds;
     }
 
     private static float[] BuildStoryCharacterStartTimes(TMP_TextInfo textInfo, int characterCount,
@@ -706,6 +762,7 @@ public class DialogView : Module
             StopCoroutine(storyExpressionCoroutine);
             storyExpressionCoroutine = null;
         }
+        StopStorySpeakerExpressionAnimation();
 
         storySpeakerExpression.sprite = expression;
         storySpeakerExpression.gameObject.SetActive(true);
@@ -719,6 +776,45 @@ public class DialogView : Module
             StoryExpressionMotion motion = StoryExpressionCatalog.GetMotion(expressionId);
             storyExpressionCoroutine = StartCoroutine(StoryExpressionPopCoroutine(motion));
         }
+
+        StoryPresentationSettings settings = StoryPresentationSettings.Load();
+        if (info != null && info.storyDynamicExpressions && settings.StoryExpressionAnimationEnabled
+            && StoryExpressionCatalog.IsAnimated(expressionId))
+        {
+            storySpeakerExpressionAnimationCoroutine = StartCoroutine(
+                StorySpeakerExpressionAnimationCoroutine(expressionId));
+        }
+    }
+
+    private IEnumerator StorySpeakerExpressionAnimationCoroutine(string expressionId)
+    {
+        float elapsed = 0f;
+        int lastFrameIndex = -1;
+        while (storySpeakerExpression != null && storySpeakerExpression.gameObject.activeSelf)
+        {
+            int frameIndex = StoryExpressionCatalog.GetFrameIndex(expressionId, elapsed);
+            if (frameIndex != lastFrameIndex)
+            {
+                Sprite frame = StoryExpressionCatalog.LoadFrame(expressionId, frameIndex);
+                if (frame != null)
+                    storySpeakerExpression.sprite = frame;
+                lastFrameIndex = frameIndex;
+            }
+
+            elapsed += Time.unscaledDeltaTime;
+            yield return null;
+        }
+
+        storySpeakerExpressionAnimationCoroutine = null;
+    }
+
+    private void StopStorySpeakerExpressionAnimation()
+    {
+        if (storySpeakerExpressionAnimationCoroutine == null)
+            return;
+
+        StopCoroutine(storySpeakerExpressionAnimationCoroutine);
+        storySpeakerExpressionAnimationCoroutine = null;
     }
 
     private IEnumerator StoryExpressionPopCoroutine(StoryExpressionMotion motion)
@@ -756,6 +852,7 @@ public class DialogView : Module
 
     private void ResetStorySpeakerExpression()
     {
+        StopStorySpeakerExpressionAnimation();
         if (storyExpressionCoroutine != null)
         {
             StopCoroutine(storyExpressionCoroutine);

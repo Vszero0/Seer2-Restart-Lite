@@ -294,8 +294,9 @@ public class MapWildNpcTalkController : MonoBehaviour
 }
 
 /// <summary>
-/// Shared catalog for the built-in small expressions used by map NPC bubbles and story portraits.
-/// Story JSON stores the stable emoji/toon/... id and never treats these built-in sprites as Mod resources.
+/// Shared catalog for map NPC bubbles and story portraits.
+/// New story content uses the centralized QQ small-face catalog; old emoji/toon
+/// ids are resolved through the compatibility aliases below.
 /// </summary>
 public enum StoryExpressionMotion
 {
@@ -311,31 +312,55 @@ public static class StoryExpressionCatalog
 {
     private const string ExternalPathPrefix = "Map/talk bubble/";
     private const string TmpSpriteNamePrefix = "story_";
-    private const int AtlasColumns = 6;
+    private const int AtlasColumns = 12;
     private const int AtlasCellSize = 40;
     private static MapWildNpcTalkController fallbackLibrary;
     private static TMP_SpriteAsset inlineSpriteAsset;
+    private static Texture2D inlineAtlasTexture;
+    private static RenderTexture inlineCellRenderTexture;
+    private static Texture2D inlineCellPixels;
+    private static readonly Dictionary<string, int> inlineAtlasIndices =
+        new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+    private static readonly Dictionary<string, int> inlineFrameIndices =
+        new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
 
     private static readonly Regex InlineTagPattern = new Regex(
         "<emoji\\s+id\\s*=\\s*[\"']([^\"']+)[\"']\\s*/>",
         RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
-    public static readonly string[] Ids =
-    {
-        "emoji/toon/alert", "emoji/toon/angry", "emoji/toon/annoyed", "emoji/toon/cool",
-        "emoji/toon/cry", "emoji/toon/dizzy", "emoji/toon/grin", "emoji/toon/happy",
-        "emoji/toon/hypno", "emoji/toon/laugh", "emoji/toon/love", "emoji/toon/mute",
-        "emoji/toon/shocked", "emoji/toon/shy", "emoji/toon/sick", "emoji/toon/silly",
-        "emoji/toon/skull", "emoji/toon/sleepy", "emoji/toon/smug", "emoji/toon/star_eyes",
-        "emoji/toon/sunglasses", "emoji/toon/surprised", "emoji/toon/sweat", "emoji/toon/worried"
-    };
+    // The old ids remain readable. New saves use the canonical QQ ids from the
+    // centralized resource catalog and the editor only offers those new ids.
+    private static readonly Dictionary<string, string> LegacyAliases =
+        new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            { "emoji/toon/alert", "qq_face_0" },
+            { "emoji/toon/angry", "qq_face_11" },
+            { "emoji/toon/annoyed", "qq_face_22" },
+            { "emoji/toon/cool", "qq_face_16" },
+            { "emoji/toon/cry", "qq_face_9" },
+            { "emoji/toon/dizzy", "qq_face_34" },
+            { "emoji/toon/grin", "qq_face_13" },
+            { "emoji/toon/happy", "qq_face_14" },
+            { "emoji/toon/hypno", "qq_face_34" },
+            { "emoji/toon/laugh", "qq_face_182" },
+            { "emoji/toon/love", "qq_face_66" },
+            { "emoji/toon/mute", "qq_face_7" },
+            { "emoji/toon/shocked", "qq_face_26" },
+            { "emoji/toon/shy", "qq_face_6" },
+            { "emoji/toon/sick", "qq_face_36" },
+            { "emoji/toon/silly", "qq_face_12" },
+            { "emoji/toon/skull", "qq_face_37" },
+            { "emoji/toon/sleepy", "qq_face_8" },
+            { "emoji/toon/smug", "qq_face_4" },
+            { "emoji/toon/star_eyes", "qq_face_21" },
+            { "emoji/toon/sunglasses", "qq_face_16" },
+            { "emoji/toon/surprised", "qq_face_0" },
+            { "emoji/toon/sweat", "qq_face_96" },
+            { "emoji/toon/worried", "qq_face_15" },
+        };
 
-    public static readonly string[] DisplayNames =
-    {
-        "警觉", "生气", "不耐", "酷", "哭泣", "眩晕", "坏笑", "开心",
-        "催眠", "大笑", "喜爱", "无语", "震惊", "求饶", "难受", "调皮",
-        "骷髅", "得意", "困倦", "星星眼", "墨镜", "惊讶", "抓狂", "担忧"
-    };
+    public static string[] Ids => StoryQQExpressionCatalog.Ids;
+    public static string[] DisplayNames => StoryQQExpressionCatalog.DisplayNames;
 
     public static string Normalize(string id)
     {
@@ -343,7 +368,21 @@ public static class StoryExpressionCatalog
             return null;
 
         string normalized = id.Replace('\\', '/').Trim('/');
-        return Array.Find(Ids, value => string.Equals(value, normalized, StringComparison.OrdinalIgnoreCase));
+        string qqId = StoryQQExpressionCatalog.Normalize(normalized);
+        if (qqId != null)
+            return qqId;
+
+        if (LegacyAliases.TryGetValue(normalized, out string alias))
+            return StoryQQExpressionCatalog.Normalize(alias) ?? alias;
+
+        // Unknown legacy ids remain readable through the previous resource
+        // path, but are never added to the new picker.
+        if (normalized.StartsWith("qq_face_", StringComparison.OrdinalIgnoreCase))
+            return normalized;
+
+        return normalized.StartsWith("emoji/toon/", StringComparison.OrdinalIgnoreCase)
+            ? normalized
+            : null;
     }
 
     public static Sprite Load(string id)
@@ -352,6 +391,43 @@ public static class StoryExpressionCatalog
         if (normalized == null)
             return null;
 
+        if (StoryQQExpressionCatalog.TryGetEntry(normalized, out _, out _))
+            return StoryQQExpressionCatalog.LoadPreview(normalized);
+
+        return LoadLegacy(normalized);
+    }
+
+    public static Sprite LoadFrame(string id, int frameIndex)
+    {
+        string normalized = Normalize(id);
+        if (normalized == null)
+            return null;
+
+        if (StoryQQExpressionCatalog.TryGetEntry(normalized, out _, out _))
+            return StoryQQExpressionCatalog.LoadFrame(normalized, frameIndex);
+
+        return LoadLegacy(normalized);
+    }
+
+    public static bool IsAnimated(string id)
+    {
+        string normalized = Normalize(id);
+        return normalized != null && StoryQQExpressionCatalog.IsAnimated(normalized);
+    }
+
+    public static int GetFrameIndex(string id, float elapsed)
+    {
+        string normalized = Normalize(id);
+        return normalized == null ? 0 : StoryQQExpressionCatalog.GetFrameIndex(normalized, elapsed);
+    }
+
+    public static void SetActiveExpressionIds(IEnumerable<string> expressionIds)
+    {
+        StoryQQExpressionCatalog.SetActiveExpressionIds(expressionIds);
+    }
+
+    private static Sprite LoadLegacy(string normalized)
+    {
         Sprite sprite = ResourceManager.instance?.GetLocalAddressables<Sprite>(ExternalPathPrefix + normalized);
         if (sprite != null)
             return sprite;
@@ -368,8 +444,7 @@ public static class StoryExpressionCatalog
     public static string GetDisplayName(string id)
     {
         string normalized = Normalize(id);
-        int index = normalized == null ? -1 : Array.IndexOf(Ids, normalized);
-        return index >= 0 && index < DisplayNames.Length ? DisplayNames[index] : null;
+        return StoryQQExpressionCatalog.GetDisplayName(normalized);
     }
 
     public static string GetEditorToken(string id)
@@ -407,7 +482,9 @@ public static class StoryExpressionCatalog
         return InlineTagPattern.Replace(storedText, match =>
         {
             string normalized = Normalize(match.Groups[1].Value);
-            return normalized == null ? match.Value : "<sprite name=\"" + GetTmpSpriteName(normalized) + "\">";
+            return string.IsNullOrEmpty(GetEditorToken(normalized))
+                ? match.Value
+                : "<sprite name=\"" + GetTmpSpriteName(normalized) + "\">";
         });
     }
 
@@ -489,6 +566,8 @@ public static class StoryExpressionCatalog
             + "\"m_LineHeight\":40,\"m_AscentLine\":32,\"m_CapLine\":32,\"m_Baseline\":0,"
             + "\"m_DescentLine\":-8,\"m_TabWidth\":40}}", asset);
         asset.spriteInfoList = new List<TMP_Sprite>();
+        asset.spriteGlyphTable.Clear();
+        asset.spriteCharacterTable.Clear();
         asset.hashCode = TMP_TextUtilities.GetSimpleHashCode(asset.name);
         asset.spriteSheet = atlas;
         Shader shader = Shader.Find("TextMeshPro/Sprite");
@@ -509,6 +588,8 @@ public static class StoryExpressionCatalog
         StoryPresentationSettings settings = StoryPresentationSettings.Load();
         float expressionScale = settings.InlineExpressionScale;
         float expressionBearingY = AtlasCellSize * .82f + settings.InlineExpressionVerticalOffset;
+        inlineAtlasIndices.Clear();
+        inlineFrameIndices.Clear();
         for (int index = 0; index < sourceSprites.Count; index++)
         {
             int column = index % AtlasColumns;
@@ -525,11 +606,100 @@ public static class StoryExpressionCatalog
             };
             asset.spriteGlyphTable.Add(glyph);
             asset.spriteCharacterTable.Add(character);
+            inlineAtlasIndices[sourceIds[index]] = index;
+            inlineFrameIndices[sourceIds[index]] = -1;
         }
 
         asset.UpdateLookupTables();
+        inlineAtlasTexture = atlas;
         inlineSpriteAsset = asset;
         return inlineSpriteAsset;
+    }
+
+    public static List<string> GetInlineExpressionIds(string storedText)
+    {
+        List<string> result = new List<string>();
+        if (string.IsNullOrEmpty(storedText))
+            return result;
+
+        HashSet<string> uniqueIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        MatchCollection matches = InlineTagPattern.Matches(storedText);
+        foreach (Match match in matches)
+        {
+            string normalized = Normalize(match.Groups[1].Value);
+            if (!string.IsNullOrEmpty(normalized) && uniqueIds.Add(normalized))
+                result.Add(normalized);
+        }
+
+        return result;
+    }
+
+    public static void RefreshInlineExpressionFrames(IEnumerable<string> expressionIds, float elapsed)
+    {
+        if (inlineSpriteAsset == null || inlineAtlasTexture == null || expressionIds == null)
+            return;
+
+        bool changed = false;
+        foreach (string expressionId in expressionIds)
+        {
+            string normalized = Normalize(expressionId);
+            if (normalized == null || !StoryQQExpressionCatalog.IsAnimated(normalized)
+                || !inlineAtlasIndices.TryGetValue(normalized, out int atlasIndex))
+                continue;
+
+            int frameIndex = StoryQQExpressionCatalog.GetFrameIndex(normalized, elapsed);
+            if (inlineFrameIndices.TryGetValue(normalized, out int previousFrame)
+                && previousFrame == frameIndex)
+                continue;
+
+            Sprite frame = StoryQQExpressionCatalog.LoadFrame(normalized, frameIndex);
+            if (frame == null)
+                continue;
+
+            WriteSpriteToInlineAtlas(frame, atlasIndex);
+            inlineFrameIndices[normalized] = frameIndex;
+            changed = true;
+        }
+
+        if (changed)
+            inlineAtlasTexture.Apply(false, false);
+    }
+
+    private static void WriteSpriteToInlineAtlas(Sprite sprite, int atlasIndex)
+    {
+        if (sprite == null || inlineAtlasTexture == null)
+            return;
+
+        if (inlineCellRenderTexture == null)
+        {
+            inlineCellRenderTexture = new RenderTexture(AtlasCellSize, AtlasCellSize, 0,
+                RenderTextureFormat.ARGB32, RenderTextureReadWrite.sRGB)
+            {
+                name = "Story Inline Expression Cell",
+                hideFlags = HideFlags.DontSave,
+            };
+            inlineCellRenderTexture.Create();
+            inlineCellPixels = new Texture2D(AtlasCellSize, AtlasCellSize, TextureFormat.RGBA32, false, false)
+            {
+                hideFlags = HideFlags.DontSave,
+            };
+        }
+
+        Rect textureRect = sprite.textureRect;
+        RenderTexture previous = RenderTexture.active;
+        RenderTexture.active = inlineCellRenderTexture;
+        GL.Clear(true, true, Color.clear);
+        Vector2 scale = new Vector2(textureRect.width / sprite.texture.width,
+            textureRect.height / sprite.texture.height);
+        Vector2 offset = new Vector2(textureRect.x / sprite.texture.width,
+            textureRect.y / sprite.texture.height);
+        Graphics.Blit(sprite.texture, inlineCellRenderTexture, scale, offset);
+        inlineCellPixels.ReadPixels(new Rect(0f, 0f, AtlasCellSize, AtlasCellSize), 0, 0, false);
+        inlineCellPixels.Apply(false, false);
+        inlineAtlasTexture.SetPixels((atlasIndex % AtlasColumns) * AtlasCellSize,
+            (atlasIndex / AtlasColumns) * AtlasCellSize, AtlasCellSize, AtlasCellSize,
+            inlineCellPixels.GetPixels());
+        RenderTexture.active = previous;
     }
 
     private static string BuildInlineTag(string id)
@@ -549,37 +719,43 @@ public static class StoryExpressionCatalog
         if (normalized == null)
             return StoryExpressionMotion.Neutral;
 
-        string name = normalized.Substring(normalized.LastIndexOf('/') + 1);
-        switch (name)
+        string qqId = normalized.StartsWith("qq_face_", StringComparison.OrdinalIgnoreCase)
+            ? normalized.Substring("qq_face_".Length)
+            : normalized.Substring(normalized.LastIndexOf('/') + 1);
+        switch (qqId)
         {
-            case "angry":
-            case "annoyed":
-            case "sick":
+            case "11":
+            case "18":
+            case "22":
+            case "31":
+            case "36":
                 return StoryExpressionMotion.Shake;
-            case "alert":
-            case "dizzy":
-            case "hypno":
-            case "shocked":
-            case "skull":
-            case "surprised":
+            case "0":
+            case "26":
+            case "34":
+            case "37":
+            case "110":
                 return StoryExpressionMotion.Surprise;
-            case "cool":
-            case "shy":
-            case "smug":
-            case "sunglasses":
+            case "4":
+            case "6":
+            case "16":
+            case "23":
+            case "105":
                 return StoryExpressionMotion.Tilt;
-            case "cry":
-            case "mute":
-            case "sleepy":
-            case "sweat":
-            case "worried":
+            case "7":
+            case "8":
+            case "9":
+            case "15":
+            case "25":
+            case "27":
+            case "96":
                 return StoryExpressionMotion.Sink;
-            case "grin":
-            case "happy":
-            case "laugh":
-            case "love":
-            case "silly":
-            case "star_eyes":
+            case "12":
+            case "13":
+            case "14":
+            case "21":
+            case "28":
+            case "182":
                 return StoryExpressionMotion.Bounce;
             default:
                 return StoryExpressionMotion.Neutral;

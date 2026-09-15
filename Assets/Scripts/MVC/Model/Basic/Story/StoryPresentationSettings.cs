@@ -36,6 +36,14 @@ public sealed class StoryPresentationSettings : ScriptableObject
     [InspectorName("垂直偏移")]
     [SerializeField, Range(-16f, 16f)] private float inlineExpressionVerticalOffset;
 
+    [Header("剧情动态表情")]
+    [InspectorName("启用动态表情")]
+    [SerializeField] private bool storyExpressionAnimationEnabled = true;
+    [InspectorName("播放速度")]
+    [SerializeField, Range(0.25f, 2f)] private float storyExpressionAnimationSpeed = 1f;
+    [InspectorName("动画资源缓存数量")]
+    [SerializeField, Range(1, 16)] private int storyExpressionSheetCacheSize = 8;
+
     [Header("景深焦点")]
     [InspectorName("启用景深焦点")]
     [SerializeField] private bool depthFocusEnabled = true;
@@ -72,6 +80,9 @@ public sealed class StoryPresentationSettings : ScriptableObject
     public float TextLineSpacing => Mathf.Max(0f, textLineSpacing);
     public float InlineExpressionScale => Mathf.Clamp(inlineExpressionScale, 0.5f, 2f);
     public float InlineExpressionVerticalOffset => Mathf.Clamp(inlineExpressionVerticalOffset, -16f, 16f);
+    public bool StoryExpressionAnimationEnabled => storyExpressionAnimationEnabled;
+    public float StoryExpressionAnimationSpeed => Mathf.Clamp(storyExpressionAnimationSpeed, 0.25f, 2f);
+    public int StoryExpressionSheetCacheSize => Mathf.Clamp(storyExpressionSheetCacheSize, 1, 16);
     public bool DepthFocusEnabled => depthFocusEnabled;
     public float BackgroundBlur => Mathf.Clamp(backgroundBlur, 0f, 4f);
     public float BackgroundBlurStrength => Mathf.Clamp01(backgroundBlurStrength);

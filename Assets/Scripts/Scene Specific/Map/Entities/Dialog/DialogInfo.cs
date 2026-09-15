@@ -26,6 +26,7 @@ public class DialogInfo
     public bool storyUseIconCrop;
     public Rect storyIconCrop = new Rect(0f, 0f, 1f, 1f);
     public string storyExpression;
+    [XmlIgnore] public bool storyDynamicExpressions = true;
     public StoryTextStyleDocument storyTextStyle;
     [XmlElement("gif")] public AnimInfo gifInfo;
     [XmlElement("content")] public string rawContent;
