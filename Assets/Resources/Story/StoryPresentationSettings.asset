@@ -24,6 +24,10 @@ MonoBehaviour:
   textLineSpacing: 10
   inlineExpressionScale: 1.25
   inlineExpressionVerticalOffset: 0
+  dialogueBackgroundSpriteResourcePath: Story/UI/StoryDialoguePanelV2
+  dialogueBackgroundTint: {r: 1, g: 1, b: 1, a: 1}
+  dialogueBackgroundOpacity: 0.88
+  dialogueBackgroundBorder: {x: 180, y: 180, z: 180, w: 180}
   storyExpressionAnimationEnabled: 1
   storyExpressionAnimationSpeed: 1
   storyExpressionSheetCacheSize: 8

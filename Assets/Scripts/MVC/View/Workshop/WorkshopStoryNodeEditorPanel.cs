@@ -261,8 +261,21 @@ public class WorkshopStoryNodeEditorPanel : Panel
         dialogueTextBar = textBar;
         if (textBar != null)
         {
-            Image textBarBackground = textBar.GetComponent<Image>() ?? textBar.gameObject.AddComponent<StoryDialogueBackground>();
-            textBarBackground.color = new Color(0f, 0f, 0f, .62f);
+            StoryDialogueBackground styledBackground = textBar.GetComponent<StoryDialogueBackground>();
+            Image textBarBackground = styledBackground != null ? styledBackground : textBar.GetComponent<Image>();
+            if (styledBackground == null && textBarBackground == null)
+                styledBackground = textBar.gameObject.AddComponent<StoryDialogueBackground>();
+
+            if (styledBackground != null)
+            {
+                styledBackground.ApplyPresentationSettings();
+                textBarBackground = styledBackground;
+            }
+            else
+            {
+                textBarBackground.color = StoryPresentationSettings.Load().DialogueBackgroundColor;
+            }
+
             textBarBackground.raycastTarget = false;
         }
 

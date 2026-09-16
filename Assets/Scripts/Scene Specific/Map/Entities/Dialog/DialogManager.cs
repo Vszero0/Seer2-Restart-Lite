@@ -400,12 +400,22 @@ public class DialogManager : Manager<DialogManager>
         if (textBar == null)
             return null;
 
-        Image image = textBar.GetComponent<Image>();
-        if (image == null)
-            image = textBar.gameObject.AddComponent<StoryDialogueBackground>();
+        StoryDialogueBackground styledBackground = textBar.GetComponent<StoryDialogueBackground>();
+        Image image = styledBackground != null ? styledBackground : textBar.GetComponent<Image>();
+        if (styledBackground == null && image == null)
+            styledBackground = textBar.gameObject.AddComponent<StoryDialogueBackground>();
 
-        image.color = new Color(0f, 0f, 0f, 0.62f);
-        image.raycastTarget = false;
+        if (styledBackground != null)
+        {
+            styledBackground.ApplyPresentationSettings();
+            image = styledBackground;
+        }
+        else
+        {
+            image.color = StoryPresentationSettings.Load().DialogueBackgroundColor;
+            image.raycastTarget = false;
+        }
+
         return image;
     }
 

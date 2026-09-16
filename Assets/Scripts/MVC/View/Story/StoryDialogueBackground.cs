@@ -1,49 +1,75 @@
 using UnityEngine;
 using UnityEngine.UI;
 
-/// <summary>对白底板的小圆角；直接绘制网格，避免背景贴图拉伸。</summary>
+/// <summary>剧情对白九宫格底板；资源路径、颜色和透明度由剧情表现设置统一控制。</summary>
 public sealed class StoryDialogueBackground : Image
 {
-    protected override void OnPopulateMesh(VertexHelper vh)
-    {
-        vh.Clear();
-        Rect rect = GetPixelAdjustedRect();
-        if (rect.width <= 0f || rect.height <= 0f)
-            return;
+    private Sprite runtimeSprite;
+    private Texture2D runtimeTexture;
+    private Vector4 runtimeBorder;
 
-        float radius = Mathf.Min(12f, Mathf.Min(rect.width, rect.height) * .5f);
-        float feather = Mathf.Min(1f, radius * .25f);
-        const int steps = 10;
-        const int count = 4 * (steps + 1);
-        UIVertex vertex = UIVertex.simpleVert;
-        vertex.color = color;
-        vertex.position = rect.center;
-        vh.AddVert(vertex);
-        for (int corner = 0; corner < 4; corner++)
+    protected override void Awake()
+    {
+        base.Awake();
+        ApplyPresentationSettings();
+    }
+
+    public void ApplyPresentationSettings()
+    {
+        StoryPresentationSettings settings = StoryPresentationSettings.Load();
+        Texture2D panelTexture = Resources.Load<Texture2D>(settings.DialogueBackgroundSpriteResourcePath);
+        if (panelTexture != null)
         {
-            Vector2 center = new Vector2(corner == 0 || corner == 3 ? rect.xMax - radius : rect.xMin + radius,
-                corner < 2 ? rect.yMax - radius : rect.yMin + radius);
-            for (int step = 0; step <= steps; step++)
+            Vector4 border = ClampBorder(settings.DialogueBackgroundBorder, panelTexture);
+            if (runtimeSprite == null || runtimeTexture != panelTexture || runtimeBorder != border)
             {
-                float angle = (corner * 90f + step * 90f / steps) * Mathf.Deg2Rad;
-                Vector2 direction = new Vector2(Mathf.Cos(angle), Mathf.Sin(angle));
-                vertex.position = center + direction * (radius - feather);
-                vertex.color = color;
-                vh.AddVert(vertex);
-                vertex.position = center + direction * radius;
-                Color edgeColor = color;
-                edgeColor.a = 0f;
-                vertex.color = edgeColor;
-                vh.AddVert(vertex);
+                if (runtimeSprite != null)
+                    Destroy(runtimeSprite);
+
+                runtimeTexture = panelTexture;
+                runtimeBorder = border;
+                runtimeSprite = Sprite.Create(panelTexture,
+                    new Rect(0f, 0f, panelTexture.width, panelTexture.height),
+                    new Vector2(.5f, .5f), 100f, 0, SpriteMeshType.FullRect, border, false);
+            }
+
+            sprite = runtimeSprite;
+            type = Type.Sliced;
+            fillCenter = true;
+            preserveAspect = false;
+        }
+        else
+        {
+            Sprite panelSprite = Resources.Load<Sprite>(settings.DialogueBackgroundSpriteResourcePath);
+            if (panelSprite != null)
+            {
+                sprite = panelSprite;
+                type = Type.Sliced;
+                fillCenter = true;
+                preserveAspect = false;
             }
         }
-        for (int i = 0; i < count; i++)
-        {
-            int inner = 1 + i * 2;
-            int next = 1 + ((i + 1) % count) * 2;
-            vh.AddTriangle(0, inner, next);
-            vh.AddTriangle(inner, inner + 1, next + 1);
-            vh.AddTriangle(inner, next + 1, next);
-        }
+
+        color = settings.DialogueBackgroundColor;
+        raycastTarget = false;
+        SetAllDirty();
+    }
+
+    protected override void OnDestroy()
+    {
+        if (runtimeSprite != null)
+            Destroy(runtimeSprite);
+        runtimeSprite = null;
+        runtimeTexture = null;
+        base.OnDestroy();
+    }
+
+    private static Vector4 ClampBorder(Vector4 border, Texture2D texture)
+    {
+        border.x = Mathf.Clamp(border.x, 0f, texture.width);
+        border.z = Mathf.Clamp(border.z, 0f, texture.width - border.x);
+        border.y = Mathf.Clamp(border.y, 0f, texture.height);
+        border.w = Mathf.Clamp(border.w, 0f, texture.height - border.y);
+        return border;
     }
 }

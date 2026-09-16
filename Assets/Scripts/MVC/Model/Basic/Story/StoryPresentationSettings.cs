@@ -47,6 +47,16 @@ public sealed class StoryPresentationSettings : ScriptableObject
     [InspectorName("垂直偏移")]
     [SerializeField, Range(-16f, 16f)] private float inlineExpressionVerticalOffset;
 
+    [Header("对白底板")]
+    [InspectorName("底板资源路径")]
+    [SerializeField] private string dialogueBackgroundSpriteResourcePath = "Story/UI/StoryDialoguePanelV2";
+    [InspectorName("底板颜色")]
+    [SerializeField] private Color dialogueBackgroundTint = Color.white;
+    [InspectorName("底板透明度")]
+    [SerializeField, Range(0f, 1f)] private float dialogueBackgroundOpacity = 0.88f;
+    [InspectorName("九宫格边界（左 下 右 上）")]
+    [SerializeField] private Vector4 dialogueBackgroundBorder = new Vector4(180f, 180f, 180f, 180f);
+
     [Header("剧情动态表情")]
     [InspectorName("启用动态表情")]
     [SerializeField] private bool storyExpressionAnimationEnabled = true;
@@ -93,6 +103,23 @@ public sealed class StoryPresentationSettings : ScriptableObject
     public float TextLineSpacing => Mathf.Max(0f, textLineSpacing);
     public float InlineExpressionScale => Mathf.Clamp(inlineExpressionScale, 0.5f, 2f);
     public float InlineExpressionVerticalOffset => Mathf.Clamp(inlineExpressionVerticalOffset, -16f, 16f);
+    public string DialogueBackgroundSpriteResourcePath => string.IsNullOrWhiteSpace(dialogueBackgroundSpriteResourcePath)
+        ? "Story/UI/StoryDialoguePanelV2"
+        : dialogueBackgroundSpriteResourcePath.Trim();
+    public Color DialogueBackgroundColor
+    {
+        get
+        {
+            Color result = dialogueBackgroundTint;
+            result.a = Mathf.Clamp01(dialogueBackgroundOpacity) * dialogueBackgroundTint.a;
+            return result;
+        }
+    }
+    public Vector4 DialogueBackgroundBorder => new Vector4(
+        Mathf.Max(0f, dialogueBackgroundBorder.x),
+        Mathf.Max(0f, dialogueBackgroundBorder.y),
+        Mathf.Max(0f, dialogueBackgroundBorder.z),
+        Mathf.Max(0f, dialogueBackgroundBorder.w));
     public bool StoryExpressionAnimationEnabled => storyExpressionAnimationEnabled;
     public float StoryExpressionAnimationSpeed => Mathf.Clamp(storyExpressionAnimationSpeed, 0.25f, 2f);
     public int StoryExpressionSheetCacheSize => Mathf.Clamp(storyExpressionSheetCacheSize, 1, 16);
