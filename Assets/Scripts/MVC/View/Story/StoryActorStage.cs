@@ -154,6 +154,7 @@ public sealed class StoryActorStage
 
             StopActorFocus(runtime);
             bool active = !string.IsNullOrEmpty(actorId) && runtime.document.id == actorId;
+            runtime.isActive = active;
             if (enableDepthFocus && presentationSettings.DepthFocusEnabled)
                 SetActorDepthFocus(runtime, active);
             else
@@ -186,6 +187,7 @@ public sealed class StoryActorStage
                 continue;
 
             StopActorFocus(runtime);
+            runtime.isActive = false;
             if (enableDepthFocus && presentationSettings.DepthFocusEnabled)
                 SetActorDepthFocus(runtime, true);
             else
@@ -434,19 +436,23 @@ public sealed class StoryActorStage
 
     private IEnumerator ActorFocusCoroutine(StoryActorRuntime runtime, StoryExpressionMotion expressionMotion)
     {
-        float duration = expressionMotion == StoryExpressionMotion.Shake ? .28f : .24f;
+        float duration = presentationSettings.ActiveActorEntryDuration;
+        float entryLift = presentationSettings.ActiveActorEntryLift;
         float time = 0f;
         while (time < duration)
         {
             float progress = Mathf.Clamp01(time / duration);
             float pulse = Mathf.Sin(progress * Mathf.PI);
-            float scale = 1f + pulse * .03f;
+            float scale = 1f;
             Vector2 offset = Vector2.zero;
             float rotation = 0f;
             switch (expressionMotion)
             {
+                case StoryExpressionMotion.Neutral:
+                    offset = Vector2.up * (pulse * entryLift);
+                    break;
                 case StoryExpressionMotion.Bounce:
-                    offset = Vector2.up * (pulse * 8f);
+                    offset = Vector2.up * (pulse * entryLift * 1.35f);
                     break;
                 case StoryExpressionMotion.Shake:
                     offset = Vector2.right * (Mathf.Sin(progress * Mathf.PI * 8f) * 7f * (1f - progress));
@@ -479,6 +485,37 @@ public sealed class StoryActorStage
         runtime.image.rectTransform.localEulerAngles = Vector3.zero;
         runtime.image.rectTransform.localScale = runtime.baseScale;
         runtime.focusCoroutine = null;
+
+        if (runtime.isActive && presentationSettings.ActiveActorBreathingEnabled)
+            runtime.breathCoroutine = coroutineHost.StartCoroutine(ActorBreathCoroutine(runtime));
+    }
+
+    private IEnumerator ActorBreathCoroutine(StoryActorRuntime runtime)
+    {
+        float period = presentationSettings.ActiveActorBreathingPeriod;
+        float amplitude = presentationSettings.ActiveActorBreathingScale;
+        float time = 0f;
+        while (runtime.isActive && runtime.image != null)
+        {
+            float phase = (time / period) * Mathf.PI * 2f;
+            float scale = 1f + (0.5f + 0.5f * Mathf.Sin(phase - Mathf.PI * 0.5f)) * amplitude;
+            runtime.image.rectTransform.anchoredPosition = runtime.basePosition;
+            runtime.image.rectTransform.localEulerAngles = Vector3.zero;
+            runtime.image.rectTransform.localScale = new Vector3(
+                runtime.baseScale.x * scale,
+                runtime.baseScale.y * scale,
+                runtime.baseScale.z);
+            time += Time.unscaledDeltaTime;
+            yield return null;
+        }
+
+        if (runtime.image != null)
+        {
+            runtime.image.rectTransform.anchoredPosition = runtime.basePosition;
+            runtime.image.rectTransform.localEulerAngles = Vector3.zero;
+            runtime.image.rectTransform.localScale = runtime.baseScale;
+        }
+        runtime.breathCoroutine = null;
     }
 
     private void StopActorAnimations(StoryActorRuntime runtime)
@@ -506,6 +543,11 @@ public sealed class StoryActorStage
         {
             coroutineHost.StopCoroutine(runtime.focusCoroutine);
             runtime.focusCoroutine = null;
+        }
+        if (runtime.breathCoroutine != null)
+        {
+            coroutineHost.StopCoroutine(runtime.breathCoroutine);
+            runtime.breathCoroutine = null;
         }
         if (runtime.image != null)
         {
@@ -624,9 +666,11 @@ public sealed class StoryActorStage
         public Material depthMaterial;
         public Coroutine fadeCoroutine;
         public Coroutine focusCoroutine;
+        public Coroutine breathCoroutine;
         public Coroutine depthCoroutine;
         public Vector2 basePosition;
         public Vector3 baseScale = Vector3.one;
+        public bool isActive;
         public int order;
         public StorySceneActorLayoutDocument placement;
     }

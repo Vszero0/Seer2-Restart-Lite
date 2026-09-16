@@ -26,8 +26,8 @@ MonoBehaviour:
   inlineExpressionVerticalOffset: 0
   dialogueBackgroundSpriteResourcePath: Story/UI/StoryDialoguePanelV2
   dialogueBackgroundTint: {r: 1, g: 1, b: 1, a: 1}
-  dialogueBackgroundOpacity: 0.88
-  dialogueBackgroundBorder: {x: 180, y: 180, z: 180, w: 180}
+  dialogueBackgroundOpacity: 1
+  dialogueBackgroundBorder: {x: 100, y: 70, z: 100, w: 70}
   storyExpressionAnimationEnabled: 1
   storyExpressionAnimationSpeed: 1
   storyExpressionSheetCacheSize: 8
@@ -38,6 +38,11 @@ MonoBehaviour:
   inactiveActorBlur: 0.6
   inactiveActorBrightness: 0.75
   depthFocusTransitionDuration: 0.2
+  activeActorEntryLift: 5
+  activeActorEntryDuration: 0.28
+  activeActorBreathingEnabled: 1
+  activeActorBreathingScale: 0.012
+  activeActorBreathingPeriod: 3
   backgroundMotionEnabled: 1
   backgroundMotionMaxOffset: 18
   backgroundMotionSmoothing: 0.12

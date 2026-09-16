@@ -81,6 +81,20 @@ public sealed class StoryPresentationSettings : ScriptableObject
     [InspectorName("焦点切换时长")]
     [SerializeField, Min(0f)] private float depthFocusTransitionDuration = 0.2f;
 
+    [Header("角色焦点进入")]
+    [InspectorName("普通切换上提距离")]
+    [SerializeField, Min(0f)] private float activeActorEntryLift = 5f;
+    [InspectorName("普通切换动效时长")]
+    [SerializeField, Min(0.05f)] private float activeActorEntryDuration = 0.28f;
+
+    [Header("角色焦点呼吸")]
+    [InspectorName("启用当前角色呼吸")]
+    [SerializeField] private bool activeActorBreathingEnabled = true;
+    [InspectorName("呼吸缩放幅度")]
+    [SerializeField, Range(0f, 0.04f)] private float activeActorBreathingScale = 0.006f;
+    [InspectorName("呼吸周期")]
+    [SerializeField, Min(0.5f)] private float activeActorBreathingPeriod = 3f;
+
     [Header("背景鼠标视差")]
     [InspectorName("启用背景鼠标视差")]
     [SerializeField] private bool backgroundMotionEnabled = true;
@@ -130,6 +144,11 @@ public sealed class StoryPresentationSettings : ScriptableObject
     public float InactiveActorBlur => Mathf.Clamp(inactiveActorBlur, 0f, 4f);
     public float InactiveActorBrightness => Mathf.Clamp(inactiveActorBrightness, 0.3f, 1f);
     public float DepthFocusTransitionDuration => Mathf.Max(0f, depthFocusTransitionDuration);
+    public float ActiveActorEntryLift => Mathf.Max(0f, activeActorEntryLift);
+    public float ActiveActorEntryDuration => Mathf.Max(0.05f, activeActorEntryDuration);
+    public bool ActiveActorBreathingEnabled => activeActorBreathingEnabled;
+    public float ActiveActorBreathingScale => Mathf.Clamp(activeActorBreathingScale, 0f, 0.04f);
+    public float ActiveActorBreathingPeriod => Mathf.Max(0.5f, activeActorBreathingPeriod);
     public bool BackgroundMotionEnabled => backgroundMotionEnabled;
     public float BackgroundMotionMaxOffset => Mathf.Max(0f, backgroundMotionMaxOffset);
     public float BackgroundMotionSmoothing => Mathf.Max(0.001f, backgroundMotionSmoothing);
